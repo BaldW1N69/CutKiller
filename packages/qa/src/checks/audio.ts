@@ -1,21 +1,26 @@
+import { existsSync } from "node:fs";
 import { type Edl, framesToSeconds, mainAudioSpans, type StyleProfile } from "@cutkiller/core";
 import { decodeMono } from "@cutkiller/media";
 import { type CheckResult, graded, notEvaluated, type Violation } from "../report";
 
 const RATE = 48_000;
 
-/** Audio edit points of the timeline, in output frames. */
-export function audioEditFrames(edl: Edl): number[] {
+/** Audio edit points of the timeline, in output frames: dialogue edits and music/SFX edits. */
+export function audioEditFrames(edl: Edl): { dialogue: number[]; other: number[] } {
   const fps = edl.output.fps;
-  const frames = mainAudioSpans(edl)
-    .filter((s) => s.cutAtStart)
+  const dialogue = mainAudioSpans(edl)
+    .filter((s) => s.cutAtStart && s.startFrame > 0)
     .map((s) => s.startFrame);
+  const frames: number[] = [];
   for (const track of edl.audio) {
     for (const c of track.clips) {
       frames.push(c.at, c.at + Math.round((c.out - c.in) * fps));
     }
   }
-  return [...new Set(frames)].filter((f) => f > 0).sort((a, b) => a - b);
+  return {
+    dialogue: [...new Set(dialogue)].sort((a, b) => a - b),
+    other: [...new Set(frames)].filter((f) => f > 0).sort((a, b) => a - b),
+  };
 }
 
 function percentile(values: number[], p: number): number {
@@ -43,16 +48,22 @@ export function clickScore(samples: Float32Array, at: number): { jump: number; b
 }
 
 export async function checkCutClicks(video: string, edl: Edl, profile: StyleProfile): Promise<CheckResult> {
-  const edits = audioEditFrames(edl);
+  const { dialogue, other } = audioEditFrames(edl);
+  const edits = [...dialogue, ...other];
   if (edits.length === 0) return notEvaluated("audio.cut-clicks", "aucune coupe audio");
   const [minFade, maxFade] = profile.audio.cutFadeMs;
   const violations: Violation[] = [];
   const fade = edl.output.audio.cutFadeMs;
   if (fade < minFade || fade > maxFade)
     violations.push({ message: `fondus de coupe de ${fade} ms (attendu ${minFade}–${maxFade} ms)` });
-  const samples = await decodeMono(video);
+  // Dialogue edits are judged on the dialogue stem when it exists: on the mix, a
+  // music hit that a beat-snapped cut lands on would read as a click.
+  const voice = `${video}.voice.wav`;
+  const voiceSamples = existsSync(voice) ? await decodeMono(voice) : undefined;
+  const mixSamples = await decodeMono(video);
   let clicks = 0;
   for (const frame of edits) {
+    const samples = voiceSamples && dialogue.includes(frame) ? voiceSamples : mixSamples;
     const at = framesToSeconds(frame, edl.output.fps) * RATE;
     const { jump, baseline } = clickScore(samples, at);
     if (jump > 3 * baseline + 0.02) {

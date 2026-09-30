@@ -4,7 +4,7 @@ import { type Edl, EdlSchema, SPATIAL_PROPERTIES } from "./edl";
 import { clipEnd, clipFrames, mainAudioSpans, sortedClips } from "./timeline";
 
 export interface Diagnostic {
-  level: "error" | "warning";
+  level: "error" | "warning" | "info";
   code: string;
   message: string;
   path?: string;

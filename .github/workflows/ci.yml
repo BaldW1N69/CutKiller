@@ -12,12 +12,22 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
-      - name: FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg && ffmpeg -version | head -1
+      - name: FFmpeg, espeak-ng (fixtures vocales)
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
+          ffmpeg -version | head -1
+
+      - name: Cache des modèles (Whisper, wav2vec2) et des analyses
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/cutkiller
+          key: models-${{ hashFiles('workers/cutkiller_workers/transcribe.py', 'workers/cutkiller_workers/align.py') }}
+          restore-keys: models-
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -27,12 +37,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - uses: astral-sh/setup-uv@v6
-      - name: Python workers
+      - name: Workers Python (dont transcription réelle, modèles en cache)
         working-directory: workers
         run: |
           uv sync --locked
           uv run ruff check .
           uv run ruff format --check .
+          (cd .. && pnpm fixtures)
           uv run pytest -q
 
       - name: Lint
@@ -47,10 +58,8 @@ jobs:
 
       - name: Démo bout en bout + quality-check
         run: |
-          pnpm fixtures
-          pnpm cutkiller auto .cache/fixtures/cam-9x16.mp4 .cache/fixtures/phone-vfr.mp4 \
-            .cache/fixtures/still.png .cache/fixtures/music-120bpm.wav \
-            -p short -o out/demo --draft --min-score 90
+          pnpm cutkiller auto .cache/fixtures/speech-fr.mp4 .cache/fixtures/music-120bpm.wav \
+            -p long -o out/demo --draft --min-score 90
       - uses: actions/upload-artifact@v4
         if: always()
         with:

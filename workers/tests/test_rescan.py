@@ -1,0 +1,33 @@
+from cutkiller_workers.transcribe import _carve, _suspicious
+
+
+def test_suspicious_words_are_long_for_their_letters():
+    assert _suspicious({"text": "depuis", "start": 0.0, "end": 0.62})
+    assert not _suspicious({"text": "depuis", "start": 0.0, "end": 0.35})
+    assert _suspicious({"text": "a", "start": 0.0, "end": 0.4, "alignScore": 0.9})
+
+
+def test_carve_splits_the_word_around_a_trailing_filler():
+    word = {"text": "depuis", "start": 1.0, "end": 1.6}
+    filler = {"text": "euh", "start": 1.35, "end": 1.6}
+    pieces = _carve(word, [filler])
+    assert [p["text"] for p in pieces] == ["depuis", "euh"]
+    assert pieces[0]["end"] == 1.34
+    assert pieces[0]["rescanned"] is True  # the carved word is marked; fillers come marked from the rescan
+
+
+def test_carve_handles_a_leading_filler():
+    pieces = _carve({"text": "donc", "start": 2.0, "end": 2.6}, [{"text": "euh", "start": 2.0, "end": 2.25}])
+    assert [p["text"] for p in pieces] == ["euh", "donc"]
+    assert pieces[1]["start"] == 2.26
+
+
+def test_fillers_themselves_are_never_rescanned():
+    from cutkiller_workers.transcribe import _windows
+
+    words = [
+        {"text": "vidéo.", "start": 0.0, "end": 0.4, "timing": "forced"},
+        {"text": "Euh,", "start": 1.0, "end": 1.6, "timing": "forced"},
+        {"text": "depuis", "start": 2.0, "end": 2.7, "timing": "forced"},
+    ]
+    assert [k for k, _, _ in _windows(words, 5.0)] == [2]

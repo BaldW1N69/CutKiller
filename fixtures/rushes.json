@@ -1,0 +1,30 @@
+{
+  "$comment": "Rushes réels sous licence libre pour la boucle qualité. Téléchargés dans .cache/rushes par `pnpm rushes`, jamais commités.",
+  "rushes": [
+    {
+      "file": "gl-vallee-300-180.mp4",
+      "url": "https://archive.org/download/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-010004-013005_life_story_interview/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-010004-013005_life_story_interview.mp4",
+      "start": 300,
+      "duration": 180,
+      "use": "format long (16:9) — entretien brut en français, 640x360, 23,976 fps",
+      "license": "CC BY 3.0",
+      "attribution": "Global Lives Project — « Pierre Vallee, Trois-Rivières » (Karen Vanderborght, David Fabrega, Marie Dietlin, Rafi Leeuwenkroon, Marianne Ploska, Catherine Genest), https://archive.org/details/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-010004-013005_life_story_interview"
+    },
+    {
+      "file": "gl-vallee-360-60.mp4",
+      "url": "https://archive.org/download/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-010004-013005_life_story_interview/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-010004-013005_life_story_interview.mp4",
+      "start": 360,
+      "duration": 60,
+      "use": "format court (9:16) — même entretien, extrait de 60 s",
+      "license": "CC BY 3.0",
+      "attribution": "Global Lives Project — voir ci-dessus"
+    },
+    {
+      "file": "cely-grande-thunder.mp3",
+      "url": "https://archive.org/download/CelyGrande-Thunderhip-hopInstrumental/CelyFeat.Rainymood-GromhiphopInstrumental.mp3",
+      "use": "musique (92 BPM) pour le calage des coupes sur les beats",
+      "license": "CC0 1.0",
+      "attribution": "Cely Grande — « Thunder (hip-hop instrumental) », https://archive.org/details/CelyGrande-Thunderhip-hopInstrumental"
+    }
+  ]
+}

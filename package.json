@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
     "schema": "tsx packages/cli/src/main.ts schema --out schema",
-    "fixtures": "tsx fixtures/generate.ts"
+    "fixtures": "tsx fixtures/generate.ts",
+    "rushes": "tsx fixtures/rushes.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

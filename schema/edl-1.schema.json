@@ -213,6 +213,34 @@
                     "contain"
                   ]
                 },
+                "transform": {
+                  "default": {
+                    "scale": 1,
+                    "x": 0,
+                    "y": 0
+                  },
+                  "type": "object",
+                  "properties": {
+                    "scale": {
+                      "default": 1,
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 4
+                    },
+                    "x": {
+                      "default": 0,
+                      "type": "number",
+                      "minimum": -0.5,
+                      "maximum": 0.5
+                    },
+                    "y": {
+                      "default": 0,
+                      "type": "number",
+                      "minimum": -0.5,
+                      "maximum": 0.5
+                    }
+                  }
+                },
                 "gainDb": {
                   "default": 0,
                   "type": "number"

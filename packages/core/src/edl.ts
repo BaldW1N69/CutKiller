@@ -41,6 +41,18 @@ export const VideoClipSchema = z.object({
    */
   audioSplitFrames: z.number().int().default(0),
   fit: z.enum(["cover", "contain"]).default("cover"),
+  /**
+   * Static framing: `scale` > 1 punches in on the fitted frame, `x`/`y` move the
+   * framing centre by a fraction of the frame (-0.5…0.5). Applied at decode time,
+   * so a punch-in keeps the source's full resolution.
+   */
+  transform: z
+    .object({
+      scale: z.number().min(1).max(4).default(1),
+      x: z.number().min(-0.5).max(0.5).default(0),
+      y: z.number().min(-0.5).max(0.5).default(0),
+    })
+    .default({ scale: 1, x: 0, y: 0 }),
   gainDb: z.number().default(0),
   why: ReasonSchema.optional(),
 });

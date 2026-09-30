@@ -2,7 +2,7 @@
 
 Montage automatique de rushes pour YouTube (16:9) et Shorts / TikTok / Reels (9:16), piloté par une **EDL JSON éditable à la main** et vérifié par des **règles de qualité mesurables**.
 
-> Statut : **phase 1 (fondations) livrée**. Le pipeline tourne de bout en bout (analyse → EDL → rendu → quality-check), mais le montage lui-même (coupes, motion, sous-titres, audio, image) arrive à partir de la phase 2. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan.
+> Statut : **phase 2 (montage) livrée**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, rendu et quality-check. Motion, sous-titres, audio et image arrivent en phases 3 à 6. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
 
 ## Prérequis
 
@@ -14,6 +14,8 @@ Montage automatique de rushes pour YouTube (16:9) et Shorts / TikTok / Reels (9:
 pnpm install
 (cd workers && uv sync)
 ```
+
+Au premier lancement, les modèles sont téléchargés dans `~/.cache/cutkiller` : Whisper `large-v3-turbo` (~1,6 Go) et wav2vec2 français (~1,3 Go). Sur CPU, compter environ 1× le temps réel pour l'analyse d'un rush. Les résultats sont mis en cache par contenu dans `.cache/analysis`.
 
 ## Utilisation
 
@@ -30,6 +32,8 @@ pnpm cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --md out/qual
 
 - `-p short|long` ou chemin vers un profil `.yaml` : tous les réglages de style vivent dans [`profiles/`](profiles).
 - `--draft` : encodage rapide (x264 `veryfast`) pour itérer ; le rendu final utilise le preset de l'EDL (`medium` par défaut).
+- `--fast` : sans analyse de la parole ni des beats (assemblage + zoom-cuts uniquement).
+- `plan` écrit aussi `<edl>.analysis.json` (transcript au mot, VAD, beats), que `check` réutilise.
 
 ## Architecture
 
@@ -51,7 +55,7 @@ pnpm schema       # régénère schema/*.json (vérifié en CI)
 (cd workers && uv run pytest && uv run ruff check .)
 ```
 
-Les médias de test sont synthétiques, générés par FFmpeg à la volée (`pnpm fixtures`) ; aucun binaire n'est commité.
+Les médias de test sont générés à la volée : mires FFmpeg et voix française espeak-ng avec vérité terrain au mot (`pnpm fixtures`, nécessite `espeak-ng`). Les rushes réels de la boucle qualité (licences libres) se téléchargent avec `pnpm rushes`. Aucun binaire n'est commité.
 
 ## Licence
 

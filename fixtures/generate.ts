@@ -9,6 +9,9 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ffmpeg } from "@cutkiller/media";
+import { generateSpeech, type SpeechTruth } from "./speech";
+
+export { SCRIPT, type SpeechTruth, type TruthWord } from "./speech";
 
 export interface Fixtures {
   dir: string;
@@ -17,9 +20,21 @@ export interface Fixtures {
   phoneVfr: string;
   still: string;
   music: string;
+  /**
+   * Video stream starting 1 s after the audio (as in re-wrapped or trimmed files),
+   * with a white flash and a 1 kHz beep both at container time 2.0 s.
+   */
+  avOffset: string;
+  /** French speech (espeak-ng) with word-level ground truth, as audio and as a 16:9 rush. */
+  speechWav: string;
+  speechVideo: string;
+  speechTruth: SpeechTruth;
 }
 
-const SPECS: Record<Exclude<keyof Fixtures, "dir">, { file: string; args: string[] }> = {
+const SPECS: Record<
+  Exclude<keyof Fixtures, "dir" | "speechWav" | "speechVideo" | "speechTruth" | "avOffset">,
+  { file: string; args: string[] }
+> = {
   cam16x9: {
     file: "cam-16x9.mp4",
     args: [
@@ -137,7 +152,69 @@ export async function generateFixtures(dir = resolve(".cache/fixtures")): Promis
     if (!existsSync(path)) await ffmpeg(["-v", "error", ...spec.args, "-y", path]);
     result[key] = path;
   }
+  result.avOffset = await avOffsetFixture(dir);
+  const speech = await generateSpeech(dir);
+  result.speechWav = speech.wav;
+  result.speechVideo = speech.video;
+  result.speechTruth = speech.truth;
   return result;
+}
+
+/** Encoded in two steps: an input offset only survives a stream-copy mux. */
+async function avOffsetFixture(dir: string): Promise<string> {
+  const path = join(dir, "av-offset.mp4");
+  if (existsSync(path)) return path;
+  const video = join(dir, "av-offset.video.mp4");
+  const audio = join(dir, "av-offset.audio.m4a");
+  await ffmpeg([
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=gray:s=640x360:r=30:d=4,drawbox=c=white:t=fill:enable='eq(n,30)',noise=alls=6:allf=t,format=yuv420p",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "18",
+    "-y",
+    video,
+  ]);
+  await ffmpeg([
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "aevalsrc='if(between(t,2,2.05),0.8*sin(2*PI*1000*t),0)':s=48000:d=5",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "160k",
+    "-y",
+    audio,
+  ]);
+  await ffmpeg([
+    "-v",
+    "error",
+    "-itsoffset",
+    "1",
+    "-i",
+    video,
+    "-i",
+    audio,
+    "-map",
+    "0:v",
+    "-map",
+    "1:a",
+    "-c",
+    "copy",
+    "-y",
+    path,
+  ]);
+  return path;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

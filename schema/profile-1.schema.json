@@ -179,6 +179,69 @@
           "items": false,
           "minItems": 2,
           "maxItems": 2
+        },
+        "zoomCutLevels": {
+          "default": [
+            1.08,
+            1.12,
+            1.06,
+            1.1
+          ],
+          "minItems": 2,
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "minShotS": {
+          "default": 1.2,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fillerWords": {
+          "default": [
+            "euh",
+            "heu",
+            "euhm",
+            "hum",
+            "hmm",
+            "mmh",
+            "bah",
+            "ben",
+            "beh"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contextualFillers": {
+          "default": [
+            "donc",
+            "bon",
+            "alors",
+            "voilà",
+            "enfin",
+            "genre",
+            "en fait",
+            "du coup"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contextualPauseMs": {
+          "default": 250,
+          "type": "number",
+          "minimum": 0
+        },
+        "repetitionMaxWords": {
+          "default": 4,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": [

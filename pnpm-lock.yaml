@@ -130,9 +130,15 @@ importers:
 
   packages/qa:
     dependencies:
+      '@cutkiller/analyze':
+        specifier: workspace:*
+        version: link:../analyze
       '@cutkiller/core':
         specifier: workspace:*
         version: link:../core
+      '@cutkiller/cut':
+        specifier: workspace:*
+        version: link:../cut
       '@cutkiller/media':
         specifier: workspace:*
         version: link:../media
@@ -146,9 +152,6 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
-      '@cutkiller/cut':
-        specifier: workspace:*
-        version: link:../cut
       '@cutkiller/fixtures':
         specifier: workspace:*
         version: link:../../fixtures

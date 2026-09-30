@@ -1,3 +1,4 @@
+import type { AnalyzerResults } from "./analysis";
 import type { Edl } from "./edl";
 import type { StyleProfile } from "./profile";
 import type { Diagnostic } from "./validate";
@@ -7,9 +8,8 @@ import { validateEdl } from "./validate";
  * Output of the analysis stage (Python workers + probes). Each analyzer adds its
  * own key in later phases; passes must tolerate missing keys.
  */
-export interface Analysis {
+export interface Analysis extends AnalyzerResults {
   sources: Record<string, SourceProbe>;
-  [analyzer: string]: unknown;
 }
 
 export interface SourceProbe {

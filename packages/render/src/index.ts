@@ -5,7 +5,7 @@ import type { Edl } from "@cutkiller/core";
 import { renderAudio } from "./audio";
 import { renderVideo, type VideoLog } from "./video";
 
-export { audioMixArgs, audioSegments } from "./audio";
+export { audioMixArgs, audioSegments, conformAudio } from "./audio";
 export { type ClipLog, decoderArgs, decoderChain, encoderArgs, type VideoLog } from "./video";
 
 export interface RenderOptions {
@@ -19,7 +19,8 @@ export interface RenderOptions {
 
 export interface RenderLog extends VideoLog {
   output: string;
-  stems: { mix?: string };
+  /** Kept stems: the full mix and the dialogue alone (main-track audio, no music/SFX). */
+  stems: { mix?: string; voice?: string };
 }
 
 export async function render(edl: Edl, opts: RenderOptions): Promise<RenderLog> {
@@ -27,9 +28,11 @@ export async function render(edl: Edl, opts: RenderOptions): Promise<RenderLog> 
   const work = await mkdtemp(join(tmpdir(), "cutkiller-"));
   const mix = opts.keepStems ? `${opts.outPath}.mix.wav` : join(work, "mix.wav");
   try {
-    await renderAudio(edl, opts.baseDir, mix);
+    await renderAudio(edl, opts.baseDir, mix, work);
+    const voice = `${opts.outPath}.voice.wav`;
+    if (opts.keepStems) await renderAudio(edl, opts.baseDir, voice, work, true);
     const video = await renderVideo(edl, opts.baseDir, mix, opts.outPath, opts.onProgress);
-    const log: RenderLog = { ...video, output: opts.outPath, stems: opts.keepStems ? { mix } : {} };
+    const log: RenderLog = { ...video, output: opts.outPath, stems: opts.keepStems ? { mix, voice } : {} };
     await writeFile(`${opts.outPath}.render-log.json`, `${JSON.stringify(log, null, 2)}\n`);
     return log;
   } finally {

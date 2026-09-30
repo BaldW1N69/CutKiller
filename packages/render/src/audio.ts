@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { type Edl, edlDurationFrames, framesToSeconds, mainAudioSpans } from "@cutkiller/core";
 import { ffmpeg } from "@cutkiller/media";
 
@@ -12,17 +12,58 @@ interface Segment {
   fadeOutS: number;
 }
 
-/** Seek this far before the in point, then trim precisely in the filter graph. */
-const SEEK_PREROLL_S = 1;
+/**
+ * Decodes each source's audio once to a float WAV on the container timeline:
+ * t = 0 is the start of the file, even when the audio stream starts later
+ * (padded with silence). Seeking a WAV is sample-accurate, whereas seeking the
+ * container snaps to video keyframes and can shift the audio by seconds.
+ */
+export async function conformAudio(
+  paths: readonly string[],
+  workDir: string,
+  rate: number,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const [i, path] of [...new Set(paths)].entries()) {
+    const wav = join(workDir, `src${i}.wav`);
+    await ffmpeg([
+      "-v",
+      "error",
+      "-i",
+      path,
+      "-map",
+      "0:a:0",
+      "-vn",
+      "-af",
+      `aresample=${rate}:async=1:first_pts=0,aformat=sample_fmts=flt:channel_layouts=stereo`,
+      "-c:a",
+      "pcm_f32le",
+      "-y",
+      wav,
+    ]);
+    out.set(path, wav);
+  }
+  return out;
+}
 
-export function audioSegments(edl: Edl, baseDir: string): Segment[] {
+export function audioSegments(edl: Edl, baseDir: string, voiceOnly = false): Segment[] {
   const fps = edl.output.fps;
   const cutFade = edl.output.audio.cutFadeMs / 1000;
   const segments: Segment[] = [];
+  let last: Segment | undefined;
   for (const span of mainAudioSpans(edl)) {
     const source = edl.sources[span.clip.source];
-    if (!source || source.hasAudio === false || source.still) continue;
-    segments.push({
+    if (!source || source.hasAudio === false || source.still) {
+      last = undefined;
+      continue;
+    }
+    if (span.continuesPrev && last) {
+      // Seamless continuation (zoom cut): extend the previous segment, no fade.
+      last.sourceOut = span.sourceOut;
+      last.fadeOutS = span.cutAtEnd ? cutFade : 0;
+      continue;
+    }
+    last = {
       path: resolve(baseDir, source.path),
       sourceIn: span.sourceIn,
       sourceOut: span.sourceOut,
@@ -30,9 +71,10 @@ export function audioSegments(edl: Edl, baseDir: string): Segment[] {
       gainDb: span.clip.gainDb,
       fadeInS: span.cutAtStart ? cutFade : 0,
       fadeOutS: span.cutAtEnd ? cutFade : 0,
-    });
+    };
+    segments.push(last);
   }
-  for (const track of edl.audio) {
+  for (const track of voiceOnly ? [] : edl.audio) {
     for (const clip of track.clips) {
       const source = edl.sources[clip.source];
       if (!source) continue;
@@ -50,21 +92,29 @@ export function audioSegments(edl: Edl, baseDir: string): Segment[] {
   return segments;
 }
 
-/** ffmpeg arguments that render the whole audio timeline to a float WAV of exact length. */
-export function audioMixArgs(edl: Edl, baseDir: string, outPath: string): string[] {
+/**
+ * ffmpeg arguments that render the whole audio timeline to a float WAV of exact
+ * length. `conformed` maps source paths to their conformed WAV (see conformAudio).
+ */
+export function audioMixArgs(
+  edl: Edl,
+  baseDir: string,
+  outPath: string,
+  voiceOnly = false,
+  conformed: ReadonlyMap<string, string> = new Map(),
+): string[] {
   const rate = edl.output.audio.sampleRate;
   const totalSamples = Math.round(framesToSeconds(edlDurationFrames(edl), edl.output.fps) * rate);
-  const segments = audioSegments(edl, baseDir);
+  const segments = audioSegments(edl, baseDir, voiceOnly);
   const args: string[] = [];
   const filters: string[] = [];
   const labels: string[] = [];
 
   segments.forEach((seg, i) => {
-    const seek = Math.max(0, seg.sourceIn - SEEK_PREROLL_S);
-    args.push("-ss", seek.toFixed(6), "-i", seg.path);
+    args.push("-ss", seg.sourceIn.toFixed(6), "-i", conformed.get(seg.path) ?? seg.path);
     const len = seg.sourceOut - seg.sourceIn;
     const chain = [
-      `atrim=start=${(seg.sourceIn - seek).toFixed(6)}:duration=${len.toFixed(6)}`,
+      `atrim=start=0:duration=${len.toFixed(6)}`,
       "asetpts=PTS-STARTPTS",
       `aresample=${rate}`,
       "aformat=sample_fmts=fltp:channel_layouts=stereo",
@@ -96,6 +146,18 @@ export function audioMixArgs(edl: Edl, baseDir: string, outPath: string): string
   return args;
 }
 
-export async function renderAudio(edl: Edl, baseDir: string, outPath: string): Promise<void> {
-  await ffmpeg(audioMixArgs(edl, baseDir, outPath));
+export async function renderAudio(
+  edl: Edl,
+  baseDir: string,
+  outPath: string,
+  workDir: string,
+  voiceOnly = false,
+): Promise<void> {
+  const rate = edl.output.audio.sampleRate;
+  const conformed = await conformAudio(
+    audioSegments(edl, baseDir, voiceOnly).map((s) => s.path),
+    workDir,
+    rate,
+  );
+  await ffmpeg(audioMixArgs(edl, baseDir, outPath, voiceOnly, conformed));
 }

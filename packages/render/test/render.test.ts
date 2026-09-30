@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type EdlInput, parseEdl } from "@cutkiller/core";
 import { generateFixtures } from "@cutkiller/fixtures";
-import { decodeMono, ffprobe, parseRate } from "@cutkiller/media";
+import { decodeMono, ffmpeg, ffprobe, parseRate } from "@cutkiller/media";
 import { beforeAll, describe, expect, it } from "vitest";
 import { type RenderLog, render } from "../src";
 
@@ -86,5 +86,53 @@ describe("render (intégration FFmpeg)", () => {
     expect(zeroCrossingHz(pcm, 4.1, 4.9)).toBeCloseTo(440, -1);
     // c4: still image, no audio.
     expect(zeroCrossingHz(pcm, 5.2, 5.9)).toBe(0);
+  });
+});
+
+describe("synchro audio/vidéo avec des flux décalés", () => {
+  it("garde le flash et le bip ensemble quand la vidéo démarre après l'audio", async () => {
+    const fx = await generateFixtures();
+    const parsed = parseEdl({
+      version: "1.0.0",
+      output: {
+        format: "long",
+        width: 320,
+        height: 180,
+        fps: 30,
+        video: { bitrateMbps: 4, preset: "veryfast" },
+        audio: {},
+      },
+      sources: { o: { path: fx.avOffset, durationS: 5 } },
+      // Clip 1 starts before the video stream exists (0.2 s < 1 s); clip 2 contains the flash + beep at 2.0 s.
+      video: [
+        {
+          id: "main",
+          clips: [
+            { id: "a", source: "o", in: 0.2, out: 0.7, at: 0 },
+            { id: "b", source: "o", in: 1.5, out: 3.5, at: 15 },
+          ],
+        },
+      ],
+    });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.diagnostics));
+    const out = join(await mkdtemp(join(tmpdir(), "ck-av-")), "av.mp4");
+    const log = await render(parsed.edl, { baseDir: fx.dir, outPath: out });
+    expect(log.frames).toBe(75);
+
+    // Flash: brightest frame. Expected at 15 + (2.0 - 1.5) × 30 = 30.
+    const { stdout } = await ffmpeg(["-v", "error", "-i", out, "-vf", "format=gray", "-f", "rawvideo", "-"]);
+    const size = 320 * 180;
+    const means = Array.from({ length: stdout.length / size }, (_, f) => {
+      let s = 0;
+      for (let i = f * size; i < (f + 1) * size; i++) s += stdout[i] as number;
+      return s / size;
+    });
+    const flash = means.indexOf(Math.max(...means));
+    expect(flash).toBe(30);
+
+    // Beep: first loud sample, expected at 1.0 s (frame 30) on the output timeline.
+    const pcm = await decodeMono(out);
+    const onset = pcm.findIndex((v) => Math.abs(v) > 0.2) / 48_000;
+    expect(Math.abs(onset - flash / 30)).toBeLessThanOrEqual(1 / 30);
   });
 });

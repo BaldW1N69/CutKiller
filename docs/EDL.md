@@ -26,6 +26,14 @@ Un clip dure `round((out - in) × fps)` frames. Le moteur de rendu consomme exac
 
 Un J/L cut exige un clip précédent contigu. Les sources doivent aussi contenir assez de matière avant ou après les points in/out (sinon `source.range`). La plage admise (4 à 12 frames) vient du profil de style et est contrôlée par `quality-check`.
 
+## Cadrage statique
+
+`transform: { scale, x, y }` sur un clip : `scale` > 1 resserre le cadre (punch-in / zoom-cut), `x` et `y` décalent le centre du cadrage d'une fraction de l'image (-0,5 à 0,5). Le recadrage est appliqué **au décodage** (crop dans la source puis mise à l'échelle), donc un punch-in à 110 % garde la pleine résolution de la source au lieu d'agrandir une image déjà réduite.
+
+## Zoom-cuts
+
+Deux clips consécutifs de la même source dont les points se touchent (`out` du premier = `in` du second, à 2 ms près) forment un **zoom-cut** : l'image change (en général de cadrage), l'audio continue sans aucune coupe ni fondu. C'est ce que la passe `cut` utilise pour qu'aucun plan ne reste statique au-delà de la limite du profil.
+
 ## Animations
 
 `keyframes[]` : `{ target: "<clipId>.<x|y|scale|opacity|rotation>", keys: [{ frame, value, ease? }] }`. Le champ `ease` d'une clé décrit la courbe qui y mène depuis la clé précédente :
@@ -39,7 +47,11 @@ Un J/L cut exige un clip précédent contigu. Les sources doivent aussi contenir
 
 ## Traçabilité
 
-Chaque clip peut porter un champ `why: { kind, note?, wordIds? }` qui explique pourquoi il existe (mots conservés, beat, B-roll…). Les passes le renseignent à partir de la phase 2, pour qu'un humain puisse auditer et corriger les décisions automatiques.
+Chaque clip porte un champ `why: { kind, note?, wordIds? }` qui explique pourquoi il existe, pour qu'un humain puisse auditer et corriger les décisions automatiques :
+
+- `kind` : `speech` (passage de parole conservé), `zoom-cut` (changement de cadrage sur audio continu), `assemble` ;
+- `wordIds` : indices des mots du transcript (`<edl>.analysis.json`) contenus dans le clip ;
+- `note` : ce qui a été coupé juste avant, par exemple `coupé avant : « euh, » (filler), silence de 685 ms`.
 
 ## Diagnostics du validateur
 

@@ -38,10 +38,15 @@ export interface AudioSpan {
   /** Source seconds matching the timeline span. */
   sourceIn: number;
   sourceOut: number;
-  /** True when an edit point (not the timeline start/end) bounds the span. */
+  /** True when an audio edit point (not the timeline start/end) bounds the span. */
   cutAtStart: boolean;
   cutAtEnd: boolean;
+  /** The span's audio continues the previous span's audio seamlessly (same source, abutting times): no audio edit there. */
+  continuesPrev: boolean;
 }
+
+/** Source-time tolerance under which two spans are considered abutting. */
+const CONTINUITY_S = 0.002;
 
 /**
  * Audio spans of the main track once J/L splits are applied. The audio edit point
@@ -50,7 +55,7 @@ export interface AudioSpan {
 export function mainAudioSpans(edl: Edl): AudioSpan[] {
   const fps = edl.output.fps;
   const clips = sortedClips(edl.video[0]?.clips ?? []);
-  return clips.map((clip, i) => {
+  const spans = clips.map((clip, i): AudioSpan => {
     const prev = clips[i - 1];
     const next = clips[i + 1];
     const contiguousPrev = prev !== undefined && clipEnd(prev, fps) === clip.at;
@@ -66,6 +71,23 @@ export function mainAudioSpans(edl: Edl): AudioSpan[] {
       sourceOut: effectiveOut(clip, fps) + framesToSeconds(tailSplit, fps),
       cutAtStart: contiguousPrev,
       cutAtEnd: contiguousNext,
+      continuesPrev: false,
     };
   });
+  // A zoom cut changes the picture over continuous audio: that boundary is no audio edit.
+  for (let i = 1; i < spans.length; i++) {
+    const prev = spans[i - 1] as AudioSpan;
+    const cur = spans[i] as AudioSpan;
+    if (
+      prev.cutAtEnd &&
+      prev.clip.source === cur.clip.source &&
+      prev.endFrame === cur.startFrame &&
+      Math.abs(prev.sourceOut - cur.sourceIn) < CONTINUITY_S
+    ) {
+      cur.continuesPrev = true;
+      cur.cutAtStart = false;
+      prev.cutAtEnd = false;
+    }
+  }
+  return spans;
 }

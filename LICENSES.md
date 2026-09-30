@@ -45,12 +45,13 @@ Idées **réimplémentées sans copie**, attribuées par courtoisie :
 | yaml 2 | lecture des profils | ISC | npm | ✅ (npm) |
 | typescript 7, vitest 5, tsx, @biomejs/biome | build, tests, lint | Apache-2.0 / MIT / MIT / MIT-Apache-2.0 | dev | 🔎 |
 | pytest, ruff, uv | tests et lint des workers | MIT / MIT / MIT-Apache-2.0 | dev | 🔎 |
-| faster-whisper + CTranslate2 | transcription au mot | MIT / MIT | pip | 🔎 |
-| Poids Whisper (OpenAI) | modèle ASR | MIT | téléchargés à l'exécution, non commités | 🔎 |
-| torchaudio | alignement forcé CTC | BSD-2-Clause | pip | 🔎 |
-| wav2vec2 FR (ex. `jonatasgrosman/wav2vec2-large-xlsr-53-french`) | modèle d'alignement | Apache-2.0 | téléchargé à l'exécution | 🔎 |
-| Silero VAD | détection de parole et de respirations | MIT | pip (modèle inclus) | 🔎 |
-| librosa | beats, onsets, prosodie | ISC | pip | 🔎 |
+| faster-whisper 1.2 + CTranslate2 4.8 | transcription au mot | MIT / MIT | pip | 🔎 |
+| Poids Whisper `large-v3-turbo` (OpenAI, conversion Systran) | modèle ASR | MIT | téléchargés à l'exécution depuis HuggingFace, non commités | 🔎 |
+| torch 2.14 (CPU) / torchaudio 2.11 | inférence, alignement forcé CTC (`forced_align`) | BSD-3-Clause / BSD-2-Clause | pip | 🔎 |
+| transformers | chargement du modèle wav2vec2 | Apache-2.0 | pip | 🔎 |
+| `jonatasgrosman/wav2vec2-large-xlsr-53-french` | modèle d'alignement FR | Apache-2.0 | téléchargé à l'exécution | ✅ (carte du modèle, phase 2) |
+| silero-vad 6 | détection de parole | MIT | pip (modèle inclus) | 🔎 |
+| librosa 0.11, soundfile, numpy | beats, onsets | ISC / BSD-3-Clause / BSD-3-Clause | pip | 🔎 |
 | MediaPipe (+ modèles BlazeFace / Pose) | suivi du sujet | Apache-2.0 | pip, modèles depuis storage.googleapis.com | 🔎 |
 | OpenCV (headless) | lecture de frames, statistiques | Apache-2.0 | pip | 🔎 |
 | espeak-ng | génération de fixtures de test uniquement | GPL-3.0 | outil de dev, non redistribué | 🔎 |
@@ -61,7 +62,19 @@ Assets :
 - SFX **générés procéduralement** par le repo ;
 - LUT **générées** par le repo, aucun pack commercial.
 
-## 5. Écartés pour raison de licence
+## 5. Médias de test (jamais commités)
+
+Téléchargés dans `.cache/rushes` par `pnpm rushes`, d'après [`fixtures/rushes.json`](fixtures/rushes.json). Aucune vidéo produite à partir d'eux n'est publiée ; toute publication devrait reprendre l'attribution.
+
+| Média | Licence | Attribution |
+|---|---|---|
+| Entretien « Pierre Vallee, Trois-Rivières » (Global Lives Project), extraits de 60 et 180 s | CC BY 3.0 | Global Lives Project — K. Vanderborght, D. Fabrega, M. Dietlin, R. Leeuwenkroon, M. Ploska, C. Genest |
+| « Thunder (hip-hop instrumental) » — Cely Grande | CC0 1.0 | — |
+| Voix synthétique française (espeak-ng) et mires FFmpeg | générées par le repo | — |
+
+Des témoignages de Wikimania Paris 2026 sous CC BY 4.0 (Wikimedia France) avaient été retenus, mais `upload.wikimedia.org` refuse les téléchargements depuis l'IP de sortie de l'environnement cloud (HTTP 429).
+
+## 6. Écartés pour raison de licence
 
 | Brique | Licence | Motif |
 |---|---|---|

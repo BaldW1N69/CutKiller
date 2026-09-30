@@ -49,7 +49,7 @@ export const RULES: readonly Rule[] = [
     category: "montage",
     title: "Punch-ins 105–115 %, jamais deux fois au même niveau",
     weight: 3,
-    phase: 3,
+    phase: 2,
   },
   {
     id: "motion.no-linear",

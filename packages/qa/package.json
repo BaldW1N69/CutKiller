@@ -12,10 +12,11 @@
     "@cutkiller/render": "workspace:*",
     "@cutkiller/media": "workspace:*",
     "zod": "4.6.5",
-    "@cutkiller/style": "workspace:*"
+    "@cutkiller/style": "workspace:*",
+    "@cutkiller/analyze": "workspace:*",
+    "@cutkiller/cut": "workspace:*"
   },
   "devDependencies": {
-    "@cutkiller/fixtures": "workspace:*",
-    "@cutkiller/cut": "workspace:*"
+    "@cutkiller/fixtures": "workspace:*"
   }
 }

@@ -91,7 +91,8 @@ export function buildReport(meta: Pick<Report, "video" | "edl" | "profile">, res
   }
   return {
     ...meta,
-    score: round1(score * 100),
+    // Floor: the score only reads 100 when every evaluated rule passes.
+    score: Math.floor(score * 1000 + 1e-9) / 10,
     coverage: round1((100 * evaluatedWeight) / totalWeight),
     categories,
     results: full,
@@ -120,7 +121,8 @@ export function reportMarkdown(report: Report): string {
             .map((v) => (v.frame !== undefined ? `f${v.frame} : ${v.message}` : v.message))
             .join(" ; ") + (r.violations.length > 3 ? ` (+${r.violations.length - 3})` : "")
         : (r.note ?? "");
-    const score = r.status === "not-evaluated" ? "—" : `${Math.round(r.score * 100)} %`;
+    // Floor, so a failing rule never reads « 100 % ».
+    const score = r.status === "not-evaluated" ? "—" : `${Math.floor(r.score * 1000) / 10} %`;
     lines.push(
       `| ${r.title} | ${r.weight} | ${ICON[r.status]} | ${score} | ${detail.replaceAll("|", "\\|")} |`,
     );

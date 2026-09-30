@@ -42,13 +42,18 @@ export function decoderChain(
   const path = resolve(baseDir, source.path);
   const frames = clipFrames(clip, fps);
   // Crop before scaling: resampling only the kept area is several times cheaper.
+  const { scale, x, y } = clip.transform;
+  const cw = `min(iw,ih*${W}/${H})`;
+  const ch = `min(ih,iw*${H}/${W})`;
   const fit =
     clip.fit === "contain"
       ? `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`
-      : `crop='min(iw,ih*${W}/${H})':'min(ih,iw*${H}/${W})',scale=${W}:${H}:flags=lanczos`;
+      : `crop=w='${cw}/${scale}':h='${ch}/${scale}':x='clip(iw/2+${x}*${cw}-ow/2,0,iw-ow)':y='clip(ih/2+${y}*${ch}-oh/2,0,ih-oh)',scale=${W}:${H}:flags=lanczos`;
   return {
     input: source.still ? ["-loop", "1", "-i", path] : ["-ss", clip.in.toFixed(6), "-i", path],
-    vf: `fps=${fps}:round=near,${fit}`,
+    // start_time=0: output time 0 is the seek point; if the video stream starts
+    // later than that (offset streams), its first frame is held, never shifted.
+    vf: `fps=${fps}:start_time=0:round=near,${fit}`,
     duration: framesToSeconds(frames, fps) + 0.5 / fps,
   };
 }

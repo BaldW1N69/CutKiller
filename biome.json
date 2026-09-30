@@ -3,6 +3,16 @@
   "files": {
     "includes": ["**", "!**/node_modules", "!**/.cache", "!**/out", "!schema/*.json", "!workers/.venv"]
   },
-  "formatter": { "indentStyle": "space", "lineWidth": 110 },
-  "linter": { "enabled": true }
+  "formatter": {
+    "indentStyle": "space",
+    "lineWidth": 110
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "style": {
+        "noNonNullAssertion": "off"
+      }
+    }
+  }
 }

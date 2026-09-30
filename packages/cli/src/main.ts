@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -7,6 +8,7 @@ import { audioPass } from "@cutkiller/audio";
 import { captionsPass } from "@cutkiller/captions";
 import { colorPass } from "@cutkiller/color";
 import {
+  type Analysis,
   type Diagnostic,
   type Edl,
   edlJsonSchema,
@@ -34,15 +36,15 @@ const USAGE = `cutkiller <commande> [options]
   schema --out <dossier>                    exporte les JSON Schemas (EDL, profil)
 
 Profils : short (9:16), long (16:9), ou chemin vers un .yaml.
---draft : encodage rapide (preset veryfast) pour itérer.`;
+--draft : encodage rapide (preset veryfast) pour itérer.
+--fast  : sans analyse de la parole ni des beats (assemblage brut).`;
 
 const PASSES = [cutPass, reframePass, colorPass, motionPass, captionsPass, audioPass];
 
 function printDiagnostics(diagnostics: Diagnostic[]): void {
+  const icon = { error: "✖", warning: "⚠", info: "ℹ" } as const;
   for (const d of diagnostics)
-    console.error(
-      `${d.level === "error" ? "✖" : "⚠"} [${d.code}] ${d.message}${d.path ? ` — ${d.path}` : ""}`,
-    );
+    console.error(`${icon[d.level]} [${d.code}] ${d.message}${d.path ? ` — ${d.path}` : ""}`);
 }
 
 async function readEdl(path: string): Promise<Edl> {
@@ -52,8 +54,17 @@ async function readEdl(path: string): Promise<Edl> {
   return result.edl;
 }
 
-async function plan(inputs: string[], profile: StyleProfile, edlPath: string): Promise<Edl> {
-  const analysis = await analyzeSources(inputs);
+async function plan(inputs: string[], profile: StyleProfile, edlPath: string, deep: boolean): Promise<Edl> {
+  const analysis = await analyzeSources(inputs, { deep, log: (m) => console.error(`… ${m}`) });
+  await mkdir(dirname(resolve(edlPath)), { recursive: true });
+  await writeFile(analysisPath(edlPath), `${JSON.stringify(analysis)}\n`);
+  for (const [id, probe] of Object.entries(analysis.sources)) {
+    const ratio = probe.fps ? profile.format.fps / probe.fps : 1;
+    if (probe.fps && Math.abs(ratio - Math.round(ratio)) > 0.01)
+      console.error(
+        `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${profile.format.fps} fps répète des images (saccade de pulldown)`,
+      );
+  }
   const assembled = assembleEdl(analysis, profile, { edlDir: dirname(resolve(edlPath)) });
   const { edl, diagnostics } = runPasses(assembled, PASSES, { analysis, profile });
   printDiagnostics(diagnostics);
@@ -63,6 +74,14 @@ async function plan(inputs: string[], profile: StyleProfile, edlPath: string): P
     `${JSON.stringify({ $schema: "https://cutkiller.dev/schema/edl-1.schema.json", ...edl }, null, 2)}\n`,
   );
   return edl;
+}
+
+/** Analysis results are written next to the EDL so `check` can reuse them. */
+const analysisPath = (edlPath: string) => `${edlPath.replace(/(\.edl)?\.json$/, "")}.analysis.json`;
+
+async function readAnalysis(edlPath: string): Promise<Analysis | undefined> {
+  const path = analysisPath(edlPath);
+  return existsSync(path) ? (JSON.parse(await readFile(path, "utf8")) as Analysis) : undefined;
 }
 
 async function doRender(edl: Edl, edlPath: string, out: string, draft: boolean, keepStems: boolean) {
@@ -94,10 +113,12 @@ async function check(
   opts: { json?: string; md?: string },
 ) {
   const edl = edlPath ? await readEdl(edlPath) : undefined;
+  const analysis = edlPath ? await readAnalysis(edlPath) : undefined;
   const report = await qualityCheck({
     video,
     profile,
     ...(edl ? { edl, edlPath, baseDir: dirname(resolve(edlPath as string)) } : {}),
+    ...(analysis ? { analysis } : {}),
   });
   const md = reportMarkdown(report);
   if (opts.json) await writeFile(opts.json, `${JSON.stringify(report, null, 2)}\n`);
@@ -127,6 +148,7 @@ async function main(argv: string[]): Promise<void> {
       md: { type: "string" },
       "min-score": { type: "string" },
       draft: { type: "boolean", default: false },
+      fast: { type: "boolean", default: false },
       "keep-stems": { type: "boolean", default: false },
     },
   });
@@ -145,7 +167,12 @@ async function main(argv: string[]): Promise<void> {
       return;
     case "plan": {
       const out = need(values.out, "out");
-      const edl = await plan(positionals, await loadProfile(need(values.profile, "profile")), out);
+      const edl = await plan(
+        positionals,
+        await loadProfile(need(values.profile, "profile")),
+        out,
+        !values.fast,
+      );
       console.log(`✔ ${out} : ${edl.video[0]?.clips.length ?? 0} clip(s)`);
       return;
     }
@@ -176,7 +203,7 @@ async function main(argv: string[]): Promise<void> {
       const profile = await loadProfile(need(values.profile, "profile"));
       const edlPath = join(dir, "edit.edl.json");
       const video = join(dir, "final.mp4");
-      const edl = await plan(positionals, profile, edlPath);
+      const edl = await plan(positionals, profile, edlPath, !values.fast);
       await doRender(edl, edlPath, video, values.draft, true);
       const report = await check(video, profile, edlPath, {
         json: join(dir, "quality.json"),

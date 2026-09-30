@@ -58,7 +58,7 @@ describe("score", () => {
     ];
     const report = buildReport({ video: "v.mp4", profile: "short@1.0.0" }, results);
     expect(report.coverage).toBe(9);
-    expect(report.score).toBeCloseTo((100 * (3 + 0 + 4 * 0.75)) / 9, 1);
+    expect(report.score).toBe(66.6); // 100 × (3 + 0 + 4 × 0.75) / 9 = 66.67, floored
     expect(report.categories.image.score).toBe(60);
     expect(report.categories.motion.score).toBeNull();
     expect(report.results.find((r) => r.ruleId === "captions.sync")?.status).toBe("not-evaluated");
@@ -138,6 +138,7 @@ describe("quality-check sur des rendus réels", () => {
         "image.bitrate",
         "image.duplicate-frames",
         "image.export-format",
+        "montage.static-shots",
       ].sort(),
     );
     expect(evaluated.filter((r) => r.status === "fail")).toEqual([]);

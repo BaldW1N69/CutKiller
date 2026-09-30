@@ -14,4 +14,22 @@ def ping(request: dict[str, Any]) -> dict[str, Any]:
     return {"echo": request, "python": platform.python_version()}
 
 
-TASKS: dict[str, Task] = {"ping": ping}
+def _transcribe(request: dict[str, Any]) -> Any:
+    from .transcribe import transcribe
+
+    return transcribe(request)
+
+
+def _vad(request: dict[str, Any]) -> Any:
+    from .vad import vad
+
+    return vad(request)
+
+
+def _beats(request: dict[str, Any]) -> Any:
+    from .beats import beats
+
+    return beats(request)
+
+
+TASKS: dict[str, Task] = {"ping": ping, "transcribe": _transcribe, "vad": _vad, "beats": _beats}

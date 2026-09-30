@@ -32,6 +32,22 @@ export const StyleProfileSchema = z.object({
     beatToleranceFrames: z.number().int().nonnegative().default(1),
     maxStaticShotS: z.number().positive(),
     punchInScale: Range.default([1.05, 1.15]),
+    /** Framings used by zoom cuts, alternated with the wide shot (1.0); consecutive punch-ins never repeat a level. */
+    zoomCutLevels: z.array(z.number().min(1)).min(2).default([1.08, 1.12, 1.06, 1.1]),
+    /** Shortest clip a zoom cut may create. */
+    minShotS: z.number().positive().default(1.2),
+    /** Always removed: pure hesitations. */
+    fillerWords: z
+      .array(z.string())
+      .default(["euh", "heu", "euhm", "hum", "hmm", "mmh", "bah", "ben", "beh"]),
+    /** Removed only when isolated by pauses (otherwise they carry meaning). */
+    contextualFillers: z
+      .array(z.string())
+      .default(["donc", "bon", "alors", "voilà", "enfin", "genre", "en fait", "du coup"]),
+    /** Pause around a contextual filler that marks it as a hesitation. */
+    contextualPauseMs: z.number().nonnegative().default(250),
+    /** Longest phrase checked for false starts (« il y a plus… il y a plus d'autres »). */
+    repetitionMaxWords: z.number().int().nonnegative().default(4),
   }),
   motion: z.object({
     microDurationMs: Range.default([150, 300]),

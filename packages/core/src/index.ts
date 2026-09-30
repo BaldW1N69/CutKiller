@@ -1,3 +1,4 @@
+export * from "./analysis";
 export * from "./ease";
 export * from "./edl";
 export * from "./pass";
