@@ -34,8 +34,13 @@ def transcribe(request: dict[str, Any]) -> dict[str, Any]:
     model_name = request.get("model", "small")
     model = _model(model_name, request.get("computeType", "int8"))
     prompt = request.get("initialPrompt", DISFLUENT_PROMPT_FR if language == "fr" else None)
+    from .audio import load_mono
+
+    # Decoded by our FFmpeg on the container timeline (not by PyAV inside faster-whisper):
+    # same time origin as every other analyzer, no dependency on the PyAV version.
+    audio = load_mono(path, 16_000)
     segments, info = model.transcribe(
-        path,
+        audio,
         language=language,
         word_timestamps=True,
         vad_filter=False,
