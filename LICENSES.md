@@ -8,7 +8,7 @@ Colonne « Vérifiée » : ✅ = lue dans le fichier de licence de la source (20
 
 | Élément | Licence | Note |
 |---|---|---|
-| CutKiller (ce repo) | CC0-1.0 (fichier `LICENSE` actuel) | Compatible avec l'inclusion de code MIT, à condition de conserver les notices. CC0 n'accorde **pas de licence de brevet** : passage en Apache-2.0 ou MIT à décider (voir `docs/AUDIT.md`, Q7) |
+| CutKiller (ce repo) | **Apache-2.0** (fichier `LICENSE`, depuis la phase 1 ; CC0 auparavant) | Compatible avec l'inclusion de code MIT, à condition de conserver les notices ; octroie une licence de brevet |
 
 ## 2. Sources auditées (phase 0)
 
@@ -39,10 +39,12 @@ Idées **réimplémentées sans copie**, attribuées par courtoisie :
 
 | Dépendance | Usage | Licence | Mode | Vérifiée |
 |---|---|---|---|---|
-| FFmpeg (build Ubuntu 24.04, 6.1) | décodage, encodage x264/x265, loudnorm, ebur128, lut3d, blackdetect | GPL-2.0+ (build avec x264/x265) | exécutable externe, non lié, non redistribué | 🔎 |
-| @napi-rs/canvas (Skia) | compositeur | MIT (Skia : BSD-3) | npm | 🔎 |
-| zod | schémas EDL / profils | MIT | npm | 🔎 |
-| vitest, typescript | tests / build | MIT / Apache-2.0 | dev | 🔎 |
+| FFmpeg (build Ubuntu 24.04, 6.1.1) | décodage, encodage x264/x265, loudnorm, ebur128, lut3d, blackdetect | GPL-2.0+ (build avec x264/x265) | exécutable externe, non lié, non redistribué | 🔎 |
+| canvas (node-canvas) 3.2.3 | compositeur 2D | MIT ; binaires précompilés embarquant Cairo (LGPL-2.1 / MPL-1.1), Pango (LGPL-2.1) et leurs dépendances, liés dynamiquement | npm | ✅ (npm) |
+| zod 4 | schémas EDL / profils | MIT | npm | ✅ (npm) |
+| yaml 2 | lecture des profils | ISC | npm | ✅ (npm) |
+| typescript 7, vitest 5, tsx, @biomejs/biome | build, tests, lint | Apache-2.0 / MIT / MIT / MIT-Apache-2.0 | dev | 🔎 |
+| pytest, ruff, uv | tests et lint des workers | MIT / MIT / MIT-Apache-2.0 | dev | 🔎 |
 | faster-whisper + CTranslate2 | transcription au mot | MIT / MIT | pip | 🔎 |
 | Poids Whisper (OpenAI) | modèle ASR | MIT | téléchargés à l'exécution, non commités | 🔎 |
 | torchaudio | alignement forcé CTC | BSD-2-Clause | pip | 🔎 |

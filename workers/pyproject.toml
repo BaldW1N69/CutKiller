@@ -1,0 +1,16 @@
+[project]
+name = "cutkiller-workers"
+version = "0.1.0"
+description = "Workers d'analyse de CutKiller (transcription, alignement, beats, suivi du sujet)"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

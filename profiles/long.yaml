@@ -1,0 +1,33 @@
+# Profil « long » : YouTube horizontal (16:9).
+id: long
+version: 1.0.0
+description: Format horizontal YouTube, rythme posé mais sans temps mort.
+format: { kind: long, width: 1920, height: 1080, fps: 30 }
+export:
+  codec: h264
+  minBitrateMbps: { "30": 16, "60": 24 }
+  targetBitrateFactor: 1.25
+montage:
+  maxSilenceMs: 350
+  wordMarginMs: [80, 120]
+  jlCutFrames: [4, 12]
+  beatToleranceFrames: 1
+  maxStaticShotS: 8
+  punchInScale: [1.05, 1.15]
+motion:
+  microDurationMs: [150, 300]
+  transitionDurationMs: [200, 500]
+  motionBlurThresholdPxPerFrame: 12
+  overshoot: [0.03, 0.08]
+captions:
+  maxLines: 2
+  maxCharsPerLine: 32
+  maxSyncErrorFrames: { p95: 1, max: 3 }
+  minContrast: 4.5
+audio:
+  integratedLufs: -14
+  lufsTolerance: 1
+  truePeakDbtp: -1
+  duckingDb: [-18, -12]
+  cutFadeMs: [5, 10]
+  sfxToleranceFrames: 1

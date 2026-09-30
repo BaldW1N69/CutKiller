@@ -1,0 +1,378 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "format": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "short",
+            "long"
+          ]
+        },
+        "width": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "height": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fps": {
+          "anyOf": [
+            {
+              "type": "number",
+              "const": 30
+            },
+            {
+              "type": "number",
+              "const": 60
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "width",
+        "height",
+        "fps"
+      ]
+    },
+    "export": {
+      "type": "object",
+      "properties": {
+        "codec": {
+          "default": "h264",
+          "type": "string",
+          "enum": [
+            "h264",
+            "h265"
+          ]
+        },
+        "minBitrateMbps": {
+          "type": "object",
+          "properties": {
+            "30": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "60": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "30",
+            "60"
+          ]
+        },
+        "targetBitrateFactor": {
+          "default": 1.25,
+          "type": "number",
+          "minimum": 1
+        },
+        "allowedFps": {
+          "default": [
+            30,
+            60
+          ],
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "blackPixelThreshold": {
+          "default": 0.1,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "minBitrateMbps"
+      ]
+    },
+    "montage": {
+      "type": "object",
+      "properties": {
+        "maxSilenceMs": {
+          "default": 350,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "wordMarginMs": {
+          "default": [
+            80,
+            120
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "jlCutFrames": {
+          "default": [
+            4,
+            12
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "beatToleranceFrames": {
+          "default": 1,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxStaticShotS": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "punchInScale": {
+          "default": [
+            1.05,
+            1.15
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "maxStaticShotS"
+      ]
+    },
+    "motion": {
+      "type": "object",
+      "properties": {
+        "microDurationMs": {
+          "default": [
+            150,
+            300
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "transitionDurationMs": {
+          "default": [
+            200,
+            500
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "motionBlurThresholdPxPerFrame": {
+          "default": 12,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "overshoot": {
+          "default": [
+            0.03,
+            0.08
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "captions": {
+      "type": "object",
+      "properties": {
+        "wordsPerScreen": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "maxLines": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxCharsPerLine": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxSyncErrorFrames": {
+          "default": {
+            "p95": 1,
+            "max": 3
+          },
+          "type": "object",
+          "properties": {
+            "p95": {
+              "type": "number",
+              "minimum": 0
+            },
+            "max": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "p95",
+            "max"
+          ]
+        },
+        "minContrast": {
+          "default": 4.5,
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "properties": {
+        "integratedLufs": {
+          "default": -14,
+          "type": "number"
+        },
+        "lufsTolerance": {
+          "default": 1,
+          "type": "number",
+          "minimum": 0
+        },
+        "truePeakDbtp": {
+          "default": -1,
+          "type": "number"
+        },
+        "duckingDb": {
+          "default": [
+            -18,
+            -12
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "cutFadeMs": {
+          "default": [
+            5,
+            10
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "sfxToleranceFrames": {
+          "default": 1,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "format",
+    "export",
+    "montage",
+    "motion",
+    "captions",
+    "audio"
+  ]
+}

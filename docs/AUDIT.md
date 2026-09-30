@@ -1,7 +1,22 @@
 # Phase 0 — Audit CutKiller
 
-> Statut : **en attente de validation**. Rien n'est implémenté tant que ce document n'est pas validé.
-> Date : 2026-09-30.
+> Statut : **validé le 2026-09-30**. Décisions ci-dessous ; le reste du document est l'audit tel que validé.
+
+## Décisions validées
+
+| Sujet | Décision |
+|---|---|
+| Seuil de motion blur (`{{SEUIL_PX}}`) | 12 px/frame |
+| Débit minimum (`{{BITRATE}}`) | 16 Mbps en 30 fps, 24 Mbps en 60 fps (cible d'encodage : ×1,25) |
+| Machine (`{{OS_ET_GPU}}`) | CPU seul / cloud ; option GPU prévue plus tard |
+| Rushes de test (`{{DOSSIER_RUSHES_TEST}}`) | Rushes sous licence libre récupérés sur le web (+ fixtures synthétiques pour les tests unitaires) |
+| Langue | Français |
+| Licence | Apache-2.0 |
+| Profils | `short` (9:16) et `long` (16:9) traités à égalité |
+| Remotion | Écarté du cœur |
+| Plan | QA dès la phase 1 ; score calculé sur le périmètre livré, avec taux de couverture |
+| Règles reformulées (§6) | Sync p95 ≤ 1 frame / max ≤ 3 ; beats sur coupes libres ; doublons attendus exclus |
+| Accès réseau | Ouvert (HuggingFace accessible) |
 
 ## 0. Synthèse
 
@@ -10,7 +25,7 @@
 - **Le « CapCut AI toolkit » n'a rien à voir avec CapCut.** C'est `digitalsamba/claude-code-video-toolkit` (MIT). On n'y trouve **aucune** référence à CapCut, ByteDance, Jianying ou Douyin (grep à 0 résultat). Il n'y a donc pas de risque de contamination par du code propriétaire, mais pas non plus de fonctions « CapCut » à récupérer.
 - **Réutilisation de code : presque nulle.** Ce qu'on récupère, ce sont surtout des idées : `MediaTime` en ticks entiers, les parseurs SRT/ASS, l'alignement script→transcription, le test de non-régression par rendu A/B. Environ 95 % du moteur est à écrire.
 - **Remotion n'est pas open source.** C'est une licence *source-available* : gratuite jusqu'à 3 salariés, licence entreprise payante au-delà. Je propose de ne pas le mettre dans le cœur du projet.
-- **Stack recommandée** : cœur TypeScript (EDL, passes de montage, compositeur, QA) avec des workers Python d'analyse (faster-whisper, alignement forcé, librosa, MediaPipe). Le rendu passe par un décodage FFmpeg, un compositeur Skia, puis un encodage FFmpeg.
+- **Stack recommandée** : cœur TypeScript (EDL, passes de montage, compositeur, QA) avec des workers Python d'analyse (faster-whisper, alignement forcé, librosa, MediaPipe). Le rendu passe par un décodage FFmpeg, un compositeur 2D (node-canvas / Cairo), puis un encodage FFmpeg.
 - **Trois règles de `<standards_qualite>` sont irréalisables ou contradictoires telles qu'elles sont écrites.** Il s'agit de la synchro des sous-titres ≤ 1 frame dans 100 % des cas, des coupes sur les beats en présence de parole, et de « zéro frame dupliquée » avec 60 fps ou des plans fixes. Des reformulations mesurables sont proposées au §6.
 
 ---
@@ -55,7 +70,7 @@ Légende : **Garder** = code copié tel quel, avec en-tête MIT. **Réécrire** 
 | Musique (`addmusic.py`, `build.py`) | Jeter | Volume constant (0.15–0.16) sans ducking |
 | SFX (`sfx.py`) | Jeter | Dépend de l'API propriétaire ElevenLabs. Remplacé par des SFX synthétisés procéduralement (whoosh, pop, hit), déterministes et libres de droits |
 | Mesure WPM (`pacing.py`) | Jeter (idée notée) | Pas de règle associée. Pourra servir plus tard en diagnostic QA |
-| Test render-baseline (rendu A/B + diff pixel lors d'une mise à jour de dépendance) | **Réécrire** l'idée | Bonne pratique : protège le compositeur contre les régressions de Skia ou FFmpeg sans images « golden » dépendantes de la machine |
+| Test render-baseline (rendu A/B + diff pixel lors d'une mise à jour de dépendance) | **Réécrire** l'idée | Bonne pratique : protège le compositeur contre les régressions de Cairo ou FFmpeg sans images « golden » dépendantes de la machine |
 | TTS, FLUX, LTX-2, SadTalker, dewatermark, Modal/RunPod, upload YouTube, skills Claude | Jeter | Génération IA ou cloud, hors périmètre. `dewatermark` pose en plus un problème juridique |
 
 ---
@@ -82,7 +97,7 @@ Légende : **Garder** = code copié tel quel, avec en-tête MIT. **Réécrire** 
 |---|---|---|
 | Langage cœur | **TypeScript** (Node 22, `strict`), en workspaces pnpm, testé avec vitest | Tout-Python : moins adapté au compositeur et au typage de l'EDL |
 | Analyse ML | **Workers Python 3.11** (uv, pytest), appelés en sous-processus, avec des entrées/sorties JSON validées par le même JSON Schema | Bindings Node de whisper.cpp : pas d'alignement forcé, écosystème pauvre |
-| Rendu | **Compositeur maison** : décodage FFmpeg (rawvideo) → `@napi-rs/canvas` (Skia, MIT) → encodage FFmpeg. Le mix audio est un `filter_complex` FFmpeg | Remotion : licence, capture Chromium lente (~5–15 fps en 1080p), rendu des polices non déterministe. Filtergraph FFmpeg seul : springs, overshoot, karaoké et motion blur par couche trop limités. WebCodecs : navigateur uniquement, inutile en batch |
+| Rendu | **Compositeur maison** : décodage FFmpeg (rawvideo) → `canvas` (node-canvas, Cairo, MIT) → encodage FFmpeg. Le mix audio est un `filter_complex` FFmpeg. *Mis à jour en phase 1 : `@napi-rs/canvas` (Skia) mesuré à ~110 ms/frame d'aller-retour de pixels en 1080×1920, contre ~21 ms pour node-canvas* | Remotion : licence, capture Chromium lente (~5–15 fps en 1080p), rendu des polices non déterministe. Filtergraph FFmpeg seul : springs, overshoot, karaoké et motion blur par couche trop limités. WebCodecs : navigateur uniquement, inutile en batch |
 | Transcription | **faster-whisper** (MIT) large-v3 avec `word_timestamps`, puis **alignement forcé** wav2vec2 FR (Apache-2.0) | Timestamps Whisper seuls : erreur de ±50–200 ms, alors que la cible est 33 ms |
 | VAD / respirations | **Silero VAD** (MIT) + énergie/spectre | pyannote : modèles « gated » |
 | Beats | **librosa** (ISC), `beat_track` + raffinement sur l'onset | essentia (AGPL), madmom (modèles NC) |
@@ -109,7 +124,7 @@ flowchart LR
     P1[cut] --> P2[reframe] --> P3[color] --> P4[motion] --> P5[captions] --> P6[audio]
   end
   PL --> E[(edit.edl.json\néditable à la main)]
-  E --> RD[3. render\ndecode → compositeur Skia → encode\n+ mix audio]
+  E --> RD[3. render\ndecode → compositeur Cairo → encode\n+ mix audio]
   RD --> OUT[final.mp4 + stems + render-log.json]
   OUT --> QA[4. quality-check\nscore /100 + violations]
   E --> QA
@@ -228,7 +243,7 @@ La CLI propose `cutkiller analyze | plan | render | check | auto`. En option (P2
 |---|---|---|---|
 | 1 | Monorepo, CI GitHub Actions (lint, typecheck, tests TS+Py, smoke render). `core` : schéma EDL zod→JSON Schema, validateur, MediaTime. `style` : profils + registre de presets. Renderer minimal (coupes + concaténation audio → MP4 en CFR). Squelette QA. Fixtures synthétiques | M | 2–3 j |
 | 2 | Transcription + alignement forcé FR, VAD, fillers et respirations, suppression des silences avec marges, beats + snapping, J/L cuts, contrôle du rythme | **XL** | 5–8 j |
-| 3 | Easing, springs, registre de presets (whip-pan, zoom-punch, glitch-cut, smooth-slide), compositeur Skia, motion blur par sous-frames, punch-ins sur l'emphase (prosodie + lexique) | L | 4–6 j |
+| 3 | Easing, springs, registre de presets (whip-pan, zoom-punch, glitch-cut, smooth-slide), compositeur Cairo, motion blur par sous-frames, punch-ins sur l'emphase (prosodie + lexique) | L | 4–6 j |
 | 4 | Découpage des sous-titres (court / long), rendu karaoké du mot actif, safe zones par plateforme, contraste WCAG | M | 3–4 j |
 | 5 | LUFS en 2 passes (cible −1,5 dBTP avant AAC), automation du ducking, SFX procéduraux + placement, micro-fondus aux coupes | M | 3–4 j |
 | 6 | Tracking MediaPipe + lissage, recadrage 9:16, statistiques de plans, LUT et égalisation d'exposition, presets d'export | L | 4–6 j |

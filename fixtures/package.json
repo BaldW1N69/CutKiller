@@ -1,0 +1,13 @@
+{
+  "name": "@cutkiller/fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./generate.ts"
+  },
+  "dependencies": {
+    "@cutkiller/media": "workspace:*"
+  }
+}
