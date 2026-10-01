@@ -1,5 +1,13 @@
 import { spawn } from "node:child_process";
-import { clipEnd, clipFrames, type Edl, sortedClips, type VideoClip } from "@cutkiller/core";
+import {
+  animationIndex,
+  clipEnd,
+  clipFrames,
+  type Edl,
+  maxAnimatedScale,
+  sortedClips,
+  type VideoClip,
+} from "@cutkiller/core";
 import { ffmpegBin, waitFor } from "@cutkiller/media";
 import { decoderChain } from "@cutkiller/render";
 
@@ -62,8 +70,13 @@ export async function clipFrameStats(
   baseDir: string,
   blackThreshold: number,
 ): Promise<FrameStats> {
-  const { input, vf, duration } = decoderChain(edl, clip, baseDir);
-  const { width, height } = edl.output;
+  const { input, vf: fit, duration } = decoderChain(edl, clip, baseDir);
+  // A clip that zooms in (animated punch-in) only shows its centre: compare the
+  // source on that same centre, or motion at the edges would hide repeated pictures.
+  const zoom = maxAnimatedScale(animationIndex(edl), clip.id, edl.output.fps);
+  const width = Math.round(edl.output.width / zoom / 2) * 2;
+  const height = Math.round(edl.output.height / zoom / 2) * 2;
+  const vf = zoom > 1 ? `${fit},crop=${width}:${height}` : fit;
   const stats: FrameStats = { diffs: [], black: [] };
   const limit = Math.round(16 + blackThreshold * 219); // limited-range luma, as blackdetect sees it
   let prev: Buffer | null = null;

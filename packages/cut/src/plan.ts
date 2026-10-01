@@ -159,8 +159,13 @@ export function planClips(input: PlanInput): { clips: PlannedClip[]; framingInde
 
   for (const run of runs) {
     const runIn = Math.max(0, start(run));
-    const runOut = Math.min(durationS, end(run));
-    const runFrames = Math.round((runOut - runIn) * fps);
+    let runOut = Math.min(durationS, end(run));
+    let runFrames = Math.round((runOut - runIn) * fps);
+    // Whole frames must not reach past the end of the rush: drop the last one.
+    if (runIn + runFrames / fps > durationS + 1e-9) {
+      runFrames--;
+      runOut = runIn + runFrames / fps;
+    }
     const splits = zoomSplits(runFrames, pos, beatFrames, profile, fps, (lo, hi, ideal) =>
       bestPause(run, runIn, fps, lo, hi, ideal),
     );

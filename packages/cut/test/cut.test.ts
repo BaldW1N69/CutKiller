@@ -142,6 +142,25 @@ describe("planClips", () => {
       return profile.montage.zoomCutLevels[Math.floor(k / 2) % profile.montage.zoomCutLevels.length];
     }
   });
+
+  it("never reaches past the end of the rush once rounded to whole frames", () => {
+    // Last word ends 50 ms before the end: 5.625 s of material (margin cut short)
+    // would round up to 169 frames (5.633 s), 8 ms past the source.
+    const tokens = classifyWords(W("fin@174.5-179.975"), profile);
+    const { clips } = planClips({
+      tokens,
+      durationS: 180.025,
+      profile,
+      fps: 30,
+      startFrame: 0,
+      beatFrames: [],
+      framingIndex: 0,
+    });
+    const last = clips.at(-1)!;
+    const frames = clips.reduce((n, k) => n + k.frames, 0);
+    expect(clips[0]!.in + frames / 30).toBeLessThanOrEqual(180.025);
+    expect(Math.round((last.out - last.in) * 30)).toBe(last.frames);
+  });
 });
 
 describe("cutPass", () => {
