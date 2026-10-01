@@ -8,11 +8,12 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@cutkiller/captions": "workspace:*",
     "@cutkiller/core": "workspace:*",
     "@cutkiller/media": "workspace:*",
-    "canvas": "3.2.3",
     "@cutkiller/motion": "workspace:*",
-    "@cutkiller/style": "workspace:*"
+    "@cutkiller/style": "workspace:*",
+    "canvas": "3.2.3"
   },
   "devDependencies": {
     "@cutkiller/fixtures": "workspace:*",

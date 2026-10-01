@@ -1,0 +1,18 @@
+{
+  "name": "subtitle-clean",
+  "version": "1.0.0",
+  "kind": "captions",
+  "description": "Format long : 2 lignes de 32 caractères au plus, Poppins SemiBold blanc à contour noir, mot prononcé en jaune, apparition en fondu court.",
+  "params": {
+    "font": { "file": "assets/fonts/poppins/Poppins-SemiBold.ttf", "family": "Poppins", "weight": "600" },
+    "sizeRel": 0.05,
+    "lineHeight": 1.2,
+    "uppercase": false,
+    "stripPunctuation": false,
+    "fill": "#FFFFFF",
+    "activeFill": "#FFE14D",
+    "stroke": { "color": "#000000", "widthRel": 0.16 },
+    "shadow": { "color": "rgba(0,0,0,0.5)", "blurRel": 0.1, "offsetYRel": 0.05 },
+    "entry": "caption-fade@1"
+  }
+}

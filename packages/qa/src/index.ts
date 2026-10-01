@@ -1,6 +1,12 @@
 import type { Analysis, Edl, StyleProfile } from "@cutkiller/core";
 import { PresetRegistry } from "@cutkiller/style";
 import { checkCutClicks } from "./checks/audio";
+import {
+  checkCaptionContrast,
+  checkCaptionDensity,
+  checkCaptionSync,
+  checkSafeZones,
+} from "./checks/captions";
 import { checkJlCuts, checkNoLinear, edlErrors } from "./checks/edl";
 import { checkBitrate, checkBlackFrames, checkDuplicateFrames, checkExportFormat } from "./checks/image";
 import { checkBeatCuts, checkFillers, checkSilences, checkStaticShots } from "./checks/montage";
@@ -14,6 +20,7 @@ import {
 import { buildReport, type CheckResult, type Report } from "./report";
 
 export { audioEditFrames, clickScore } from "./checks/audio";
+export { contrastRatio, luminance, parseColor } from "./checks/captions";
 export { DUPLICATE_MAD } from "./checks/image";
 export * from "./report";
 export * from "./rules";
@@ -29,6 +36,8 @@ export interface QualityCheckInput {
   analysis?: Analysis;
   /** Re-transcribe the render to look for leftover hesitations (slow: ~1× real time). Default: true. */
   transcribeOutput?: boolean;
+  /** Force-align the captions on the rendered dialogue to measure their sync (needs the models). Default: true. */
+  alignCaptions?: boolean;
   /** Preset library the EDL refers to (default: the repo's presets/). */
   registry?: PresetRegistry;
 }
@@ -65,6 +74,15 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
       checkMotionBlur(input.video, input.edl, registry, input.profile),
     );
     results.push(checkBeatCuts(input.edl, input.profile, input.analysis));
+    results.push(
+      checkCaptionDensity(input.edl, input.profile),
+      checkSafeZones(input.edl, input.profile, registry),
+      await checkCaptionContrast(input.video, input.edl, input.profile, registry),
+    );
+    if (input.alignCaptions !== false)
+      results.push(
+        await checkCaptionSync(input.video, input.edl, input.profile, input.analysis, ctx.baseDir),
+      );
     const hasSpeech = Object.keys(input.analysis?.transcripts ?? {}).length > 0;
     if (hasSpeech) {
       results.push(await checkSilences(input.video, input.edl, input.profile, input.analysis));

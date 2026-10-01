@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { analyzeSources } from "@cutkiller/analyze";
 import { audioPass } from "@cutkiller/audio";
-import { captionsPass } from "@cutkiller/captions";
+import { captionsPass, toSrt } from "@cutkiller/captions";
 import { colorPass } from "@cutkiller/color";
 import {
   type Analysis,
@@ -106,6 +106,9 @@ async function doRender(edl: Edl, edlPath: string, out: string, draft: boolean, 
     },
   });
   process.stderr.write(`\rrendu 100 % — ${log.frames} frames à ${log.renderFps.toFixed(1)} fps\n`);
+  // Sidecar subtitles (same cues as the burnt-in captions) for the platforms' own subtitle track.
+  if (edl.captions.length > 0)
+    await writeFile(`${out.replace(/\.[^./]+$/, "")}.srt`, toSrt(edl.captions, edl.output.fps));
   for (const w of log.warnings) console.error(`⚠ ${w}`);
   return log;
 }

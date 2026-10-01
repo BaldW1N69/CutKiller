@@ -18,7 +18,7 @@ export interface AnalyzeOptions {
 }
 
 /** Bump when an analyzer's output changes, to invalidate cached results. */
-const ANALYZER_VERSION = { transcribe: "5", vad: "2", beats: "3", prosody: "1" } as const;
+const ANALYZER_VERSION = { transcribe: "7", vad: "2", beats: "3", prosody: "1" } as const;
 
 /**
  * Stage 1 of the pipeline. Every input is probed; with `deep`, rushes with speech

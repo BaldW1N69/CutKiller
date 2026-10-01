@@ -77,6 +77,37 @@ describe("cutkiller CLI (bout en bout)", () => {
     const notes = edl.video[0].clips.map((c: { why: { note?: string } }) => c.why.note ?? "").join(" ");
     expect(notes).toMatch(/euh/i);
     expect(notes).toMatch(/silence de/);
+
+    // Captions: every rule passes, and each highlight starts within a frame of the
+    // ground-truth onset of its word (the synthetic voice's exact timings).
+    expect(byId).toMatchObject({
+      "captions.sync": "pass",
+      "captions.density": "pass",
+      "captions.safe-zones": "pass",
+      "captions.contrast": "pass",
+    });
+    expect(await readFile(join(dir, "final.srt"), "utf8")).toMatch(/^1\n00:00:\d\d,\d{3} --> /);
+    const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}']/gu, "");
+    const fps = edl.output.fps;
+    type Clip = { at: number; in: number; out: number };
+    const clips: Clip[] = edl.video[0].clips;
+    const errors: number[] = [];
+    for (const c of edl.captions as { words: { text: string; fromFrame: number }[] }[])
+      for (const w of c.words) {
+        const clip = clips.find(
+          (k) => k.at <= w.fromFrame && w.fromFrame < k.at + Math.round((k.out - k.in) * fps),
+        );
+        if (!clip) continue;
+        const t = clip.in + (w.fromFrame - clip.at) / fps;
+        const truth = fx.speechTruth.words
+          .filter((x) => !x.filler && norm(x.text) === norm(w.text))
+          .sort((a, b) => Math.abs(a.start - t) - Math.abs(b.start - t))[0];
+        if (truth && Math.abs(truth.start - t) < 0.5) errors.push(Math.abs(truth.start - t) * fps);
+      }
+    errors.sort((a, b) => a - b);
+    expect(errors.length).toBeGreaterThan(10);
+    expect(errors[Math.ceil(errors.length * 0.95) - 1]).toBeLessThanOrEqual(1);
+    expect(errors.at(-1)).toBeLessThanOrEqual(3);
   }, 900_000);
 
   it("validate rejects a broken EDL with readable diagnostics", async () => {

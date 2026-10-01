@@ -1,0 +1,14 @@
+{
+  "name": "caption-pop",
+  "version": "1.0.0",
+  "kind": "motion",
+  "description": "Apparition d'un sous-titre : échelle 0,8 → 1 en 200 ms sur un ressort amorti (≈5 % de rebond).",
+  "params": {
+    "property": "scale",
+    "role": "entry",
+    "durationMs": 200,
+    "from": 0.8,
+    "to": 1,
+    "ease": { "spring": { "stiffness": 1310, "damping": 50, "mass": 1 } }
+  }
+}

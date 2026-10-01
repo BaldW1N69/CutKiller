@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { CaptionTimeline, captionStyle } from "@cutkiller/captions";
 import {
   type Ease,
   type Edl,
@@ -150,6 +151,21 @@ export function checkPresets(edl: Edl, registry: PresetRegistry, profile: StyleP
       violations.push({ message: `${t.id} : ${(e as Error).message}`, frame: t.atFrame });
     }
   }
+  // Caption styles and the entry animation each one plays.
+  for (const ref of new Set(edl.captions.map((c) => c.style))) {
+    items++;
+    try {
+      const style = captionStyle(registry, ref);
+      if (style.entry) {
+        const entry = registry.resolve(style.entry);
+        const params = MotionParamsSchema.safeParse(entry.params);
+        if (entry.kind !== "motion" || !params.success || params.data.role !== "entry")
+          violations.push({ message: `${ref} : ${style.entry} n'est pas une animation d'entrée` });
+      }
+    } catch (e) {
+      violations.push({ message: `${ref} : ${(e as Error).message}` });
+    }
+  }
   if (items === 0) return notEvaluated("motion.presets", "aucun preset");
   return graded("motion.presets", items, violations, { presets: library.length });
 }
@@ -209,7 +225,7 @@ export function checkOvershoot(edl: Edl, registry: PresetRegistry, profile: Styl
 
 /**
  * Motion blur: recomputes, from the EDL, every frame moving faster than the
- * threshold and checks the render log says it was blurred (several shutter
+ * threshold (pictures, transitions and caption entries) and checks the render log says it was blurred (several shutter
  * samples). Indirect measure: blur is not measured on the pixels.
  */
 export function checkMotionBlur(
@@ -224,11 +240,12 @@ export function checkMotionBlur(
   if (!log.motion) return notEvaluated("motion.blur", "journal de rendu sans données de mouvement");
   const rendered = new Map(log.motion.frames.map(([f, , n]) => [f, n]));
   const timeline = new MotionTimeline(edl, resolveTransitions(edl, registry));
+  const captions = new CaptionTimeline(edl, registry);
   const threshold = profile.motion.motionBlurThresholdPxPerFrame;
   const violations: Violation[] = [];
   let fast = 0;
   for (let f = 0; f < log.frames; f++) {
-    const v = timeline.velocityAt(f);
+    const v = Math.max(timeline.velocityAt(f), captions.velocityAt(f));
     if (v <= threshold) continue;
     fast++;
     if ((rendered.get(f) ?? 1) < 2)

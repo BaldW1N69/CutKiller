@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -171,8 +172,42 @@ def rescan_fillers(
 
     out: list[dict[str, Any]] = []
     for k, w in enumerate(words):
-        out.extend(_carve(w, found[k]) if k in found else [w])
+        if k not in found:
+            out.append(w)
+            continue
+        pieces = _carve(w, found[k])
+        if not all(_plausible(p) for p in pieces if _norm(p["text"]) not in FILLERS):
+            pieces = _realign(audio, pieces)
+        out.extend(pieces)
     return out
+
+
+def _plausible(word: dict[str, Any]) -> bool:
+    """A word cannot be spoken faster than ~25 ms per letter (60 ms at least)."""
+    letters = len(re.findall(r"[^\W\d_]", word["text"]))
+    return word["end"] - word["start"] >= max(0.06, 0.025 * letters)
+
+
+def _realign(audio: np.ndarray, pieces: list[dict[str, Any]], pad: float = 0.05) -> list[dict[str, Any]]:
+    """Force-aligns the filler(s) and the word together over the span they share.
+
+    Carving keeps the filler's own boundaries: when its alignment swallowed the
+    word (« euh » stretched over « euh d'autres »), the word is left with a few
+    milliseconds and the edit would cut it. Aligning the whole sequence lets CTC
+    share the span between them.
+    """
+    from .align import RATE, align_words
+
+    a = max(0.0, min(p["start"] for p in pieces) - pad)
+    b = min(len(audio) / RATE, max(p["end"] for p in pieces) + pad)
+    local = [dict(p, start=p["start"] - a, end=p["end"] - a) for p in pieces]
+    aligned = align_words(None, local, audio=audio[int(a * RATE) : int(b * RATE)])
+    if any(x.get("timing") != "forced" for x in aligned):
+        return pieces
+    return [
+        dict(p, start=round(x["start"] + a, 3), end=round(x["end"] + a, 3), realigned=True)
+        for p, x in zip(pieces, aligned, strict=True)
+    ]
 
 
 def _carve(word: dict[str, Any], fillers: list[dict[str, Any]]) -> list[dict[str, Any]]:

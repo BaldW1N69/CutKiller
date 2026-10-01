@@ -148,5 +148,30 @@ export function validateEdl(edl: Edl): Diagnostic[] {
     lastEnd = t.atFrame + half;
   }
 
+  // Captions: in order, never overlapping, words inside their caption and in spoken order.
+  let captionEnd = 0;
+  edl.captions.forEach((c, k) => {
+    const path = `captions.${k}`;
+    if (c.toFrame <= c.fromFrame) err("captions.range", `sous-titre « ${c.id} » vide`, path);
+    if (c.fromFrame < captionEnd)
+      err("captions.overlap", `le sous-titre « ${c.id} » chevauche le précédent`, path);
+    captionEnd = Math.max(captionEnd, c.toFrame);
+    let prevFrom = -1;
+    let prevLine = 0;
+    c.words.forEach((w, i) => {
+      const wpath = `${path}.words.${i}`;
+      if (w.fromFrame < c.fromFrame || w.fromFrame >= c.toFrame || w.toFrame <= w.fromFrame)
+        err("captions.word-range", `mot « ${w.text} » hors de son sous-titre « ${c.id} »`, wpath);
+      if (w.fromFrame < prevFrom)
+        err("captions.word-order", `mots du sous-titre « ${c.id} » dans le désordre`, wpath);
+      if (w.line < prevLine || w.line > prevLine + 1)
+        err("captions.lines", `lignes du sous-titre « ${c.id} » non consécutives`, wpath);
+      prevFrom = w.fromFrame;
+      prevLine = w.line;
+    });
+    if ((c.words[0]?.line ?? 0) !== 0)
+      err("captions.lines", `le sous-titre « ${c.id} » doit commencer à la ligne 0`, path);
+  });
+
   return out;
 }

@@ -50,6 +50,19 @@ importers:
       '@cutkiller/core':
         specifier: workspace:*
         version: link:../core
+      '@cutkiller/motion':
+        specifier: workspace:*
+        version: link:../motion
+      canvas:
+        specifier: 3.2.3
+        version: 3.2.3
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@cutkiller/style':
+        specifier: workspace:*
+        version: link:../style
 
   packages/cli:
     dependencies:
@@ -139,6 +152,9 @@ importers:
       '@cutkiller/analyze':
         specifier: workspace:*
         version: link:../analyze
+      '@cutkiller/captions':
+        specifier: workspace:*
+        version: link:../captions
       '@cutkiller/core':
         specifier: workspace:*
         version: link:../core
@@ -157,6 +173,9 @@ importers:
       '@cutkiller/style':
         specifier: workspace:*
         version: link:../style
+      canvas:
+        specifier: 3.2.3
+        version: 3.2.3
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -173,6 +192,9 @@ importers:
 
   packages/render:
     dependencies:
+      '@cutkiller/captions':
+        specifier: workspace:*
+        version: link:../captions
       '@cutkiller/core':
         specifier: workspace:*
         version: link:../core

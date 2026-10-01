@@ -15,9 +15,12 @@
     "@cutkiller/style": "workspace:*",
     "@cutkiller/analyze": "workspace:*",
     "@cutkiller/cut": "workspace:*",
-    "@cutkiller/motion": "workspace:*"
+    "@cutkiller/motion": "workspace:*",
+    "@cutkiller/captions": "workspace:*",
+    "canvas": "3.2.3"
   },
   "devDependencies": {
-    "@cutkiller/fixtures": "workspace:*"
+    "@cutkiller/fixtures": "workspace:*",
+    "@cutkiller/captions": "workspace:*"
   }
 }

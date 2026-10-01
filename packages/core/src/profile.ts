@@ -212,9 +212,55 @@ export const StyleProfileSchema = z.object({
       }),
   }),
   captions: z.object({
+    /** Burn captions into the video. */
+    enabled: z.boolean().default(true),
+    /** Caption style preset (`presets/captions/`). */
+    style: z.string().default("subtitle-clean@1"),
+    /** Short-form screens: 1–3 words. Unset: limited by lines and characters only. */
     wordsPerScreen: Range.optional(),
-    maxLines: z.number().int().positive().optional(),
-    maxCharsPerLine: z.number().int().positive().optional(),
+    maxLines: z.number().int().positive().default(2),
+    maxCharsPerLine: z.number().int().positive().default(32),
+    /**
+     * Long form: after a comma, start a new caption once this share of the
+     * caption's capacity (lines × characters) is used. Short form breaks at every comma.
+     */
+    commaBreakFill: z.number().min(0).max(1).default(0.4),
+    /** A pause at least this long between two words starts a new caption. */
+    pauseBreakMs: z.number().nonnegative().default(400),
+    /** Longest a caption stays on screen. */
+    maxDurationS: z.number().positive().default(6),
+    /** How long a caption lingers after its last word when nothing follows. */
+    holdMs: z.number().nonnegative().default(500),
+    /** Shortest a caption is shown, if the next one allows it. */
+    minDurationMs: z.number().nonnegative().default(700),
+    /**
+     * Vertical placement: `y` is the caption block's centre (`anchor: center`) or
+     * bottom edge (`anchor: bottom`), as a fraction of the frame height. The block
+     * is kept inside the safe zone in any case.
+     */
+    placement: z
+      .object({
+        anchor: z.enum(["center", "bottom"]).default("bottom"),
+        y: z.number().min(0).max(1).default(0.9),
+      })
+      .default({ anchor: "bottom", y: 0.9 }),
+    /**
+     * Areas covered by each target platform's interface, as fractions of the frame
+     * (top, bottom, left, right). Captions must stay inside the intersection of
+     * every listed platform's safe area. Versioned with the profile: platforms move
+     * their buttons.
+     */
+    safeZones: z
+      .record(
+        z.string(),
+        z.object({
+          top: z.number().min(0).max(0.5),
+          bottom: z.number().min(0).max(0.5),
+          left: z.number().min(0).max(0.5),
+          right: z.number().min(0).max(0.5),
+        }),
+      )
+      .default({ "title-safe": { top: 0.05, bottom: 0.05, left: 0.05, right: 0.05 } }),
     maxSyncErrorFrames: z.object({ p95: z.number().nonnegative(), max: z.number().nonnegative() }).default({
       p95: 1,
       max: 3,

@@ -29,8 +29,17 @@ motion:
     minSpacingS: 12
     minRemovedS: 1.2
 captions:
+  style: subtitle-clean@1
   maxLines: 2
   maxCharsPerLine: 32
+  pauseBreakMs: 500
+  maxDurationS: 6
+  holdMs: 500
+  minDurationMs: 800
+  placement: { anchor: bottom, y: 0.92 }
+  # Zone de titrage (title-safe, 90 % de l'image) : rien sous les contrôles du lecteur.
+  safeZones:
+    title-safe: { top: 0.05, bottom: 0.05, left: 0.05, right: 0.05 }
   maxSyncErrorFrames: { p95: 1, max: 3 }
   minContrast: 4.5
 audio:

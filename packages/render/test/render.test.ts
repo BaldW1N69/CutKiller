@@ -230,4 +230,70 @@ describe("animations, transitions et flou de mouvement", () => {
     const still = await edgeEnergy(blurred.out, 40, 270, 480);
     expect(still).toBeGreaterThan(without * 0.6);
   });
+
+  it("garde les sous-titres intacts par-dessus un glitch", async () => {
+    const fx = await generateFixtures();
+    const parsed = parseEdl({
+      version: "1.2.0",
+      output: {
+        format: "short",
+        width: 540,
+        height: 960,
+        fps: 30,
+        video: { bitrateMbps: 8, preset: "veryfast" },
+        audio: {},
+      },
+      sources: { a: { path: fx.cam16x9, durationS: 6 }, b: { path: fx.cam9x16, durationS: 4 } },
+      video: [
+        {
+          id: "main",
+          clips: [
+            { id: "c1", source: "a", in: 0, out: 2, at: 0 },
+            { id: "c2", source: "b", in: 0, out: 1, at: 60 },
+          ],
+        },
+      ],
+      transitions: [{ id: "t1", atFrame: 60, preset: "glitch-cut@1", durationFrames: 6 }],
+      captions: [
+        {
+          id: "k1",
+          style: "karaoke-pop@1",
+          fromFrame: 45,
+          toFrame: 80,
+          words: [{ text: "GLITCH", fromFrame: 45, toFrame: 80 }],
+        },
+      ],
+    });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.diagnostics));
+    const out = join(await mkdtemp(join(tmpdir(), "ck-captions-")), "c.mp4");
+    const log = await render(parsed.edl, { baseDir: fx.dir, outPath: out });
+    expect(log.motion.glitchFrames).toBe(6);
+    expect(log.motion.captionFrames).toBe(35);
+    // Highlight yellow pixels of the spoken word: same on the glitch's peak (60) as after it (70).
+    const yellow = async (frame: number) => {
+      const { stdout } = await ffmpeg([
+        "-v",
+        "error",
+        "-i",
+        out,
+        "-vf",
+        `select='eq(n,${frame})',format=rgb24`,
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-",
+      ]);
+      let n = 0;
+      for (let i = 0; i < stdout.length; i += 3)
+        if ((stdout[i] as number) > 200 && (stdout[i + 1] as number) > 180 && (stdout[i + 2] as number) < 140)
+          n++;
+      return n;
+    };
+    const during = await yellow(60);
+    const after = await yellow(70);
+    expect(after).toBeGreaterThan(300);
+    expect(during / after).toBeGreaterThan(0.85);
+    expect(during / after).toBeLessThan(1.15);
+  });
 });

@@ -57,7 +57,7 @@ describe("bibliothèque de presets", () => {
   it("les presets du repo respectent toutes les règles", () => {
     const r = checkPresets(edlOf(input()), registry, profile);
     expect(r.violations).toEqual([]);
-    expect(r.measured).toMatchObject({ presets: 6 });
+    expect(r.measured).toMatchObject({ presets: 8 });
   });
 
   it("signale durée, linéarité, forme et dépassement hors règles", async () => {

@@ -38,10 +38,23 @@ def _prosody(request: dict[str, Any]) -> Any:
     return prosody(request)
 
 
+def _align(request: dict[str, Any]) -> Any:
+    """Alignement forcé d'un texte connu (mots avec position approximative) sur un audio."""
+    from .align import RATE, align_words, noise_floor_db
+    from .audio import load_mono
+
+    words = [
+        {"text": w["text"], "start": float(w["start"]), "end": float(w["end"])} for w in request["words"]
+    ]
+    floor = noise_floor_db(load_mono(request["floorPath"], RATE)) if request.get("floorPath") else None
+    return {"words": align_words(request["path"], words, floor_db=floor) if words else [], "floorDb": floor}
+
+
 TASKS: dict[str, Task] = {
     "ping": ping,
     "transcribe": _transcribe,
     "vad": _vad,
     "beats": _beats,
     "prosody": _prosody,
+    "align": _align,
 }

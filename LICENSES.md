@@ -26,14 +26,15 @@ Le toolkit s'appuie sur des API propriétaires : ElevenLabs, Ideogram, et du GPU
 
 | Fichier source | Destination prévue | Licence | Phase |
 |---|---|---|---|
-| opencut-classic `apps/web/src/subtitles/srt.ts` | `packages/captions/src/io/srt.ts` | MIT © 2025-2026 OpenCut | 4 |
-| opencut-classic `apps/web/src/subtitles/ass.ts` (parseur) | `packages/captions/src/io/ass.ts` | MIT © 2025-2026 OpenCut | 4 |
+| opencut-classic `apps/web/src/subtitles/ass.ts` (parseur) | `packages/captions/src/io/ass.ts` | MIT © 2025-2026 OpenCut | import ASS, non planifié |
 | toolkit `templates/concept-explainer-short/gen_captions.py` (fonction `align`) | `workers/cutkiller_workers/script_align.py` | MIT © 2024 Digital Samba | 2 |
 
 Idées **réimplémentées sans copie**, attribuées par courtoisie :
 - `MediaTime` à 120 000 ticks/s (opencut-classic `rust/crates/time`) ;
 - l'épinglage FFmpeg par sha256 (OpenCut `crates/media/setup`) ;
 - le test render-baseline A/B (toolkit `tests/render-baseline`).
+
+Phase 4 (sous-titres) : aucun code tiers. L'export SRT (`packages/captions/src/srt.ts`) est un writer d'une vingtaine de lignes écrit pour ce dépôt : le parseur SRT d'opencut-classic, prévu à l'audit, n'a pas été nécessaire (pas d'import de sous-titres). Le découpage remplace `chunk()` du toolkit, réécrit comme prévu. Le ratio de contraste suit la définition WCAG 2.x (luminance relative sRGB).
 
 Phase 3 (motion) : aucun code tiers. Le solveur cubic-bezier suit la définition CSS (W3C *CSS Easing Functions*) et les ressorts suivent l'équation de l'oscillateur amorti. Les transitions (whip-pan, smooth-slide, glitch-cut) et le flou de mouvement sont écrits pour ce dépôt. Les transitions du toolkit, qui dépendent de Remotion, n'ont pas été reprises.
 
@@ -60,7 +61,12 @@ Phase 3 (motion) : aucun code tiers. Le solveur cubic-bezier suit la définition
 | OpenTimelineIO (optionnel) | export vers Resolve / Premiere | Apache-2.0 | pip | 🔎 |
 
 Assets :
-- polices sous **SIL OFL 1.1** uniquement (Inter, Montserrat…) ;
+- polices sous **SIL OFL 1.1** uniquement. Commitées dans `assets/fonts/`, avec leur `OFL.txt` (l'OFL autorise la redistribution avec le logiciel) :
+
+  | Police | Fichiers | Source | Licence | sha256 |
+  |---|---|---|---|---|
+  | Poppins | `Poppins-ExtraBold.ttf`, `Poppins-SemiBold.ttf` | `github.com/google/fonts` (`ofl/poppins`) | SIL OFL 1.1, © 2020 The Poppins Project Authors | `f2ab17c1…f958e1`, `d3bf1bda…a0286` |
+
 - SFX **générés procéduralement** par le repo ;
 - LUT **générées** par le repo, aucun pack commercial.
 

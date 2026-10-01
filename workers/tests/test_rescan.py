@@ -1,4 +1,4 @@
-from cutkiller_workers.transcribe import _carve, _suspicious
+from cutkiller_workers.transcribe import _carve, _plausible, _suspicious
 
 
 def test_suspicious_words_are_long_for_their_letters():
@@ -31,3 +31,14 @@ def test_fillers_themselves_are_never_rescanned():
         {"text": "depuis", "start": 2.0, "end": 2.7, "timing": "forced"},
     ]
     assert [k for k, _, _ in _windows(words, 5.0)] == [2]
+
+
+def test_a_carved_word_left_with_a_few_milliseconds_is_implausible():
+    """« euh » stretched over « euh d'autres »: the carved word keeps 20 ms and must be realigned."""
+    pieces = _carve(
+        {"text": "d'autres", "start": 56.74, "end": 57.45}, [{"text": "euh,", "start": 56.73, "end": 57.42}]
+    )
+    word = next(p for p in pieces if p["text"] == "d'autres")
+    assert not _plausible(word)
+    assert _plausible({"text": "d'autres", "start": 56.8, "end": 57.5})
+    assert _plausible({"text": "a", "start": 1.0, "end": 1.07})

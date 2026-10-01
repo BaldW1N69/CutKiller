@@ -56,7 +56,7 @@ pnpm schema       # régénère schema/*.json (vérifié en CI)
 (cd workers && uv run pytest && uv run ruff check .)
 ```
 
-Les médias de test sont générés à la volée : mires FFmpeg et voix française espeak-ng avec vérité terrain au mot (`pnpm fixtures`, nécessite `espeak-ng`). Les rushes réels de la boucle qualité (licences libres) se téléchargent avec `pnpm rushes`. Aucun binaire n'est commité.
+Les médias de test sont générés à la volée : mires FFmpeg et voix française espeak-ng avec vérité terrain au mot (`pnpm fixtures`, nécessite `espeak-ng`). Les rushes réels de la boucle qualité (licences libres) se téléchargent avec `pnpm rushes`. Aucun média de test n'est commité (seules les polices OFL de `assets/fonts/` le sont, avec leur licence).
 
 ## Licence
 

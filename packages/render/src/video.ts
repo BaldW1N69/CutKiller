@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { resolve } from "node:path";
+import { CaptionTimeline } from "@cutkiller/captions";
 import {
   clipEnd,
   clipFrames,
@@ -193,6 +194,8 @@ export interface MotionLog {
   frames: [number, number, number][];
   blurredFrames: number;
   glitchFrames: number;
+  /** Frames with a caption on screen. */
+  captionFrames: number;
 }
 
 /** Sample times (fractional frames) spread over the shutter, centred on the frame. */
@@ -221,6 +224,7 @@ export async function renderVideo(
   const started = performance.now();
   const warnings: string[] = [];
   const timeline = new MotionTimeline(edl, resolveTransitions(edl, registry));
+  const captions = new CaptionTimeline(edl, registry);
 
   const encoder = spawn(ffmpegBin(), encoderArgs(edl, audioPath, outPath), {
     stdio: ["pipe", "ignore", "pipe"],
@@ -233,10 +237,11 @@ export async function renderVideo(
   const ctx = out.getContext("2d") as CanvasRenderingContext2D;
   ctx.quality = "good";
   const sum = new Uint32Array(W * H * 4);
+  const glitched = ctx.createImageData(W, H);
 
   const decoders = new Map<string, Decoded>();
   const logs: ClipLog[] = [];
-  const motion: MotionLog = { frames: [], blurredFrames: 0, glitchFrames: 0 };
+  const motion: MotionLog = { frames: [], blurredFrames: 0, glitchFrames: 0, captionFrames: 0 };
 
   const open = (clip: VideoClip): Decoded => {
     const existing = decoders.get(clip.id);
@@ -295,7 +300,14 @@ export async function renderVideo(
     decoders.delete(d.clip.id);
   };
 
-  const draw = (target: CanvasRenderingContext2D, layers: LayerPlan[], t: number) => {
+  /** Pictures of frame f at time t, captions on top unless they are drawn later (over a glitch). */
+  const draw = (
+    target: CanvasRenderingContext2D,
+    layers: LayerPlan[],
+    f: number,
+    t: number,
+    withCaptions: boolean,
+  ) => {
     target.setTransform(1, 0, 0, 1, 0, 0);
     target.globalAlpha = 1;
     target.fillStyle = "#000";
@@ -314,6 +326,7 @@ export async function renderVideo(
     }
     target.setTransform(1, 0, 0, 1, 0, 0);
     target.globalAlpha = 1;
+    if (withCaptions) captions.draw(target, f, t);
   };
 
   try {
@@ -328,7 +341,10 @@ export async function renderVideo(
       for (const d of [...decoders.values()])
         if (f >= clipEnd(d.clip, fps) && !layers.some((l) => l.clip.id === d.clip.id)) await close(d);
 
-      const v = timeline.velocityAt(f);
+      const v = Math.max(timeline.velocityAt(f), captions.velocityAt(f));
+      const glitch = timeline.glitchAt(f);
+      // A glitch distorts the pictures, never the captions: they go on top afterwards.
+      const captionsInDraw = !glitch;
       let samples = 1;
       if (v > motionBlur.thresholdPxPerFrame && motionBlur.shutterAngle > 0)
         samples = Math.min(
@@ -336,14 +352,37 @@ export async function renderVideo(
           Math.max(2, Math.ceil((v * motionBlur.shutterAngle) / 360 / motionBlur.stepPx)),
         );
       let frame: Buffer;
-      if (samples === 1) {
-        draw(ctx, layers, f);
+      const caption = captions.at(f);
+      if (
+        samples > 1 &&
+        caption &&
+        captionsInDraw &&
+        timeline.velocityAt(f) <= motionBlur.thresholdPxPerFrame
+      ) {
+        // Only the caption moves (its entry): average its area alone over the pictures drawn once.
+        draw(ctx, layers, f, f, false);
+        const r = captions.extent(caption, W, H);
+        const base = ctx.getImageData(r.x, r.y, r.w, r.h);
+        const acc = new Uint32Array(r.w * r.h * 4);
+        for (const t of shutterSamples(f, samples, motionBlur.shutterAngle)) {
+          ctx.putImageData(base, r.x, r.y);
+          captions.draw(ctx, f, t);
+          const px = ctx.getImageData(r.x, r.y, r.w, r.h).data;
+          for (let i = 0; i < px.length; i++) acc[i] = (acc[i] as number) + (px[i] as number);
+        }
+        const avg = ctx.createImageData(r.w, r.h);
+        for (let i = 0; i < acc.length; i++) avg.data[i] = Math.round((acc[i] as number) / samples);
+        ctx.putImageData(avg, r.x, r.y);
+        frame = out.toBuffer("raw");
+        motion.blurredFrames++;
+      } else if (samples === 1) {
+        draw(ctx, layers, f, f, captionsInDraw);
         frame = out.toBuffer("raw");
       } else {
         // Exact average of the sub-frame samples, accumulated in 32 bits.
         sum.fill(0);
         for (const t of shutterSamples(f, samples, motionBlur.shutterAngle)) {
-          draw(ctx, layers, t);
+          draw(ctx, layers, f, t, captionsInDraw);
           const px = out.toBuffer("raw");
           for (let i = 0; i < px.length; i++) sum[i] = (sum[i] as number) + (px[i] as number);
         }
@@ -352,11 +391,24 @@ export async function renderVideo(
         motion.blurredFrames++;
       }
       if (v > 0.5) motion.frames.push([f, Math.round(v * 10) / 10, samples]);
-      const glitch = timeline.glitchAt(f);
       if (glitch) {
         applyGlitch(frame, W, H, glitch.intensity, glitch.seed);
         motion.glitchFrames++;
+        if (caption) {
+          // Raw canvas pixels are BGRA (opaque here), ImageData is RGBA.
+          const rgba = glitched.data;
+          for (let i = 0; i < frame.length; i += 4) {
+            rgba[i] = frame[i + 2] as number;
+            rgba[i + 1] = frame[i + 1] as number;
+            rgba[i + 2] = frame[i] as number;
+            rgba[i + 3] = 255;
+          }
+          ctx.putImageData(glitched, 0, 0);
+          captions.draw(ctx, f);
+          frame = out.toBuffer("raw");
+        }
       }
+      if (caption) motion.captionFrames++;
       await write(stdin, frame);
       if (onProgress && f % fps === 0) onProgress(f, total);
     }

@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 
 from .audio import load_mono
+from .numbers import spell_numbers
 
 MODEL_FR = "jonatasgrosman/wav2vec2-large-xlsr-53-french"
 RATE = 16_000
@@ -42,9 +43,13 @@ def _model(name: str):
 
 
 def normalize(word: str, vocab: dict[str, int]) -> str:
-    """Lower-case and keep only characters the acoustic model knows."""
-    text = unicodedata.normalize("NFC", word.lower()).replace("’", "'")
-    return "".join(ch for ch in text if ch in vocab and ch not in "|")
+    """Lower-case, spell numbers out, keep only characters the acoustic model knows.
+
+    Spaces inside a spelled number (« quatorze heures ») come back as "|", the
+    model's word delimiter."""
+    text = unicodedata.normalize("NFC", spell_numbers(word).lower()).replace("’", "'").replace("-", " ")
+    kept = "".join(ch for ch in text if ch == " " or (ch in vocab and ch != "|"))
+    return "|".join(part for part in kept.split(" ") if part)
 
 
 def _windows(words: list[dict[str, Any]], duration: float) -> list[tuple[int, int, float, float]]:
@@ -62,8 +67,18 @@ def _windows(words: list[dict[str, Any]], duration: float) -> list[tuple[int, in
     return out
 
 
+def noise_floor_db(audio: np.ndarray, rate: int = RATE) -> float:
+    """Level the recording's quiet parts sit at (10th percentile of short-term energy)."""
+    db = _energy_db(audio, rate)
+    return float(np.percentile(db, 10)) if len(db) else -120.0
+
+
 def align_words(
-    path: str | None, words: list[dict[str, Any]], model_name: str = MODEL_FR, audio: np.ndarray | None = None
+    path: str | None,
+    words: list[dict[str, Any]],
+    model_name: str = MODEL_FR,
+    audio: np.ndarray | None = None,
+    floor_db: float | None = None,
 ) -> list[dict[str, Any]]:
     import torch
     import torchaudio.functional as F
@@ -113,7 +128,7 @@ def align_words(
                 alignScore=round(float(np.mean(conf[k])), 3),
                 timing="forced",
             )
-    return refine_boundaries(audio, result)
+    return refine_boundaries(audio, result, floor_db=floor_db)
 
 
 _APOSTROPHE = re.compile(r"^['’]")
@@ -146,19 +161,25 @@ def _energy_db(audio: np.ndarray, rate: int) -> np.ndarray:
 
 
 def refine_boundaries(
-    audio: np.ndarray, words: list[dict[str, Any]], rate: int = RATE, max_extend_s: float = 0.2
+    audio: np.ndarray,
+    words: list[dict[str, Any]],
+    rate: int = RATE,
+    max_extend_s: float = 0.2,
+    floor_db: float | None = None,
 ) -> list[dict[str, Any]]:
     """Moves CTC boundaries to where the voice actually starts and fades out.
 
     CTC emits a spike per character, so its word starts lag and its ends lead the
     real sound. Each boundary is pushed outwards while the signal stays above a
     threshold set between the noise floor and the word's peak, never crossing into
-    the neighbouring word.
+    the neighbouring word. The noise floor is a property of the recording: an edit
+    with its pauses removed must be refined with the floor of its rush
+    (`floor_db`), not with its own, much higher one.
     """
     db = _energy_db(audio, rate)
     if len(db) == 0:
         return words
-    floor = float(np.percentile(db, 10))
+    floor = float(np.percentile(db, 10)) if floor_db is None else floor_db
     out = [dict(w) for w in words]
     idx = lambda t: int(np.clip(round(t / HOP_S), 0, len(db) - 1))
     for k, w in enumerate(out):

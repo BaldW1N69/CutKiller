@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EaseSchema } from "./ease";
 
-export const EDL_VERSION = "1.1.0";
+export const EDL_VERSION = "1.2.0";
 
 const Id = z.string().regex(/^[A-Za-z0-9_.-]+$/, "identifiant alphanumérique");
 const Seconds = z.number().nonnegative();
@@ -108,6 +108,33 @@ export const TransitionSchema = z.object({
   why: ReasonSchema.optional(),
 });
 
+/** A word of a caption, on the timeline: shown highlighted from `fromFrame` until the next word starts. */
+export const CaptionWordSchema = z.object({
+  /** Text as displayed (case and punctuation already applied by the style). */
+  text: z.string().min(1),
+  /** First frame of the spoken word (its audio onset on the timeline). */
+  fromFrame: Frame,
+  /** Frame after the spoken word ends. */
+  toFrame: Frame,
+  /** Line of the caption the word sits on (0 = top line). */
+  line: z.number().int().min(0).max(3).default(0),
+  /** Transcript word it comes from, for traceability and QA. */
+  source: Id.optional(),
+  wordId: z.number().int().nonnegative().optional(),
+});
+
+/** One caption screen: a few words shown together, the spoken one highlighted (karaoke). */
+export const CaptionSchema = z.object({
+  id: Id,
+  /** Caption style preset (`kind: captions`): font, colours, outline, entry animation. */
+  style: PresetRefSchema,
+  fromFrame: Frame,
+  /** Frame after the caption disappears. */
+  toFrame: Frame,
+  words: z.array(CaptionWordSchema).min(1),
+  why: ReasonSchema.optional(),
+});
+
 export const OutputSchema = z.object({
   format: z.enum(["short", "long"]),
   width: z.number().int().positive().multipleOf(2),
@@ -134,6 +161,32 @@ export const OutputSchema = z.object({
       maxSamples: z.number().int().min(2).max(64).default(32),
     })
     .default({ thresholdPxPerFrame: 12, shutterAngle: 180, stepPx: 3, maxSamples: 32 }),
+  /**
+   * Where captions go: the area they must stay inside (fractions of the frame
+   * hidden by the platforms' interface) and their vertical placement. Filled
+   * from the profile, editable here.
+   */
+  captions: z
+    .object({
+      safeArea: z
+        .object({
+          top: z.number().min(0).max(0.5),
+          bottom: z.number().min(0).max(0.5),
+          left: z.number().min(0).max(0.5),
+          right: z.number().min(0).max(0.5),
+        })
+        .default({ top: 0.05, bottom: 0.05, left: 0.05, right: 0.05 }),
+      placement: z
+        .object({
+          anchor: z.enum(["center", "bottom"]).default("bottom"),
+          y: z.number().min(0).max(1).default(0.9),
+        })
+        .default({ anchor: "bottom", y: 0.9 }),
+    })
+    .default({
+      safeArea: { top: 0.05, bottom: 0.05, left: 0.05, right: 0.05 },
+      placement: { anchor: "bottom", y: 0.9 },
+    }),
   audio: z.object({
     sampleRate: z.number().int().positive().default(48_000),
     bitrateKbps: z.number().int().positive().default(192),
@@ -159,6 +212,8 @@ export const EdlSchema = z.object({
   audio: z.array(z.object({ id: Id, clips: z.array(AudioClipSchema) })).default([]),
   keyframes: z.array(KeyframeTrackSchema).default([]),
   transitions: z.array(TransitionSchema).default([]),
+  /** Burnt-in captions, in timeline order, never overlapping. */
+  captions: z.array(CaptionSchema).default([]),
   markers: z.object({ beats: z.array(Frame).optional() }).default({}),
 });
 
@@ -170,6 +225,8 @@ export type Source = z.infer<typeof SourceSchema>;
 export type Output = z.infer<typeof OutputSchema>;
 export type KeyframeTrack = z.infer<typeof KeyframeTrackSchema>;
 export type Transition = z.infer<typeof TransitionSchema>;
+export type Caption = z.infer<typeof CaptionSchema>;
+export type CaptionWord = z.infer<typeof CaptionWordSchema>;
 
 export const SPATIAL_PROPERTIES = new Set(["x", "y", "scale", "opacity"]);
 

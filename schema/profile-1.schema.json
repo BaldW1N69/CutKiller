@@ -523,6 +523,14 @@
     "captions": {
       "type": "object",
       "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "style": {
+          "default": "subtitle-clean@1",
+          "type": "string"
+        },
         "wordsPerScreen": {
           "type": "array",
           "prefixItems": [
@@ -538,14 +546,110 @@
           "maxItems": 2
         },
         "maxLines": {
+          "default": 2,
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
         "maxCharsPerLine": {
+          "default": 32,
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "commaBreakFill": {
+          "default": 0.4,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "pauseBreakMs": {
+          "default": 400,
+          "type": "number",
+          "minimum": 0
+        },
+        "maxDurationS": {
+          "default": 6,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "holdMs": {
+          "default": 500,
+          "type": "number",
+          "minimum": 0
+        },
+        "minDurationMs": {
+          "default": 700,
+          "type": "number",
+          "minimum": 0
+        },
+        "placement": {
+          "default": {
+            "anchor": "bottom",
+            "y": 0.9
+          },
+          "type": "object",
+          "properties": {
+            "anchor": {
+              "default": "bottom",
+              "type": "string",
+              "enum": [
+                "center",
+                "bottom"
+              ]
+            },
+            "y": {
+              "default": 0.9,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "safeZones": {
+          "default": {
+            "title-safe": {
+              "top": 0.05,
+              "bottom": 0.05,
+              "left": 0.05,
+              "right": 0.05
+            }
+          },
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "top": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.5
+              },
+              "bottom": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.5
+              },
+              "left": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.5
+              },
+              "right": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.5
+              }
+            },
+            "required": [
+              "top",
+              "bottom",
+              "left",
+              "right"
+            ]
+          }
         },
         "maxSyncErrorFrames": {
           "default": {

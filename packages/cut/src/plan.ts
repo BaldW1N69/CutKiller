@@ -126,7 +126,8 @@ export function snapJumpCuts(runs: Run[], fps: number, startFrame: number, beats
       // Among reachable cut frames, the one closest to a beat (beats are fractional frames).
       const distance = (f: number) => Math.min(...beats.map((b) => Math.abs(b - f)));
       let targetFrame = defaultEnd;
-      for (let f = pos + Math.ceil(dMin * fps); f <= pos + Math.floor(dMax * fps); f++)
+      // A run's length is rounded to whole frames: any frame its duration range rounds to is reachable.
+      for (let f = pos + Math.round(dMin * fps); f <= pos + Math.round(dMax * fps); f++)
         if (distance(f) < distance(targetFrame) - 1e-9) targetFrame = f;
       const target = targetFrame !== defaultEnd ? targetFrame : undefined;
       if (target !== undefined) {

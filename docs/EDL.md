@@ -89,6 +89,29 @@ Au-delà du seuil (12 px/frame par défaut, réglable dans le profil), la frame 
 
 Le journal de rendu (`<vidéo>.render-log.json`, champ `motion`) liste la vitesse et le nombre d'échantillons de chaque frame en mouvement : c'est ce que vérifie la règle `motion.blur`.
 
+## Sous-titres
+
+`captions[]` : `{ id, style, fromFrame, toFrame, words[], why? }`. Un sous-titre est un écran de quelques mots. Les sous-titres sont rangés dans l'ordre et ne se chevauchent jamais.
+
+- `style` : preset `captions/` (`karaoke-pop@1`, `subtitle-clean@1`). Il fixe la police (fichier OFL du dépôt), la taille (fraction de la hauteur), la casse, la ponctuation, les couleurs (texte, mot actif, contour), l'ombre et l'animation d'entrée (preset `motion/` de rôle `entry`).
+- `words[]` : `{ text, fromFrame, toFrame, line, source?, wordId? }`.
+  - `text` est le texte affiché, après application du style.
+  - `fromFrame` est l'attaque du mot sur la timeline : le mot passe à la couleur active à cette frame et la garde jusqu'au début du mot suivant (karaoké).
+  - `line` vaut 0 ou 1.
+  - `source` et `wordId` renvoient au mot du transcript.
+
+Placement : `output.captions: { safeArea, placement }`.
+- `safeArea` donne les marges (fractions de l'image) cachées par l'interface des plateformes. La passe y écrit l'intersection des zones du profil.
+- `placement` vaut `{ anchor: center | bottom, y }`.
+
+Le bloc est centré sur l'image et ramené dans la zone sûre, rebond de l'animation compris. La police est réduite si une ligne est trop large. La QA vérifie les sous-titres contre les zones **du profil**, pas contre ce réglage : une EDL retouchée qui sort de la zone est donc signalée.
+
+Au rendu :
+- les sous-titres passent au-dessus des images, y compris pendant un glitch ;
+- l'entrée animée est floutée comme le reste au-delà du seuil de vitesse.
+
+`render` écrit aussi `<vidéo>.srt` avec les mêmes écrans.
+
 ## Traçabilité
 
 Chaque clip porte un champ `why: { kind, note?, wordIds? }` qui explique pourquoi il existe, pour qu'un humain puisse auditer et corriger les décisions automatiques :
@@ -109,3 +132,6 @@ Chaque clip porte un champ `why: { kind, note?, wordIds? }` qui explique pourquo
 | `split.orphan` / `split.range` | J/L cut sans clip précédent contigu / plus long que le clip |
 | `keyframes.target` / `keyframes.order` | Cible inconnue / frames non croissantes |
 | `motion.linear` | Interpolation linéaire sur une propriété spatiale |
+| `captions.range` / `captions.overlap` | Sous-titre vide / qui chevauche le précédent |
+| `captions.word-range` / `captions.word-order` | Mot hors de son sous-titre / mots dans le désordre |
+| `captions.lines` | Lignes qui ne commencent pas à 0 ou sautent une ligne |
