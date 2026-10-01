@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EaseSchema } from "./ease";
 
-export const EDL_VERSION = "1.0.0";
+export const EDL_VERSION = "1.1.0";
 
 const Id = z.string().regex(/^[A-Za-z0-9_.-]+$/, "identifiant alphanumérique");
 const Seconds = z.number().nonnegative();
@@ -76,10 +76,36 @@ export const KeyframeSchema = z.object({
   ease: EaseSchema.optional(),
 });
 
+/** `name@major`, `name@major.minor` or `name@x.y.z`, resolved by the preset registry. */
+export const PresetRefSchema = z
+  .string()
+  .regex(/^[a-z0-9-]+@\d+(\.\d+){0,2}$/, "référence de preset nom@version");
+
+/**
+ * Animated property of a clip, on top of its static framing. Frames are timeline
+ * frames. Values: `scale` multiplies the static framing (1 = unchanged), `x`/`y`
+ * move the picture by a fraction of the output frame, `opacity` 0–1, `rotation`
+ * in degrees. Before the first key and after the last, the nearest key's value holds.
+ */
 export const KeyframeTrackSchema = z.object({
   /** `<clipId>.<property>`, e.g. `c001.scale`. */
   target: z.string().regex(/^[A-Za-z0-9_.-]+\.(x|y|scale|opacity|rotation)$/),
   keys: z.array(KeyframeSchema).min(2),
+  /** What the animation does, for the quality rules (entries ease out, exits ease in, micro 150–300 ms). */
+  role: z.enum(["entry", "exit", "micro", "move"]).optional(),
+  /** Preset this track was generated from. */
+  preset: PresetRefSchema.optional(),
+  why: ReasonSchema.optional(),
+});
+
+/** Transition at a cut of the main track; its geometry comes from the preset. */
+export const TransitionSchema = z.object({
+  id: Id,
+  /** The cut: timeline frame where the incoming clip starts. */
+  atFrame: Frame,
+  preset: PresetRefSchema,
+  durationFrames: z.number().int().positive(),
+  why: ReasonSchema.optional(),
 });
 
 export const OutputSchema = z.object({
@@ -95,6 +121,19 @@ export const OutputSchema = z.object({
       .enum(["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower"])
       .default("medium"),
   }),
+  /**
+   * Motion blur: frames where something moves faster than the threshold are
+   * rendered as the average of sub-frame samples spread over the shutter.
+   */
+  motionBlur: z
+    .object({
+      thresholdPxPerFrame: z.number().positive().default(12),
+      shutterAngle: z.number().min(0).max(360).default(180),
+      /** Spacing of samples along the motion, in pixels: lower is smoother and slower. */
+      stepPx: z.number().positive().default(3),
+      maxSamples: z.number().int().min(2).max(64).default(32),
+    })
+    .default({ thresholdPxPerFrame: 12, shutterAngle: 180, stepPx: 3, maxSamples: 32 }),
   audio: z.object({
     sampleRate: z.number().int().positive().default(48_000),
     bitrateKbps: z.number().int().positive().default(192),
@@ -119,6 +158,7 @@ export const EdlSchema = z.object({
   video: z.array(z.object({ id: Id, clips: z.array(VideoClipSchema) })).min(1),
   audio: z.array(z.object({ id: Id, clips: z.array(AudioClipSchema) })).default([]),
   keyframes: z.array(KeyframeTrackSchema).default([]),
+  transitions: z.array(TransitionSchema).default([]),
   markers: z.object({ beats: z.array(Frame).optional() }).default({}),
 });
 
@@ -129,6 +169,7 @@ export type AudioClip = z.infer<typeof AudioClipSchema>;
 export type Source = z.infer<typeof SourceSchema>;
 export type Output = z.infer<typeof OutputSchema>;
 export type KeyframeTrack = z.infer<typeof KeyframeTrackSchema>;
+export type Transition = z.infer<typeof TransitionSchema>;
 
 export const SPATIAL_PROPERTIES = new Set(["x", "y", "scale", "opacity"]);
 

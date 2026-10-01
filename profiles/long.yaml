@@ -19,6 +19,15 @@ motion:
   transitionDurationMs: [200, 500]
   motionBlurThresholdPxPerFrame: 12
   overshoot: [0.03, 0.08]
+  punchLevels: [1.06, 1.1, 1.13]
+  punchPreset: zoom-punch@1
+  emphasisMinScore: 1.2
+  punchMinSpacingS: 4
+  transitions:
+    sameSource: [whip-pan@1]
+    crossSource: [smooth-slide@1, whip-pan@1]
+    minSpacingS: 12
+    minRemovedS: 1.2
 captions:
   maxLines: 2
   maxCharsPerLine: 32

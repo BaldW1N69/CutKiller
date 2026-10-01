@@ -128,7 +128,7 @@ describe("quality-check sur des rendus réels", () => {
     await render(edl, { baseDir: fx.dir, outPath: good });
   });
 
-  it("passes a clean render on every phase-1 rule", async () => {
+  it("passes a clean render on every applicable rule", async () => {
     const report = await qualityCheck({ video: good, edl, profile, baseDir: fx.dir });
     const evaluated = report.results.filter((r) => r.status !== "not-evaluated");
     expect(evaluated.map((r) => r.ruleId).sort()).toEqual(
@@ -139,6 +139,8 @@ describe("quality-check sur des rendus réels", () => {
         "image.duplicate-frames",
         "image.export-format",
         "montage.static-shots",
+        // The preset library itself is checked even when the EDL animates nothing.
+        "motion.presets",
       ].sort(),
     );
     expect(evaluated.filter((r) => r.status === "fail")).toEqual([]);

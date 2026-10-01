@@ -1,13 +1,8 @@
 import { type Analysis, type EdlInput, parseEdl, type Word } from "@cutkiller/core";
 import { loadProfile } from "@cutkiller/style";
 import { beforeAll, describe, expect, it } from "vitest";
-import {
-  checkBeatCuts,
-  checkFillers,
-  checkPunchIns,
-  checkSilences,
-  checkStaticShots,
-} from "../src/checks/montage";
+import { checkBeatCuts, checkFillers, checkSilences, checkStaticShots } from "../src/checks/montage";
+import { checkPunchIns } from "../src/checks/motion";
 
 let profile: Awaited<ReturnType<typeof loadProfile>>;
 beforeAll(async () => {

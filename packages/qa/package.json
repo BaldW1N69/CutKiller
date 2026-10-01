@@ -14,7 +14,8 @@
     "zod": "4.6.5",
     "@cutkiller/style": "workspace:*",
     "@cutkiller/analyze": "workspace:*",
-    "@cutkiller/cut": "workspace:*"
+    "@cutkiller/cut": "workspace:*",
+    "@cutkiller/motion": "workspace:*"
   },
   "devDependencies": {
     "@cutkiller/fixtures": "workspace:*"

@@ -32,4 +32,16 @@ def _beats(request: dict[str, Any]) -> Any:
     return beats(request)
 
 
-TASKS: dict[str, Task] = {"ping": ping, "transcribe": _transcribe, "vad": _vad, "beats": _beats}
+def _prosody(request: dict[str, Any]) -> Any:
+    from .prosody import prosody
+
+    return prosody(request)
+
+
+TASKS: dict[str, Task] = {
+    "ping": ping,
+    "transcribe": _transcribe,
+    "vad": _vad,
+    "beats": _beats,
+    "prosody": _prosody,
+}

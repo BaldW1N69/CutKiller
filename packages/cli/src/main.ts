@@ -23,7 +23,7 @@ import { motionPass } from "@cutkiller/motion";
 import { qualityCheck, type Report, reportMarkdown } from "@cutkiller/qa";
 import { reframePass } from "@cutkiller/reframe";
 import { render } from "@cutkiller/render";
-import { loadProfile } from "@cutkiller/style";
+import { loadProfile, PresetRegistry } from "@cutkiller/style";
 
 const USAGE = `cutkiller <commande> [options]
 
@@ -66,7 +66,11 @@ async function plan(inputs: string[], profile: StyleProfile, edlPath: string, de
       );
   }
   const assembled = assembleEdl(analysis, profile, { edlDir: dirname(resolve(edlPath)) });
-  const { edl, diagnostics } = runPasses(assembled, PASSES, { analysis, profile });
+  const { edl, diagnostics } = runPasses(assembled, PASSES, {
+    analysis,
+    profile,
+    presets: await PresetRegistry.load(),
+  });
   printDiagnostics(diagnostics);
   await mkdir(dirname(resolve(edlPath)), { recursive: true });
   await writeFile(

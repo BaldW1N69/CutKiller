@@ -10,7 +10,9 @@
   "dependencies": {
     "@cutkiller/core": "workspace:*",
     "@cutkiller/media": "workspace:*",
-    "canvas": "3.2.3"
+    "canvas": "3.2.3",
+    "@cutkiller/motion": "workspace:*",
+    "@cutkiller/style": "workspace:*"
   },
   "devDependencies": {
     "@cutkiller/fixtures": "workspace:*",

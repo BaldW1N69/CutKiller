@@ -100,12 +100,21 @@ export function validateEdl(edl: Edl): Diagnostic[] {
     });
   });
 
+  const spans = new Map<string, { at: number; end: number }>();
+  for (const track of edl.video)
+    for (const c of track.clips) spans.set(c.id, { at: c.at, end: clipEnd(c, fps) });
+
   edl.keyframes.forEach((track, k) => {
     const path = `keyframes.${k}`;
     const dot = track.target.lastIndexOf(".");
     const clipId = track.target.slice(0, dot);
     const prop = track.target.slice(dot + 1);
     if (!clipIds.has(clipId)) err("keyframes.target", `clip cible inconnu « ${clipId} »`, path);
+    const span = spans.get(clipId);
+    const first = track.keys[0]?.frame ?? 0;
+    const last = track.keys.at(-1)?.frame ?? 0;
+    if (span && (first < span.at || last > span.end))
+      err("keyframes.range", `animation hors du clip « ${clipId} » (frames ${span.at}–${span.end})`, path);
     track.keys.forEach((key, i) => {
       const prev = track.keys[i - 1];
       if (prev && key.frame <= prev.frame)
@@ -118,6 +127,26 @@ export function validateEdl(edl: Edl): Diagnostic[] {
         );
     });
   });
+
+  // Transitions sit on a cut of the main track and fit inside both clips.
+  const main = sortedClips(edl.video[0]?.clips ?? []);
+  let lastEnd = -1;
+  for (const [k, t] of [...edl.transitions].sort((a, b) => a.atFrame - b.atFrame).entries()) {
+    const path = `transitions.${k}`;
+    const idx = main.findIndex((c) => c.at === t.atFrame);
+    const prev = main[idx - 1];
+    const next = main[idx];
+    if (idx < 1 || !prev || !next || clipEnd(prev, fps) !== next.at) {
+      err("transition.cut", `la transition « ${t.id} » n'est pas sur une coupe de la piste principale`, path);
+      continue;
+    }
+    const half = Math.ceil(t.durationFrames / 2);
+    if (half > clipFrames(prev, fps) || half > clipFrames(next, fps))
+      err("transition.range", `transition « ${t.id} » plus longue que les clips qu'elle relie`, path);
+    if (t.atFrame - half < lastEnd)
+      err("transition.overlap", `la transition « ${t.id} » chevauche la précédente`, path);
+    lastEnd = t.atFrame + half;
+  }
 
   return out;
 }

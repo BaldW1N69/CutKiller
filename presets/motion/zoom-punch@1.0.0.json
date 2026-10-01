@@ -1,0 +1,12 @@
+{
+  "name": "zoom-punch",
+  "version": "1.0.0",
+  "kind": "motion",
+  "description": "Punch-in sur un mot d'emphase : resserre le cadre en 200 ms sur un ressort amorti (≈5 % de rebond), puis tient jusqu'à la coupe suivante.",
+  "params": {
+    "property": "scale",
+    "role": "micro",
+    "durationMs": 200,
+    "ease": { "spring": { "stiffness": 1310, "damping": 50, "mass": 1 } }
+  }
+}

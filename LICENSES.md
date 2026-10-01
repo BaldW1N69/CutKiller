@@ -35,6 +35,8 @@ Idées **réimplémentées sans copie**, attribuées par courtoisie :
 - l'épinglage FFmpeg par sha256 (OpenCut `crates/media/setup`) ;
 - le test render-baseline A/B (toolkit `tests/render-baseline`).
 
+Phase 3 (motion) : aucun code tiers. Le solveur cubic-bezier suit la définition CSS (W3C *CSS Easing Functions*) et les ressorts suivent l'équation de l'oscillateur amorti. Les transitions (whip-pan, smooth-slide, glitch-cut) et le flou de mouvement sont écrits pour ce dépôt. Les transitions du toolkit, qui dépendent de Remotion, n'ont pas été reprises.
+
 ## 4. Dépendances prévues
 
 | Dépendance | Usage | Licence | Mode | Vérifiée |

@@ -1,4 +1,16 @@
-import { identityPass, type Pass } from "@cutkiller/core";
-
-/** Passe « motion » (easing, springs, presets, motion blur, punch-in). Implémentée en phase 3 ; identité d'ici là. */
-export const motionPass: Pass = identityPass("motion");
+export { emphasisScores } from "./emphasis";
+export { applyGlitch, rng } from "./glitch";
+export { motionPass } from "./pass";
+export {
+  directionVector,
+  type MotionParams,
+  MotionParamsSchema,
+  motionParams,
+  type ResolvedTransition,
+  resolveTransitions,
+  type TransitionParams,
+  TransitionParamsSchema,
+  transitionParams,
+  transitionWindow,
+} from "./presets";
+export { type LayerImage, type LayerPlan, MotionTimeline } from "./timeline";

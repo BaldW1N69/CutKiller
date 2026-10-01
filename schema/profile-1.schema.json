@@ -309,6 +309,214 @@
           "items": false,
           "minItems": 2,
           "maxItems": 2
+        },
+        "punchLevels": {
+          "default": [
+            1.06,
+            1.1,
+            1.13
+          ],
+          "minItems": 2,
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "punchPreset": {
+          "default": "zoom-punch@1",
+          "type": "string"
+        },
+        "punchMinSpacingS": {
+          "default": 3,
+          "type": "number",
+          "minimum": 0
+        },
+        "emphasisMinScore": {
+          "default": 1.2,
+          "type": "number"
+        },
+        "emphasisWords": {
+          "default": [
+            "vraiment",
+            "jamais",
+            "toujours",
+            "énorme",
+            "énormes",
+            "énormément",
+            "incroyable",
+            "majeur",
+            "majeure",
+            "absolument",
+            "totalement",
+            "complètement",
+            "extrêmement",
+            "surtout",
+            "exactement",
+            "impossible",
+            "essentiel",
+            "essentielle",
+            "important",
+            "importante",
+            "seul",
+            "seule",
+            "tous",
+            "toutes",
+            "rien",
+            "personne",
+            "beaucoup",
+            "énorme",
+            "fou",
+            "folle",
+            "dingue",
+            "génial",
+            "parfait",
+            "pire",
+            "meilleur"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stopWords": {
+          "default": [
+            "le",
+            "la",
+            "les",
+            "l'",
+            "un",
+            "une",
+            "des",
+            "du",
+            "de",
+            "d'",
+            "à",
+            "au",
+            "aux",
+            "et",
+            "ou",
+            "mais",
+            "donc",
+            "or",
+            "ni",
+            "car",
+            "que",
+            "qu'",
+            "qui",
+            "quoi",
+            "dont",
+            "où",
+            "ce",
+            "c'est",
+            "ça",
+            "cela",
+            "il",
+            "elle",
+            "ils",
+            "elles",
+            "on",
+            "je",
+            "j'",
+            "tu",
+            "nous",
+            "vous",
+            "me",
+            "te",
+            "se",
+            "s'",
+            "en",
+            "y",
+            "ne",
+            "n'",
+            "pas",
+            "est",
+            "sont",
+            "a",
+            "ai",
+            "as",
+            "avait",
+            "être",
+            "avoir",
+            "pour",
+            "par",
+            "sur",
+            "dans",
+            "avec",
+            "sans",
+            "sous",
+            "chez",
+            "mon",
+            "ma",
+            "mes",
+            "ton",
+            "ta",
+            "tes",
+            "son",
+            "sa",
+            "ses",
+            "notre",
+            "nos",
+            "votre",
+            "vos",
+            "leur",
+            "leurs",
+            "cette",
+            "ces",
+            "cet",
+            "si",
+            "comme",
+            "alors",
+            "bon",
+            "voilà"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "transitions": {
+          "default": {
+            "sameSource": [
+              "whip-pan@1"
+            ],
+            "crossSource": [
+              "smooth-slide@1"
+            ],
+            "minSpacingS": 10,
+            "minRemovedS": 1.2
+          },
+          "type": "object",
+          "properties": {
+            "sameSource": {
+              "default": [
+                "whip-pan@1"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "crossSource": {
+              "default": [
+                "smooth-slide@1"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "minSpacingS": {
+              "default": 10,
+              "type": "number",
+              "minimum": 0
+            },
+            "minRemovedS": {
+              "default": 1.2,
+              "type": "number",
+              "minimum": 0
+            }
+          }
         }
       }
     },

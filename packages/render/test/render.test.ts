@@ -136,3 +136,98 @@ describe("synchro audio/vidéo avec des flux décalés", () => {
     expect(Math.abs(onset - flash / 30)).toBeLessThanOrEqual(1 / 30);
   });
 });
+
+describe("animations, transitions et flou de mouvement", () => {
+  /**
+   * Mean squared horizontal luma gradient of one frame. Blur spreads a step over
+   * n pixels: the summed |gradient| stays the same, its energy drops by n.
+   */
+  async function edgeEnergy(video: string, frame: number, w: number, h: number): Promise<number> {
+    const { stdout } = await ffmpeg([
+      "-v",
+      "error",
+      "-i",
+      video,
+      "-vf",
+      `select='eq(n,${frame})',format=gray`,
+      "-frames:v",
+      "1",
+      "-f",
+      "rawvideo",
+      "-",
+    ]);
+    let sum = 0;
+    for (let y = 0; y < h; y++)
+      for (let x = 1; x < w; x++)
+        sum += ((stdout[y * w + x] as number) - (stdout[y * w + x - 1] as number)) ** 2;
+    return sum / (w * h);
+  }
+
+  async function renderDemo(shutterAngle: number) {
+    const fx = await generateFixtures();
+    const parsed = parseEdl({
+      version: "1.1.0",
+      output: {
+        format: "short",
+        width: 270,
+        height: 480,
+        fps: 30,
+        video: { bitrateMbps: 6, preset: "veryfast" },
+        audio: {},
+        motionBlur: { shutterAngle },
+      },
+      sources: { a: { path: fx.cam16x9, durationS: 6 }, b: { path: fx.cam9x16, durationS: 4 } },
+      video: [
+        {
+          id: "main",
+          clips: [
+            { id: "c1", source: "a", in: 0, out: 2, at: 0 },
+            { id: "c2", source: "b", in: 0, out: 2, at: 60 },
+            { id: "c3", source: "a", in: 3, out: 4, at: 120 },
+          ],
+        },
+      ],
+      keyframes: [
+        {
+          target: "c1.scale",
+          role: "micro",
+          preset: "zoom-punch@1",
+          keys: [
+            { frame: 20, value: 1 },
+            { frame: 26, value: 1.1, ease: { spring: { stiffness: 1310, damping: 50, mass: 1 } } },
+          ],
+          why: { kind: "emphasis", wordIds: [0] },
+        },
+      ],
+      transitions: [
+        { id: "t1", atFrame: 60, preset: "whip-pan@1", durationFrames: 9 },
+        { id: "t2", atFrame: 120, preset: "glitch-cut@1", durationFrames: 6 },
+      ],
+    });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.diagnostics));
+    const out = join(await mkdtemp(join(tmpdir(), "ck-motion-")), "m.mp4");
+    const log = await render(parsed.edl, { baseDir: fx.dir, outPath: out });
+    return { out, log };
+  }
+
+  it("rend les presets, floute les frames rapides et glitche la coupe", async () => {
+    const blurred = await renderDemo(180);
+    expect(blurred.log.frames).toBe(150);
+    expect(blurred.log.motion.glitchFrames).toBe(6);
+    const whip = blurred.log.motion.frames.find(([f]) => f === 60);
+    expect(whip?.[1]).toBeGreaterThan(50);
+    expect(whip?.[2]).toBeGreaterThanOrEqual(8);
+    const punch = blurred.log.motion.frames.filter(([f]) => f >= 20 && f <= 26);
+    expect(punch.some(([, v, n]) => v > 12 && n >= 2)).toBe(true);
+
+    const sharp = await renderDemo(0);
+    expect(sharp.log.motion.blurredFrames).toBe(0);
+    // Same picture, same motion: only the blur differs. It must smear the vertical edges.
+    const withBlur = await edgeEnergy(blurred.out, 60, 270, 480);
+    const without = await edgeEnergy(sharp.out, 60, 270, 480);
+    expect(withBlur).toBeLessThan(without * 0.6);
+    // A frame that does not move is identical in both renders' sharpness.
+    const still = await edgeEnergy(blurred.out, 40, 270, 480);
+    expect(still).toBeGreaterThan(without * 0.6);
+  });
+});

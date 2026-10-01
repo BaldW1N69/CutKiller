@@ -2,7 +2,7 @@
 
 Montage automatique de rushes pour YouTube (16:9) et Shorts / TikTok / Reels (9:16), piloté par une **EDL JSON éditable à la main** et vérifié par des **règles de qualité mesurables**.
 
-> Statut : **phase 2 (montage) livrée**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, rendu et quality-check. Motion, sous-titres, audio et image arrivent en phases 3 à 6. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
+> Statut : **phase 3 (animation/motion) livrée**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés sur l'emphase, transitions versionnées (whip-pan, smooth-slide, glitch-cut) avec flou de mouvement, rendu et quality-check. Sous-titres, audio et image arrivent en phases 4 à 6. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
 
 ## Prérequis
 
@@ -42,7 +42,8 @@ pnpm cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --md out/qual
 | Analyse | `@cutkiller/analyze` + `workers/` (Python) | Probe des rushes ; transcription, beats, suivi du sujet à partir de la phase 2 |
 | Planification | `cut → reframe → color → motion → captions → audio` | Passes pures `EDL → EDL`, dans cet ordre fixe |
 | EDL | `@cutkiller/core` | Schéma, validateur, temps en frames entières ([référence](docs/EDL.md), [JSON Schema](schema/edl-1.schema.json)) |
-| Rendu | `@cutkiller/render` | Décodage FFmpeg par clip → compositeur Cairo → encodage FFmpeg CFR ; mix audio FFmpeg |
+| Motion | `@cutkiller/motion` + [`presets/`](presets) | Punch-ins sur l'emphase, transitions, timeline d'animation partagée par le rendu et la QA |
+| Rendu | `@cutkiller/render` | Décodage FFmpeg par clip → compositeur Cairo (animations, flou de mouvement, glitch) → encodage FFmpeg CFR ; mix audio FFmpeg |
 | QA | `@cutkiller/qa` | `quality-check` : 25 règles, score /100 sur les règles évaluées, taux de couverture |
 
 ## Développement

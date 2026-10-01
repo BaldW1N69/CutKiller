@@ -114,3 +114,22 @@ def test_espeak_available_for_fixtures():
         pytest.skip("espeak-ng absent")
     out = subprocess.run(["espeak-ng", "--version"], capture_output=True, text=True, check=False)
     assert out.returncode == 0
+
+
+def test_prosody_finds_the_loud_high_word(tmp_path):
+    """Three tones as « words »: the middle one louder and higher must stand out."""
+    from cutkiller_workers.prosody import prosody
+
+    rate = 16_000
+    t = np.arange(int(rate * 0.4)) / rate
+    quiet = 0.05 * np.sin(2 * np.pi * 120 * t)
+    loud = 0.4 * np.sin(2 * np.pi * 220 * t)
+    gap = np.zeros(int(rate * 0.2))
+    y = np.concatenate([gap, quiet, gap, loud, gap, quiet, gap]).astype(np.float32)
+    path = tmp_path / "words.wav"
+    sf.write(path, y, rate)
+    words = [{"start": 0.2, "end": 0.6}, {"start": 0.8, "end": 1.2}, {"start": 1.4, "end": 1.8}]
+    out = prosody({"path": str(path), "words": words})["words"]
+    assert out[1]["rmsDb"] > out[0]["rmsDb"] + 15
+    assert abs(out[0]["pitchSt"] - 12 * np.log2(1.2)) < 0.5
+    assert abs(out[1]["pitchSt"] - 12 * np.log2(2.2)) < 0.5

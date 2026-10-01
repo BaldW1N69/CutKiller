@@ -25,9 +25,16 @@ export interface SourceProbe {
   still?: boolean;
 }
 
+/** Structural view of the preset registry (implemented by @cutkiller/style). */
+export interface PresetResolver {
+  resolve(ref: string): { name: string; version: string; kind: string; params: Record<string, unknown> };
+}
+
 export interface PassContext {
   analysis: Analysis;
   profile: StyleProfile;
+  /** Needed by passes that place presets (motion, captions, audio). */
+  presets?: PresetResolver;
 }
 
 export interface PassResult {

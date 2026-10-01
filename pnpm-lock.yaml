@@ -127,6 +127,12 @@ importers:
       '@cutkiller/core':
         specifier: workspace:*
         version: link:../core
+      '@cutkiller/style':
+        specifier: workspace:*
+        version: link:../style
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   packages/qa:
     dependencies:
@@ -142,6 +148,9 @@ importers:
       '@cutkiller/media':
         specifier: workspace:*
         version: link:../media
+      '@cutkiller/motion':
+        specifier: workspace:*
+        version: link:../motion
       '@cutkiller/render':
         specifier: workspace:*
         version: link:../render
@@ -170,6 +179,12 @@ importers:
       '@cutkiller/media':
         specifier: workspace:*
         version: link:../media
+      '@cutkiller/motion':
+        specifier: workspace:*
+        version: link:../motion
+      '@cutkiller/style':
+        specifier: workspace:*
+        version: link:../style
       canvas:
         specifier: 3.2.3
         version: 3.2.3
@@ -177,9 +192,6 @@ importers:
       '@cutkiller/fixtures':
         specifier: workspace:*
         version: link:../../fixtures
-      '@cutkiller/style':
-        specifier: workspace:*
-        version: link:../style
 
   packages/style:
     dependencies:

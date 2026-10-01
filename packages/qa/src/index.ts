@@ -1,14 +1,16 @@
 import type { Analysis, Edl, StyleProfile } from "@cutkiller/core";
+import { PresetRegistry } from "@cutkiller/style";
 import { checkCutClicks } from "./checks/audio";
 import { checkJlCuts, checkNoLinear, edlErrors } from "./checks/edl";
 import { checkBitrate, checkBlackFrames, checkDuplicateFrames, checkExportFormat } from "./checks/image";
+import { checkBeatCuts, checkFillers, checkSilences, checkStaticShots } from "./checks/montage";
 import {
-  checkBeatCuts,
-  checkFillers,
+  checkDurations,
+  checkMotionBlur,
+  checkOvershoot,
+  checkPresets,
   checkPunchIns,
-  checkSilences,
-  checkStaticShots,
-} from "./checks/montage";
+} from "./checks/motion";
 import { buildReport, type CheckResult, type Report } from "./report";
 
 export { audioEditFrames, clickScore } from "./checks/audio";
@@ -27,6 +29,8 @@ export interface QualityCheckInput {
   analysis?: Analysis;
   /** Re-transcribe the render to look for leftover hesitations (slow: ~1× real time). Default: true. */
   transcribeOutput?: boolean;
+  /** Preset library the EDL refers to (default: the repo's presets/). */
+  registry?: PresetRegistry;
 }
 
 /**
@@ -53,6 +57,13 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
     results.push(checkNoLinear(input.edl), checkJlCuts(input.edl, input.profile));
     results.push(await checkCutClicks(input.video, input.edl, input.profile));
     results.push(checkStaticShots(input.edl, input.profile), checkPunchIns(input.edl, input.profile));
+    const registry = input.registry ?? (await PresetRegistry.load());
+    results.push(
+      checkPresets(input.edl, registry, input.profile),
+      checkDurations(input.edl, input.profile),
+      checkOvershoot(input.edl, registry, input.profile),
+      checkMotionBlur(input.video, input.edl, registry, input.profile),
+    );
     results.push(checkBeatCuts(input.edl, input.profile, input.analysis));
     const hasSpeech = Object.keys(input.analysis?.transcripts ?? {}).length > 0;
     if (hasSpeech) {

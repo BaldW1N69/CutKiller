@@ -36,14 +36,58 @@ Deux clips consécutifs de la même source dont les points se touchent (`out` du
 
 ## Animations
 
-`keyframes[]` : `{ target: "<clipId>.<x|y|scale|opacity|rotation>", keys: [{ frame, value, ease? }] }`. Le champ `ease` d'une clé décrit la courbe qui y mène depuis la clé précédente :
+`keyframes[]` : `{ target: "<clipId>.<propriété>", keys: [{ frame, value, ease? }], role?, preset?, why? }`.
 
-- un nom (`ease-out`, `ease-in`, `ease-in-out`, `ease-out-back`…) ;
-- `{ "cubicBezier": [x1, y1, x2, y2] }` ;
-- `{ "spring": { "stiffness", "damping", "mass" } }` ;
+**Valeurs** :
+- `frame` est une frame de la timeline ;
+- `scale` multiplie le cadrage statique du clip (1 = inchangé) ;
+- `x` / `y` déplacent l'image d'une fraction de la largeur ou de la hauteur de sortie ;
+- `opacity` va de 0 à 1 ;
+- `rotation` est en degrés.
+
+Avant la première clé et après la dernière, la valeur la plus proche est tenue.
+
+**Courbes** : le champ `ease` d'une clé décrit la courbe qui y mène depuis la clé précédente :
+
+- un nom : `ease-out`, `ease-in`, `ease-in-out`, `ease-out-cubic`, `ease-in-out-expo`, `ease-out-back`… ;
+- `{ "cubicBezier": [x1, y1, x2, y2] }` (convention CSS) ;
+- `{ "spring": { "stiffness", "damping", "mass" } }` : ressort amorti évalué en temps réel, posé exactement sur la valeur cible à la fin du segment. Son dépassement vaut `exp(-ζπ/√(1-ζ²))` ;
 - `"hold"`.
 
-**Toute interpolation linéaire sur `x`, `y`, `scale` ou `opacity` est refusée par le validateur**, y compris un `ease` absent ou un `cubicBezier` équivalent au linéaire. Le rendu des keyframes arrive en phase 3.
+**Toute interpolation linéaire sur `x`, `y`, `scale` ou `opacity` est refusée par le validateur**, y compris un `ease` absent ou un `cubicBezier` équivalent au linéaire.
+
+**Rôles**, contrôlés par `quality-check` :
+
+| Rôle | Durée | Forme de courbe | Dépassement |
+|---|---|---|---|
+| `entry` | 150–300 ms | décélérée (ease-out) | 0, ou entre 3 et 8 % |
+| `exit` | 150–300 ms | accélérée (ease-in) | aucun |
+| `micro` (punch-in…) | 150–300 ms | libre | 0, ou entre 3 et 8 % |
+| `move` (mouvement long) | non contrôlée | libre | aucun |
+
+Une animation peut aussi porter `preset` (`zoom-punch@1`…) : la QA vérifie alors qu'elle correspond toujours à son preset.
+
+Le moteur de rendu décode un clip qui zoome avec la marge nécessaire (jusqu'à ×1,5), pour que le punch-in reste net.
+
+## Transitions
+
+`transitions[]` : `{ id, atFrame, preset, durationFrames, why? }`. `atFrame` est une coupe de la piste principale ; la géométrie vient du preset :
+
+| Type | Fenêtre | Ce qui se passe |
+|---|---|---|
+| `push` (whip-pan) | à cheval sur la coupe | Les deux images se déplacent ensemble. Avant la coupe, le plan entrant montre sa première image figée ; après, le plan sortant garde sa dernière image figée. Le flou de mouvement masque ces images figées |
+| `slide` (smooth-slide) | à partir de la coupe | Le plan entrant glisse par-dessus la dernière image du plan sortant |
+| `glitch` (glitch-cut) | à cheval sur la coupe | Séparation RVB et bandes décalées, déterministes (graine fixe), au maximum sur la coupe |
+
+L'audio n'est pas modifié par une transition : la coupe son reste à `atFrame`.
+
+## Flou de mouvement
+
+`output.motionBlur: { thresholdPxPerFrame, shutterAngle, stepPx, maxSamples }`. Pour chaque frame, le moteur de rendu calcule la vitesse à l'écran : le plus grand déplacement d'un coin de calque entre t−½ et t+½.
+
+Au-delà du seuil (12 px/frame par défaut, réglable dans le profil), la frame devient la moyenne exacte de *n* sous-échantillons répartis sur l'obturateur (180° par défaut). *n* est choisi pour espacer les échantillons de `stepPx` pixels au plus, dans la limite de `maxSamples`.
+
+Le journal de rendu (`<vidéo>.render-log.json`, champ `motion`) liste la vitesse et le nombre d'échantillons de chaque frame en mouvement : c'est ce que vérifie la règle `motion.blur`.
 
 ## Traçabilité
 

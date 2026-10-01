@@ -6,11 +6,13 @@ import {
   type Edl,
   edlDurationFrames,
   framesToSeconds,
-  sortedClips,
+  maxAnimatedScale,
   type VideoClip,
 } from "@cutkiller/core";
 import { ffmpegBin, waitFor } from "@cutkiller/media";
-import { type CanvasRenderingContext2D, createCanvas, type ImageData } from "canvas";
+import { applyGlitch, type LayerPlan, MotionTimeline, resolveTransitions } from "@cutkiller/motion";
+import type { PresetRegistry } from "@cutkiller/style";
+import { type Canvas, type CanvasRenderingContext2D, createCanvas, type ImageData } from "canvas";
 import { FrameReader } from "./frames";
 
 export interface ClipLog {
@@ -35,16 +37,20 @@ export function decoderChain(
   edl: Edl,
   clip: VideoClip,
   baseDir: string,
-): { input: string[]; vf: string; duration: number } {
-  const { width: W, height: H, fps } = edl.output;
+  k = 1,
+): { input: string[]; vf: string; duration: number; width: number; height: number } {
+  const { width: outW, height: outH, fps } = edl.output;
+  // Decoded k× larger than the output when the clip zooms in later, so the punch-in stays sharp.
+  const W = Math.round((outW * k) / 2) * 2;
+  const H = Math.round((outH * k) / 2) * 2;
   const source = edl.sources[clip.source];
   if (!source) throw new Error(`source inconnue ${clip.source}`);
   const path = resolve(baseDir, source.path);
   const frames = clipFrames(clip, fps);
   // Crop before scaling: resampling only the kept area is several times cheaper.
   const { scale, x, y } = clip.transform;
-  const cw = `min(iw,ih*${W}/${H})`;
-  const ch = `min(ih,iw*${H}/${W})`;
+  const cw = `min(iw,ih*${outW}/${outH})`;
+  const ch = `min(ih,iw*${outH}/${outW})`;
   const fit =
     clip.fit === "contain"
       ? `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`
@@ -55,11 +61,13 @@ export function decoderChain(
     // later than that (offset streams), its first frame is held, never shifted.
     vf: `fps=${fps}:start_time=0:round=near,${fit}`,
     duration: framesToSeconds(frames, fps) + 0.5 / fps,
+    width: W,
+    height: H,
   };
 }
 
-export function decoderArgs(edl: Edl, clip: VideoClip, baseDir: string): string[] {
-  const { input, vf, duration } = decoderChain(edl, clip, baseDir);
+export function decoderArgs(edl: Edl, clip: VideoClip, baseDir: string, k = 1): string[] {
+  const { input, vf, duration } = decoderChain(edl, clip, baseDir, k);
   return [
     "-hide_banner",
     "-nostdin",
@@ -155,14 +163,19 @@ export function encoderArgs(edl: Edl, audioPath: string, outPath: string): strin
   ];
 }
 
-interface ActiveClip {
+interface Decoded {
   clip: VideoClip;
-  track: string;
-  end: number;
+  k: number;
+  width: number;
+  height: number;
+  canvas: Canvas;
+  ctx: CanvasRenderingContext2D;
+  pixels: ImageData;
   process: ChildProcess;
   reader: FrameReader;
   done: Promise<void>;
-  last: Buffer | null;
+  /** Frames of the clip already decoded into `canvas`. */
+  read: number;
   log: ClipLog;
   stopped: boolean;
 }
@@ -175,24 +188,39 @@ function write(stream: NodeJS.WritableStream, data: Buffer): Promise<void> {
   });
 }
 
+export interface MotionLog {
+  /** [frame, speed in px/frame, motion-blur samples (1 = none)] for frames that move. */
+  frames: [number, number, number][];
+  blurredFrames: number;
+  glitchFrames: number;
+}
+
+/** Sample times (fractional frames) spread over the shutter, centred on the frame. */
+export function shutterSamples(f: number, n: number, shutterAngle: number): number[] {
+  const open = shutterAngle / 360;
+  return Array.from({ length: n }, (_, i) => f - open / 2 + (open * (i + 0.5)) / n);
+}
+
 /**
- * Frame loop: every track's active clip is decoded by its own FFmpeg process
- * (seek + fps conform + fit), composited on a Cairo canvas, and piped to one
- * encoder. Keyframe animation is evaluated here from phase 3 on.
+ * Frame loop: each visible clip is decoded by its own FFmpeg process (seek + fps
+ * conform + static framing), animated and composited on a Cairo canvas, then piped
+ * to one encoder. Layers, their pictures and their motion come from the
+ * MotionTimeline; frames moving faster than the threshold are the average of
+ * shutter sub-samples (motion blur).
  */
 export async function renderVideo(
   edl: Edl,
   baseDir: string,
   audioPath: string,
   outPath: string,
+  registry: PresetRegistry,
   onProgress?: (frame: number, total: number) => void,
-): Promise<VideoLog> {
-  const { width: W, height: H, fps } = edl.output;
+): Promise<VideoLog & { motion: MotionLog }> {
+  const { width: W, height: H, fps, motionBlur } = edl.output;
   const total = edlDurationFrames(edl);
   const started = performance.now();
   const warnings: string[] = [];
-  if (edl.keyframes.length > 0)
-    warnings.push("keyframes présentes mais non rendues avant la phase 3 (motion)");
+  const timeline = new MotionTimeline(edl, resolveTransitions(edl, registry));
 
   const encoder = spawn(ffmpegBin(), encoderArgs(edl, audioPath, outPath), {
     stdio: ["pipe", "ignore", "pipe"],
@@ -204,75 +232,136 @@ export async function renderVideo(
   const out = createCanvas(W, H);
   const ctx = out.getContext("2d") as CanvasRenderingContext2D;
   ctx.quality = "good";
-  const layer = createCanvas(W, H);
-  const layerCtx = layer.getContext("2d") as CanvasRenderingContext2D;
-  const pixels: ImageData = layerCtx.createImageData(W, H);
-  const frameSize = W * H * 4;
+  const sum = new Uint32Array(W * H * 4);
 
-  const queues = edl.video.map((track) => ({ id: track.id, clips: sortedClips(track.clips) }));
-  const active = new Map<string, ActiveClip>();
+  const decoders = new Map<string, Decoded>();
   const logs: ClipLog[] = [];
+  const motion: MotionLog = { frames: [], blurredFrames: 0, glitchFrames: 0 };
 
-  const start = (track: string, clip: VideoClip): ActiveClip => {
-    const child = spawn(ffmpegBin(), decoderArgs(edl, clip, baseDir), { stdio: ["ignore", "pipe", "pipe"] });
-    const log: ClipLog = { id: clip.id, track, frames: clipFrames(clip, fps), held: 0 };
+  const open = (clip: VideoClip): Decoded => {
+    const existing = decoders.get(clip.id);
+    if (existing) return existing;
+    const k = Math.min(1.5, maxAnimatedScale(timeline.index, clip.id, fps));
+    const { width, height } = decoderChain(edl, clip, baseDir, k);
+    const child = spawn(ffmpegBin(), decoderArgs(edl, clip, baseDir, k), {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const canvas = createCanvas(width, height);
+    const cctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+    const log: ClipLog = { id: clip.id, track: "", frames: clipFrames(clip, fps), held: 0 };
     logs.push(log);
-    return {
+    const d: Decoded = {
       clip,
-      track,
-      end: clipEnd(clip, fps),
+      k,
+      width,
+      height,
+      canvas,
+      ctx: cctx,
+      pixels: cctx.createImageData(width, height),
       process: child,
-      reader: new FrameReader(child.stdout as NonNullable<typeof child.stdout>, frameSize),
+      reader: new FrameReader(child.stdout as NonNullable<typeof child.stdout>, width * height * 4),
       done: waitFor(child, `décodeur ${clip.id}`),
-      last: null,
+      read: 0,
       log,
       stopped: false,
     };
+    decoders.set(clip.id, d);
+    return d;
   };
 
-  const stop = async (a: ActiveClip) => {
-    // The decoder is asked for half a frame of margin: stopping it early is normal.
-    if (a.process.exitCode === null) {
-      a.stopped = true;
-      a.process.kill("SIGTERM");
+  /** Decodes until the clip's local frame `index` is in its canvas (holding the last picture if the source runs out). */
+  const advance = async (d: Decoded, index: number) => {
+    while (d.read <= index) {
+      const frame = await d.reader.next();
+      d.read++;
+      if (frame === null) {
+        d.log.held++;
+        continue;
+      }
+      if (d.read <= index) continue; // skipped picture: only the latest one is drawn
+      d.pixels.data.set(frame);
+      d.ctx.putImageData(d.pixels, 0, 0);
     }
-    await a.done.catch((e: Error) => {
-      if (!a.stopped) warnings.push(e.message);
+  };
+
+  const close = async (d: Decoded) => {
+    if (d.process.exitCode === null) {
+      d.stopped = true;
+      d.process.kill("SIGTERM");
+    }
+    await d.done.catch((e: Error) => {
+      if (!d.stopped) warnings.push(e.message);
     });
+    decoders.delete(d.clip.id);
+  };
+
+  const draw = (target: CanvasRenderingContext2D, layers: LayerPlan[], t: number) => {
+    target.setTransform(1, 0, 0, 1, 0, 0);
+    target.globalAlpha = 1;
+    target.fillStyle = "#000";
+    target.fillRect(0, 0, W, H);
+    for (const layer of layers) {
+      const d = decoders.get(layer.clip.id);
+      if (!d) continue;
+      const s = layer.state(t);
+      target.setTransform(1, 0, 0, 1, 0, 0);
+      target.globalAlpha = Math.min(1, Math.max(0, s.opacity));
+      target.translate(W / 2 + s.x * W, H / 2 + s.y * H);
+      if (s.rotation !== 0) target.rotate((s.rotation * Math.PI) / 180);
+      const scale = s.scale / d.k;
+      target.scale(scale, scale);
+      target.drawImage(d.canvas, -d.width / 2, -d.height / 2);
+    }
+    target.setTransform(1, 0, 0, 1, 0, 0);
+    target.globalAlpha = 1;
   };
 
   try {
     for (let f = 0; f < total; f++) {
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, W, H);
-      for (const q of queues) {
-        let a = active.get(q.id);
-        if (a && f >= a.end) {
-          await stop(a);
-          active.delete(q.id);
-          a = undefined;
-        }
-        if (!a && q.clips[0] && q.clips[0].at <= f) {
-          a = start(q.id, q.clips.shift() as VideoClip);
-          active.set(q.id, a);
-        }
-        if (!a) continue;
-        let frame = await a.reader.next();
-        if (frame === null) {
-          frame = a.last;
-          a.log.held++;
-        }
-        if (frame === null) continue;
-        a.last = frame;
-        pixels.data.set(frame);
-        layerCtx.putImageData(pixels, 0, 0);
-        ctx.drawImage(layer, 0, 0);
+      const layers = timeline.layersAt(f);
+      for (const layer of layers) {
+        const d = open(layer.clip);
+        if (layer.image === "live") await advance(d, f - layer.clip.at);
+        else if (layer.image === "first") await advance(d, 0);
       }
-      await write(stdin, out.toBuffer("raw"));
+      // Clips no longer on screen and past their end will not come back.
+      for (const d of [...decoders.values()])
+        if (f >= clipEnd(d.clip, fps) && !layers.some((l) => l.clip.id === d.clip.id)) await close(d);
+
+      const v = timeline.velocityAt(f);
+      let samples = 1;
+      if (v > motionBlur.thresholdPxPerFrame && motionBlur.shutterAngle > 0)
+        samples = Math.min(
+          motionBlur.maxSamples,
+          Math.max(2, Math.ceil((v * motionBlur.shutterAngle) / 360 / motionBlur.stepPx)),
+        );
+      let frame: Buffer;
+      if (samples === 1) {
+        draw(ctx, layers, f);
+        frame = out.toBuffer("raw");
+      } else {
+        // Exact average of the sub-frame samples, accumulated in 32 bits.
+        sum.fill(0);
+        for (const t of shutterSamples(f, samples, motionBlur.shutterAngle)) {
+          draw(ctx, layers, t);
+          const px = out.toBuffer("raw");
+          for (let i = 0; i < px.length; i++) sum[i] = (sum[i] as number) + (px[i] as number);
+        }
+        frame = Buffer.allocUnsafe(sum.length);
+        for (let i = 0; i < sum.length; i++) frame[i] = Math.round((sum[i] as number) / samples);
+        motion.blurredFrames++;
+      }
+      if (v > 0.5) motion.frames.push([f, Math.round(v * 10) / 10, samples]);
+      const glitch = timeline.glitchAt(f);
+      if (glitch) {
+        applyGlitch(frame, W, H, glitch.intensity, glitch.seed);
+        motion.glitchFrames++;
+      }
+      await write(stdin, frame);
       if (onProgress && f % fps === 0) onProgress(f, total);
     }
   } finally {
-    for (const a of active.values()) await stop(a);
+    for (const d of [...decoders.values()]) await close(d);
     stdin.end();
   }
   await encoded;
@@ -287,5 +376,6 @@ export async function renderVideo(
     elapsedMs,
     renderFps: total / (elapsedMs / 1000),
     warnings,
+    motion,
   };
 }

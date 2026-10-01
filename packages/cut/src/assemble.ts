@@ -86,6 +86,7 @@ export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: Ass
         bitrateMbps: Math.round(minMbps * profile.export.targetBitrateFactor * 10) / 10,
       },
       audio: { cutFadeMs: (profile.audio.cutFadeMs[0] + profile.audio.cutFadeMs[1]) / 2 },
+      motionBlur: { thresholdPxPerFrame: profile.motion.motionBlurThresholdPxPerFrame },
     },
     sources,
     video: [{ id: "main", clips }],

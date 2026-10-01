@@ -1,0 +1,7 @@
+{
+  "name": "glitch-cut",
+  "version": "1.0.0",
+  "kind": "transition",
+  "description": "Coupe glitchée : séparation RVB et bandes décalées autour de la coupe, au maximum sur la coupe (200 ms, déterministe).",
+  "params": { "type": "glitch", "durationMs": 200, "intensity": 1, "seed": 7 }
+}

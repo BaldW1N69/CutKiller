@@ -226,21 +226,3 @@ export function checkStaticShots(edl: Edl, profile: StyleProfile): CheckResult {
   }
   return graded("montage.static-shots", points.length - 1, violations, { shots: points.length - 1 });
 }
-
-/** Punch-ins: level within range, never the same level twice in a row. */
-export function checkPunchIns(edl: Edl, profile: StyleProfile): CheckResult {
-  const [lo, hi] = profile.montage.punchInScale;
-  const clips = sortedClips(edl.video[0]?.clips ?? []);
-  const punches = clips.filter((c) => c.transform.scale > 1.0001);
-  if (punches.length === 0) return notEvaluated("montage.punch-ins", "aucun punch-in");
-  const violations: Violation[] = [];
-  punches.forEach((c, k) => {
-    const s = c.transform.scale;
-    if (s < lo - 1e-6 || s > hi + 1e-6)
-      violations.push({ message: `punch-in à ${Math.round(s * 100)} %`, frame: c.at });
-    const prev = punches[k - 1];
-    if (prev && Math.abs(prev.transform.scale - s) < 1e-6)
-      violations.push({ message: `deux punch-ins de suite à ${Math.round(s * 100)} %`, frame: c.at });
-  });
-  return graded("montage.punch-ins", punches.length, violations, { punchIns: punches.length });
-}

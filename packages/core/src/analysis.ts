@@ -34,9 +34,15 @@ export interface BeatGrid {
   durationS: number;
 }
 
+/** Per-word prosody, aligned with the transcript's words (same indices). */
+export interface Prosody {
+  words: { rmsDb: number | null; pitchSt: number | null }[];
+}
+
 /** Per-source analyzer results, keyed by source id. */
 export interface AnalyzerResults {
   transcripts?: Record<string, Transcript>;
+  prosody?: Record<string, Prosody>;
   vad?: Record<string, VoiceActivity>;
   beats?: Record<string, BeatGrid>;
 }
