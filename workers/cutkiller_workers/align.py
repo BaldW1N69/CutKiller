@@ -23,6 +23,8 @@ MODEL_FR = "jonatasgrosman/wav2vec2-large-xlsr-53-french"
 RATE = 16_000
 FRAME_S = 320 / RATE  # wav2vec2 stride: 20 ms per emission frame
 MAX_WINDOW_S = 25.0
+# Below this CTC confidence a word's placement is treated as unreliable.
+LOW_SCORE = 0.1
 PAD_S = 0.4
 
 
@@ -92,14 +94,17 @@ def align_words(
     duration = len(audio) / RATE
     result = [dict(w, timing="whisper") for w in words]
 
-    for a, b, ws, we in _windows(words, duration):
+    def ctc(indices: list[int], ws: float, we: float) -> dict[int, tuple[float, float, float]]:
+        """Forced alignment of words[indices] on audio [ws, we): start, end, mean confidence."""
         chunk = audio[int(ws * RATE) : int(we * RATE)]
+        if len(chunk) < RATE // 50:
+            return {}
         inputs = processor(chunk, sampling_rate=RATE, return_tensors="pt")
         with torch.inference_mode():
             log_probs = torch.log_softmax(model(inputs.input_values).logits, dim=-1)
         targets: list[int] = []
         owner: list[int] = []  # word index of each target token (-1 for delimiters)
-        for k in range(a, b):
+        for k in indices:
             chars = normalize(words[k]["text"], vocab)
             if not chars:
                 continue
@@ -109,7 +114,7 @@ def align_words(
             targets.extend(vocab[c] for c in chars)
             owner.extend([k] * len(chars))
         if not targets or log_probs.shape[1] < len(targets):
-            continue
+            return {}
         labels, scores = F.forced_align(log_probs, torch.tensor([targets], dtype=torch.int32), blank=blank)
         spans = F.merge_tokens(labels[0], scores[0].exp())
         first: dict[int, float] = {}
@@ -121,13 +126,36 @@ def align_words(
             first.setdefault(k, ws + span.start * FRAME_S)
             last[k] = ws + span.end * FRAME_S
             conf.setdefault(k, []).append(float(span.score))
-        for k, start in first.items():
-            result[k].update(
-                start=round(start, 3),
-                end=round(max(last[k], start + FRAME_S), 3),
-                alignScore=round(float(np.mean(conf[k])), 3),
-                timing="forced",
-            )
+        return {k: (first[k], max(last[k], first[k] + FRAME_S), float(np.mean(conf[k]))) for k in first}
+
+    def apply(found: dict[int, tuple[float, float, float]]) -> None:
+        for k, (st, en, sc) in found.items():
+            result[k].update(start=round(st, 3), end=round(en, 3), alignScore=round(sc, 3), timing="forced")
+
+    for a, b, ws, we in _windows(words, duration):
+        apply(ctc(list(range(a, b)), ws, we))
+
+    # Second chance for runs of words the long-window alignment placed with almost
+    # no confidence (CTC drifted, e.g. around a mis-transcribed phrase): realign them
+    # alone between their confident neighbours, keep the result if it is surer.
+    score = lambda k: result[k].get("alignScore", 0.0) if result[k]["timing"] == "forced" else 0.0
+    k = 0
+    while k < len(words):
+        if score(k) >= LOW_SCORE:
+            k += 1
+            continue
+        j = k
+        while j + 1 < len(words) and score(j + 1) < LOW_SCORE:
+            j += 1
+        run = list(range(k, j + 1))
+        lo = result[k - 1]["end"] if k > 0 else max(0.0, words[k]["start"] - PAD_S)
+        hi = result[j + 1]["start"] if j + 1 < len(words) else min(duration, words[j]["end"] + PAD_S)
+        if hi - lo <= MAX_WINDOW_S:
+            found = ctc(run, lo, hi)
+            before = np.mean([score(i) for i in run])
+            if found and np.mean([found[i][2] for i in run if i in found] or [0.0]) > before:
+                apply(found)
+        k = j + 1
     return refine_boundaries(audio, result, floor_db=floor_db)
 
 

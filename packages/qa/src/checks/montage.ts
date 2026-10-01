@@ -173,11 +173,15 @@ export function checkBeatCuts(edl: Edl, profile: StyleProfile, analysis: Analysi
       const head = margins(clips[j] as VideoClip, analysis, profile);
       const tail = margins(prev, analysis, profile);
       if (!head || !tail) continue;
-      const shrink = Math.max(0, head.head - lo) + Math.max(0, tail.tail - lo);
-      const grow =
-        Math.max(0, Math.min(hi, head.headRoom) - head.head) +
-        Math.max(0, Math.min(hi, tail.tailRoom) - tail.tail);
-      window = [cut - Math.floor(shrink * fps + 1e-6), cut + Math.floor(grow * fps + 1e-6)];
+      // Same reachable range as the planner: the run starts where it starts on the
+      // timeline, its length spans its words plus the smallest to largest margins,
+      // in whole frames (clips are quantized, so the longest length rounds down).
+      const core = tail.last.end - head.first.start;
+      const room = (r: number, m: number) => Math.max(0, Math.min(m, r));
+      const dMin = core + room(head.headRoom, lo) + room(tail.tailRoom, lo);
+      const dMax = core + room(head.headRoom, hi) + room(tail.tailRoom, hi);
+      const runStart = (clips[j] as VideoClip).at;
+      window = [runStart + Math.ceil(dMin * fps - 1e-6), runStart + Math.floor(dMax * fps + 1e-6)];
     }
     // Free cut: some beat can be reached within tolerance from an allowed position.
     const toWindow = (b: number) => Math.max(0, window[0] - b, b - window[1]);
