@@ -52,7 +52,12 @@ Quatre sons sont **synthétisés au rendu** : `whoosh`, `whoosh-soft`, `glitch-b
 
 ## Tests
 
-TESTS_COUNT
+```sh
+pnpm check && pnpm typecheck && pnpm test
+(cd workers && uv run ruff check . && uv run pytest)
+```
+
+**99 tests TypeScript et 18 tests Python verts.** Lint, format, typecheck et schémas sont à jour.
 
 Tests propres à la phase :
 - **audio** :
@@ -71,8 +76,33 @@ Tests propres à la phase :
 
 ## Score qualité
 
-SCORE
+Mêmes rushes qu'aux phases précédentes, et voix synthétique. Rendus en `--draft`, avec mesures sur le fichier livré (AAC).
+
+| Rendu | Loudness / true peak | Ducking (médiane, pompage) | SFX (écart max) | Limiteur | Score | Couverture |
+|---|---|---|---|---|---|---|
+| Voix synthétique 16:9 | -14,2 LUFS / -1,6 dBTP | -15 dB, 0 | 1 SFX, 0,03 frame | — | **100/100** | 81 % |
+| Long 16:9 | -14,3 LUFS / -1,4 dBTP | -15 dB sur 23 passages, 0 | 3 SFX, 0,03 frame | 0,2 LU retiré | **99,8/100** | 87 % |
+| Court 9:16 | -14,2 LUFS / -1,8 dBTP | -15 dB sur 8 passages, 0 | 5 SFX, 0,05 frame | 0,5 LU retiré | **99,7/100** | 87 % |
+
+- **Toute la catégorie audio passe (20/20)** sur les trois rendus. La couverture passe de 71 % à 87 %. Il ne reste que l'image (recadrage, étalonnage : phase 6) et les J/L cuts, non générés sur une caméra unique.
+- **Compression de la voix** : sans elle, le limiteur retirait 1,2 LU au court, c'est-à-dire qu'il écrasait les pointes de la voix. Avec elle, il ne retire plus que 0,5 LU.
+- **Seuls écarts restants**, hors audio et déjà connus :
+  - synchro de quelques mots mal alignés à la source (phase 4) ;
+  - un « euh » ou une répétition que Whisper n'a pas écrits à l'analyse (phase 2). Comme en phase 4, la transcription varie d'une analyse à l'autre.
+
+### Ce qu'un monteur pro critiquerait encore
+
+1. **La musique ne respire jamais** : la parole étant continue après le montage, la musique reste sous la voix du début à la fin. Il manque une intro musicale avant le premier mot, des remontées sur les respirations du propos et une fin calée sur une mesure.
+2. **Des effets sonores génériques** : un même whoosh synthétique pour toutes les transitions, et un impact identique sur chaque punch-in. Un monteur varie, et ne met pas d'effet sur chaque zoom (5 en 53 s, c'est déjà beaucoup).
+3. **Une voix seulement compressée** : pas d'égalisation (coupe-bas sous 80 Hz, présence), pas de réduction de bruit ni de désessage. Le son d'un entretien filmé en intérieur reste « pièce ».
+4. **Des respirations non traitées** : celles qui restent dans les pauses courtes ne sont pas atténuées. C'était annoncé en phase 2 et ce n'est pas fait.
+5. **Une loudness à la cible, mais une musique au niveau calculé** : -5 / -7 LU sous la voix avant ducking, quel que soit le morceau. Une musique très dense ou très calme mériterait un réglage à l'oreille.
 
 ## Limites connues
 
-LIMITS
+- **Dépendance aux stems** : le ducking et la synchro des SFX se mesurent sur les stems écrits par le rendu (`--keep-stems`, utilisé par `auto`). Sans stems, ces deux règles sont « non évaluées ». L'écart de ducking compare deux sorties du même moteur (avec et sans enveloppe). Ce qui est vérifié de façon indépendante, c'est la présence de la parole (VAD), la profondeur et la douceur effectivement rendues.
+- **Marge du true peak** : le rendu vise -1,5 dBTP pour une limite de -1. Mesuré après AAC : -1,4 à -1,8 dBTP. Avec un autre codec ou un débit audio plus faible, cette marge pourrait ne pas suffire. La QA le signalerait.
+- **Limiteur** : `alimiter` de FFmpeg agit sur les échantillons, pas sur le true peak. La boucle de remesure compense, en 1 à 2 passes sur nos rendus et 5 au plus.
+- **Ducking** : il est calé sur les mots du transcript, pas sur l'énergie réelle de la voix. Un rire ou une respiration hors transcript ne fait pas descendre la musique.
+- **Effets sonores** : 4 sons procéduraux seulement, sans banque de sons réels. Un whoosh synthétique reste reconnaissable.
+- **Durée** : le mix ajoute 4 à 6 mesures EBU R128 (FFmpeg) par rendu, soit environ 10 s sur un rendu de 2 min 30.

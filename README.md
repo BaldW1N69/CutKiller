@@ -2,7 +2,7 @@
 
 Montage automatique de rushes pour YouTube (16:9) et Shorts / TikTok / Reels (9:16), piloté par une **EDL JSON éditable à la main** et vérifié par des **règles de qualité mesurables**.
 
-> Statut : **phase 4 (sous-titres) livrée**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké synchronisés au mot (1–3 mots en 9:16, 2 lignes × 32 caractères en 16:9) dans les safe zones TikTok/Reels/Shorts avec export SRT, rendu et quality-check. Audio et image arrivent en phases 5 et 6. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
+> Statut : **phase 5 (audio) livrée**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké dans les safe zones avec export SRT, mix audio à -14 LUFS (true peak ≤ -1 dBTP) avec musique sous la voix, ducking sans pompage et effets sonores procéduraux synchronisés, rendu et quality-check. L'image (recadrage 9:16 et étalonnage) arrive en phase 6. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
 
 ## Prérequis
 
@@ -43,8 +43,9 @@ pnpm cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --md out/qual
 | Planification | `cut → reframe → color → motion → captions → audio` | Passes pures `EDL → EDL`, dans cet ordre fixe |
 | EDL | `@cutkiller/core` | Schéma, validateur, temps en frames entières ([référence](docs/EDL.md), [JSON Schema](schema/edl-1.schema.json)) |
 | Motion | `@cutkiller/motion` + [`presets/`](presets) | Punch-ins sur l'emphase, transitions, timeline d'animation partagée par le rendu et la QA |
+| Audio | `@cutkiller/audio` + [`presets/sfx/`](presets) | Ducking sur la parole, effets sonores synthétisés et calés à l'impact |
 | Sous-titres | `@cutkiller/captions` | Mots sur la timeline, découpage, mise en page dans les safe zones, rendu karaoké, export SRT |
-| Rendu | `@cutkiller/render` | Décodage FFmpeg par clip → compositeur Cairo (animations, flou de mouvement, glitch) → encodage FFmpeg CFR ; mix audio FFmpeg |
+| Rendu | `@cutkiller/render` | Décodage FFmpeg par clip → compositeur Cairo (animations, flou de mouvement, glitch, sous-titres) → encodage FFmpeg CFR ; mix audio par stems (voix compressée, musique placée et baissée, effets), loudness EBU R128 + limiteur |
 | QA | `@cutkiller/qa` | `quality-check` : 25 règles, score /100 sur les règles évaluées, taux de couverture |
 
 ## Développement
