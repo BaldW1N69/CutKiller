@@ -8,7 +8,6 @@ import {
   edlDurationFrames,
   type Pass,
   type PassContext,
-  sortedClips,
 } from "@cutkiller/core";
 import { TransitionParamsSchema } from "@cutkiller/motion";
 import { SfxParamsSchema, sfxTiming } from "./sfx";

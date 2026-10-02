@@ -394,6 +394,213 @@
                   "default": 0,
                   "type": "number"
                 },
+                "reframe": {
+                  "type": "object",
+                  "properties": {
+                    "axis": {
+                      "type": "string",
+                      "enum": [
+                        "x",
+                        "y"
+                      ]
+                    },
+                    "keys": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "frame": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "value": {
+                            "type": "number"
+                          },
+                          "ease": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "linear",
+                                  "ease",
+                                  "ease-in",
+                                  "ease-out",
+                                  "ease-in-out",
+                                  "ease-out-cubic",
+                                  "ease-in-cubic",
+                                  "ease-out-expo",
+                                  "ease-in-expo",
+                                  "ease-in-out-cubic",
+                                  "ease-in-out-expo",
+                                  "ease-out-back"
+                                ]
+                              },
+                              {
+                                "type": "string",
+                                "const": "hold"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "cubicBezier": {
+                                    "type": "array",
+                                    "prefixItems": [
+                                      {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "items": false,
+                                    "minItems": 4,
+                                    "maxItems": 4
+                                  }
+                                },
+                                "required": [
+                                  "cubicBezier"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "spring": {
+                                    "type": "object",
+                                    "properties": {
+                                      "stiffness": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0
+                                      },
+                                      "damping": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0
+                                      },
+                                      "mass": {
+                                        "default": 1,
+                                        "type": "number",
+                                        "exclusiveMinimum": 0
+                                      }
+                                    },
+                                    "required": [
+                                      "stiffness",
+                                      "damping"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "spring"
+                                ]
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "frame",
+                          "value"
+                        ]
+                      }
+                    },
+                    "why": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "wordIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "axis",
+                    "keys"
+                  ]
+                },
+                "color": {
+                  "type": "object",
+                  "properties": {
+                    "exposureEv": {
+                      "default": 0,
+                      "type": "number",
+                      "minimum": -3,
+                      "maximum": 3
+                    },
+                    "balance": {
+                      "default": [
+                        1,
+                        1,
+                        1
+                      ],
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "look": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "wordIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  }
+                },
                 "why": {
                   "type": "object",
                   "properties": {

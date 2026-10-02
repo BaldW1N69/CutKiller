@@ -1,4 +1,11 @@
-import { identityPass, type Pass } from "@cutkiller/core";
-
-/** Passe « color » (LUT et égalisation d'exposition entre plans). Implémentée en phase 6 ; identité d'ici là. */
-export const colorPass: Pass = identityPass("color");
+export { lightnessToY, linearToSrgb, lumaLinear, type Rgb, srgbToLab, srgbToLinear } from "./lab";
+export {
+  applyLook,
+  gradeCube,
+  gradeKey,
+  type LookParams,
+  LookParamsSchema,
+  lookCube,
+  shoulder,
+} from "./look";
+export { colorPass, skinTone, toLinear } from "./pass";

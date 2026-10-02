@@ -108,6 +108,144 @@
         "minBitrateMbps"
       ]
     },
+    "reframe": {
+      "default": {
+        "enabled": true,
+        "deadZone": 0.1,
+        "minDriftS": 0.5,
+        "smoothingS": 0.8,
+        "moveS": [
+          0.4,
+          2
+        ],
+        "ease": "ease-in-out",
+        "minFaceInFrame": 0.95,
+        "maxFaceOffset": 0.25,
+        "maxAccelPx": 3
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "deadZone": {
+          "default": 0.1,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5
+        },
+        "minDriftS": {
+          "default": 0.5,
+          "type": "number",
+          "minimum": 0
+        },
+        "smoothingS": {
+          "default": 0.8,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "moveS": {
+          "default": [
+            0.4,
+            2
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "ease": {
+          "default": "ease-in-out",
+          "type": "string"
+        },
+        "minFaceInFrame": {
+          "default": 0.95,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "maxFaceOffset": {
+          "default": 0.25,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5
+        },
+        "maxAccelPx": {
+          "default": 3,
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "color": {
+      "default": {
+        "enabled": true,
+        "look": "clean@1",
+        "maxExposureEv": 1.5,
+        "maxBalance": 0.3,
+        "minCorrection": 0.04,
+        "minSkinLightness": 25,
+        "shotMatchDeltaE": 4,
+        "maxSkinDeltaL": 6,
+        "maxSkinDeltaAb": 6
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "look": {
+          "default": "clean@1",
+          "type": "string"
+        },
+        "maxExposureEv": {
+          "default": 1.5,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxBalance": {
+          "default": 0.3,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "minCorrection": {
+          "default": 0.04,
+          "type": "number",
+          "minimum": 0
+        },
+        "minSkinLightness": {
+          "default": 25,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "shotMatchDeltaE": {
+          "default": 4,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxSkinDeltaL": {
+          "default": 6,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxSkinDeltaAb": {
+          "default": 6,
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
     "montage": {
       "type": "object",
       "properties": {

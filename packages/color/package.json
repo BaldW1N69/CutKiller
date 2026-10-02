@@ -8,6 +8,10 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@cutkiller/core": "workspace:*"
+    "@cutkiller/core": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@cutkiller/style": "workspace:*"
   }
 }

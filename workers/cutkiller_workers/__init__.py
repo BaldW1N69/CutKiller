@@ -50,6 +50,12 @@ def _align(request: dict[str, Any]) -> Any:
     return {"words": align_words(request["path"], words, floor_db=floor) if words else [], "floorDb": floor}
 
 
+def _subjects(request: dict[str, Any]) -> Any:
+    from .subjects import subjects
+
+    return subjects(request)
+
+
 TASKS: dict[str, Task] = {
     "ping": ping,
     "transcribe": _transcribe,
@@ -57,4 +63,5 @@ TASKS: dict[str, Task] = {
     "beats": _beats,
     "prosody": _prosody,
     "align": _align,
+    "subjects": _subjects,
 }

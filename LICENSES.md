@@ -38,6 +38,8 @@ Phase 5 (audio) : aucun code tiers et aucun fichier audio tiers.
 - Les effets sonores sont **synthétisés** par le dépôt (`packages/audio/src/sfx.ts` : bruit pseudo-aléatoire, filtre à variables d'état, enveloppes) à partir des presets `presets/sfx/`.
 - La mesure de loudness et le limiteur sont ceux de FFmpeg (`ebur128`, `alimiter`), utilisé comme exécutable externe, comme ailleurs.
 
+Phase 6 (image) : aucun code tiers. La caméra virtuelle (filtre médian, zone morte, glissement posé sur le déplacement du sujet, borne d'accélération), l'égalisation sur la peau, l'épaulement des hautes lumières, la génération des LUT `.cube` et la conversion CIELAB (formules CIE publiques) sont écrits pour ce dépôt. MediaPipe, prévu à l'audit, n'a pas été retenu : YuNet (OpenCV) fournit visages et points du visage avec une seule dépendance déjà prévue, et un modèle MIT de 230 Ko.
+
 Phase 4 (sous-titres) : aucun code tiers. L'export SRT (`packages/captions/src/srt.ts`) est un writer d'une vingtaine de lignes écrit pour ce dépôt : le parseur SRT d'opencut-classic, prévu à l'audit, n'a pas été nécessaire (pas d'import de sous-titres). Le découpage remplace `chunk()` du toolkit, réécrit comme prévu. Le ratio de contraste suit la définition WCAG 2.x (luminance relative sRGB).
 
 Phase 3 (motion) : aucun code tiers. Le solveur cubic-bezier suit la définition CSS (W3C *CSS Easing Functions*) et les ressorts suivent l'équation de l'oscillateur amorti. Les transitions (whip-pan, smooth-slide, glitch-cut) et le flou de mouvement sont écrits pour ce dépôt. Les transitions du toolkit, qui dépendent de Remotion, n'ont pas été reprises.
@@ -59,8 +61,8 @@ Phase 3 (motion) : aucun code tiers. Le solveur cubic-bezier suit la définition
 | `jonatasgrosman/wav2vec2-large-xlsr-53-french` | modèle d'alignement FR | Apache-2.0 | téléchargé à l'exécution | ✅ (carte du modèle, phase 2) |
 | silero-vad 6 | détection de parole | MIT | pip (modèle inclus) | 🔎 |
 | librosa 0.11, soundfile, numpy | beats, onsets | ISC / BSD-3-Clause / BSD-3-Clause | pip | 🔎 |
-| MediaPipe (+ modèles BlazeFace / Pose) | suivi du sujet | Apache-2.0 | pip, modèles depuis storage.googleapis.com | 🔎 |
-| OpenCV (headless) | lecture de frames, statistiques | Apache-2.0 | pip | 🔎 |
+| opencv-python-headless 5.0 | détection de visages (`FaceDetectorYN`) | Apache-2.0 ; la wheel embarque FFmpeg (LGPL-2.1+) et d'autres bibliothèques sous licences permissives | pip | ✅ (PyPI, phase 6) |
+| Modèle YuNet `face_detection_yunet_2023mar.onnx` (opencv_zoo) | détecteur de visages et 5 points (yeux, nez, bouche) | **MIT**, © 2020 Shiqi Yu (`models/face_detection_yunet/LICENSE`) | téléchargé à l'exécution (sha256 épinglé), non commité | ✅ (fichier LICENSE, phase 6) |
 | espeak-ng | génération de fixtures de test uniquement | GPL-3.0 | outil de dev, non redistribué | 🔎 |
 | OpenTimelineIO (optionnel) | export vers Resolve / Premiere | Apache-2.0 | pip | 🔎 |
 
@@ -83,6 +85,7 @@ Téléchargés dans `.cache/rushes` par `pnpm rushes`, d'après [`fixtures/rushe
 | Entretien « Pierre Vallee, Trois-Rivières » (Global Lives Project), extraits de 60 et 180 s | CC BY 3.0 | Global Lives Project — K. Vanderborght, D. Fabrega, M. Dietlin, R. Leeuwenkroon, M. Ploska, C. Genest |
 | « Thunder (hip-hop instrumental) » — Cely Grande | CC0 1.0 | — |
 | Voix synthétique française (espeak-ng) et mires FFmpeg | générées par le repo | — |
+| Portrait d'Eileen Collins (`astronaut.png` de scikit-image 0.24, sha256 épinglé), composé par FFmpeg dans les fixtures de visage | domaine public (NASA Great Images ; « no known copyright restrictions ») | NASA |
 
 Des témoignages de Wikimania Paris 2026 sous CC BY 4.0 (Wikimedia France) avaient été retenus, mais `upload.wikimedia.org` refuse les téléchargements depuis l'IP de sortie de l'environnement cloud (HTTP 429).
 

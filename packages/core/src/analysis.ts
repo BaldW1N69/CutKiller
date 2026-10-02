@@ -39,8 +39,27 @@ export interface Prosody {
   words: { rmsDb: number | null; pitchSt: number | null }[];
 }
 
+/** A face found in a sample, box as fractions of the frame; `rgb` is the mean skin colour (0–1, gamma-encoded). */
+export interface Face {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  score: number;
+  rgb: [number, number, number];
+}
+
+/** Faces and colours of a video source, sampled on the container timeline. */
+export interface Subjects {
+  width: number;
+  height: number;
+  sampleFps: number;
+  samples: { t: number; faces: Face[]; rgb: [number, number, number] }[];
+}
+
 /** Per-source analyzer results, keyed by source id. */
 export interface AnalyzerResults {
+  subjects?: Record<string, Subjects>;
   transcripts?: Record<string, Transcript>;
   prosody?: Record<string, Prosody>;
   vad?: Record<string, VoiceActivity>;

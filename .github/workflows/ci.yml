@@ -26,7 +26,7 @@ jobs:
         with:
           path: |
             ~/.cache/cutkiller
-          key: models-${{ hashFiles('workers/cutkiller_workers/transcribe.py', 'workers/cutkiller_workers/align.py') }}
+          key: models-${{ hashFiles('workers/cutkiller_workers/transcribe.py', 'workers/cutkiller_workers/align.py', 'workers/cutkiller_workers/subjects.py') }}
           restore-keys: models-
 
       - uses: pnpm/action-setup@v4

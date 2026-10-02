@@ -35,7 +35,7 @@ const SemVer = z.string().regex(/^\d+\.\d+\.\d+$/);
 export const PresetSchema = z.object({
   name: z.string().regex(/^[a-z0-9-]+$/),
   version: SemVer,
-  kind: z.enum(["motion", "transition", "captions", "sfx"]),
+  kind: z.enum(["motion", "transition", "captions", "sfx", "look"]),
   description: z.string().optional(),
   params: z.record(z.string(), z.unknown()).default({}),
 });

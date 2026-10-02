@@ -21,7 +21,11 @@ export const trackProperty = (track: KeyframeTrack) =>
 
 /** Value of a keyframe track at a (fractional) timeline frame. */
 export function trackValue(track: KeyframeTrack, frame: number, fps: number): number {
-  const keys = track.keys;
+  return keysValue(track.keys, frame, fps);
+}
+
+/** Value of eased keys at a (fractional) timeline frame; before the first / after the last key, it holds. */
+export function keysValue(keys: KeyframeTrack["keys"], frame: number, fps: number): number {
   const first = keys[0];
   const last = keys.at(-1);
   if (!first || !last) return Number.NaN;

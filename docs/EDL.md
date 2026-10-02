@@ -30,6 +30,24 @@ Un J/L cut exige un clip précédent contigu. Les sources doivent aussi contenir
 
 `transform: { scale, x, y }` sur un clip : `scale` > 1 resserre le cadre (punch-in / zoom-cut), `x` et `y` décalent le centre du cadrage d'une fraction de l'image (-0,5 à 0,5). Le recadrage est appliqué **au décodage** (crop dans la source puis mise à l'échelle), donc un punch-in à 110 % garde la pleine résolution de la source au lieu d'agrandir une image déjà réduite.
 
+## Recadrage dynamique (9:16)
+
+`reframe: { axis, keys: [{ frame, value, ease? }], why? }` sur un clip de la piste principale dont la source n'a pas le format de sortie (16:9 → 9:16 : `axis: "x"` ; 9:16 → 16:9 : `axis: "y"`).
+
+- `value` est la position du **centre du cadre** dans la source, en fraction de sa largeur (`x`) ou de sa hauteur (`y`), de 0 à 1. Les clés sont des frames de la timeline, à l'intérieur du clip ; entre deux clés, l'easing de la seconde s'applique (jamais linéaire, comme pour toute animation spatiale).
+- La taille du cadre reste celle du cadrage statique (`transform.scale`) ; le cadre est maintenu dans la source.
+- **Au décodage**, seule la bande de la source que le cadre parcourt est extraite, en pixels entiers ; le compositeur la fait glisser frame par frame. La QA relit la même géométrie (`clipFraming`).
+- La passe `reframe` pose une **caméra virtuelle** par plan : immobile tant que le visage reste dans la zone morte (`deadZone` du profil, en fraction du cadre), puis un glissement **posé sur le déplacement du sujet** (même milieu, même durée), allongé si besoin pour que l'accélération du cadre ne dépasse pas `maxAccelPx` px/frame². À chaque coupe, le cadre repart de la position du visage.
+
+## Étalonnage
+
+`color: { exposureEv, balance: [r, g, b], look?, why? }` sur un clip.
+
+- `exposureEv` (-3 à 3) et `balance` (gains par canal, de luminance neutre sur la peau) s'appliquent **en lumière linéaire** ; au-delà du blanc, les hautes lumières sont compressées par un épaulement (pas d'écrêtage).
+- `look` désigne un preset `look/` (`clean@1`) : courbe en S autour d'un pivot, léger relevé des noirs, saturation, chaleur. La LUT est **générée** au rendu, aucun fichier LUT n'est livré.
+- Le rendu cuit l'étalonnage complet d'un plan (exposition, balance, épaulement, look) dans **une seule LUT 3D** (`lut3d`, interpolation tétraédrique) par combinaison distincte, appliquée avant la mise à l'échelle quand c'est moins coûteux.
+- La passe `color` mesure la peau de chaque source (joues et nez du plus grand visage, médiane) sur les passages conservés et la ramène sur la **référence** du montage : la médiane des sources, pondérée par la durée. Tous les plans d'une même source reçoivent la même correction (pas de scintillement entre deux jump-cuts), sauf un plan dont la peau s'écarte de celle de sa source de plus de `shotMatchDeltaE` (ΔE 4 : lumière qui change, tête tournée vers la fenêtre), raccordé isolément. Une référence plus sombre que `minSkinLightness` (L\* 25 : visage à contre-jour, quelle que soit la carnation) est relevée, dans la limite de `maxExposureEv`.
+
 ## Zoom-cuts
 
 Deux clips consécutifs de la même source dont les points se touchent (`out` du premier = `in` du second, à 2 ms près) forment un **zoom-cut** : l'image change (en général de cadrage), l'audio continue sans aucune coupe ni fondu. C'est ce que la passe `cut` utilise pour qu'aucun plan ne reste statique au-delà de la limite du profil.
@@ -140,7 +158,7 @@ Les règles de mixage sont décrites ci-dessous.
 
 Chaque clip porte un champ `why: { kind, note?, wordIds? }` qui explique pourquoi il existe, pour qu'un humain puisse auditer et corriger les décisions automatiques :
 
-- `kind` : `speech` (passage de parole conservé), `zoom-cut` (changement de cadrage sur audio continu), `assemble` ;
+- `kind` : `speech` (passage de parole conservé), `zoom-cut` (changement de cadrage sur audio continu), `assemble` ; sur `reframe`, `subject` (visage suivi) ; sur `color`, `skin-match` (peau ramenée sur la référence) ou `look-only` (aucun visage mesuré) ;
 - `wordIds` : indices des mots du transcript (`<edl>.analysis.json`) contenus dans le clip ;
 - `note` : ce qui a été coupé juste avant, par exemple `coupé avant : « euh, » (filler), silence de 685 ms`.
 
@@ -155,7 +173,8 @@ Chaque clip porte un champ `why: { kind, note?, wordIds? }` qui explique pourquo
 | `track.overlap` / `track.gap` | Chevauchement sur une piste / trou sur la piste principale |
 | `split.orphan` / `split.range` | J/L cut sans clip précédent contigu / plus long que le clip |
 | `keyframes.target` / `keyframes.order` | Cible inconnue / frames non croissantes |
-| `motion.linear` | Interpolation linéaire sur une propriété spatiale |
+| `motion.linear` | Interpolation linéaire sur une propriété spatiale ou un recadrage |
+| `reframe.range` | Clé de recadrage hors du clip ou position hors de la source (0–1) |
 | `captions.range` / `captions.overlap` | Sous-titre vide / qui chevauche le précédent |
 | `captions.word-range` / `captions.word-order` | Mot hors de son sous-titre / mots dans le désordre |
 | `captions.lines` | Lignes qui ne commencent pas à 0 ou sautent une ligne |

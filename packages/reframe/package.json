@@ -9,5 +9,8 @@
   },
   "dependencies": {
     "@cutkiller/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@cutkiller/style": "workspace:*"
   }
 }

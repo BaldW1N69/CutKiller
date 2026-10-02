@@ -18,10 +18,12 @@
     "@cutkiller/motion": "workspace:*",
     "@cutkiller/captions": "workspace:*",
     "canvas": "3.2.3",
-    "@cutkiller/audio": "workspace:*"
+    "@cutkiller/audio": "workspace:*",
+    "@cutkiller/color": "workspace:*"
   },
   "devDependencies": {
     "@cutkiller/fixtures": "workspace:*",
-    "@cutkiller/captions": "workspace:*"
+    "@cutkiller/captions": "workspace:*",
+    "@cutkiller/reframe": "workspace:*"
   }
 }

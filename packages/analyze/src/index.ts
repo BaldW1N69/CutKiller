@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, open, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { Analysis, BeatGrid, Prosody, Transcript, VoiceActivity } from "@cutkiller/core";
+import type { Analysis, BeatGrid, Prosody, Subjects, Transcript, VoiceActivity } from "@cutkiller/core";
 import { probeSource } from "@cutkiller/media";
 import { runWorker } from "./worker";
 
@@ -18,7 +18,7 @@ export interface AnalyzeOptions {
 }
 
 /** Bump when an analyzer's output changes, to invalidate cached results. */
-const ANALYZER_VERSION = { transcribe: "7", vad: "2", beats: "3", prosody: "1" } as const;
+const ANALYZER_VERSION = { transcribe: "7", vad: "2", beats: "3", prosody: "1", subjects: "2" } as const;
 
 /**
  * Stage 1 of the pipeline. Every input is probed; with `deep`, rushes with speech
@@ -34,8 +34,16 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
     const probe = await probeSource(resolve(path));
     const id = sourceId(path, analysis.sources);
     analysis.sources[id] = probe;
-    if (!opts.deep || !probe.hasAudio) continue;
+    if (!opts.deep) continue;
     const key = await contentKey(probe.path);
+    if (probe.hasVideo) {
+      opts.log?.(`visages et couleurs de ${id}…`);
+      const subjects = await cached<Subjects>(cacheDir, `${key}.subjects-${ANALYZER_VERSION.subjects}`, () =>
+        runWorker("subjects", { path: probe.path }),
+      );
+      analysis.subjects = { ...analysis.subjects, [id]: subjects };
+    }
+    if (!probe.hasAudio) continue;
     if (probe.hasVideo && !probe.still) {
       opts.log?.(`transcription de ${id}…`);
       const transcript = await cached<Transcript>(

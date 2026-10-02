@@ -10,6 +10,7 @@
   "dependencies": {
     "@cutkiller/audio": "workspace:*",
     "@cutkiller/captions": "workspace:*",
+    "@cutkiller/color": "workspace:*",
     "@cutkiller/core": "workspace:*",
     "@cutkiller/media": "workspace:*",
     "@cutkiller/motion": "workspace:*",

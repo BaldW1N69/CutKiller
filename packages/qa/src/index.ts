@@ -17,11 +17,13 @@ import {
   checkPresets,
   checkPunchIns,
 } from "./checks/motion";
+import { checkColor, checkReframe } from "./checks/subject";
 import { buildReport, type CheckResult, type Report } from "./report";
 
 export { audioEditFrames, clickScore } from "./checks/audio";
 export { contrastRatio, luminance, parseColor } from "./checks/captions";
 export { DUPLICATE_MAD } from "./checks/image";
+export { renderSubjects } from "./checks/subject";
 export * from "./report";
 export * from "./rules";
 
@@ -80,6 +82,10 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
       checkMotionBlur(input.video, input.edl, registry, input.profile),
     );
     results.push(checkBeatCuts(input.edl, input.profile, input.analysis));
+    results.push(
+      await checkReframe(input.video, input.edl, input.profile, input.analysis),
+      await checkColor(input.video, input.edl, input.profile),
+    );
     results.push(
       checkCaptionDensity(input.edl, input.profile),
       checkSafeZones(input.edl, input.profile, registry),

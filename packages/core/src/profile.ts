@@ -25,6 +25,75 @@ export const StyleProfileSchema = z.object({
     allowedFps: z.array(z.number().int()).default([30, 60]),
     blackPixelThreshold: z.number().min(0).max(1).default(0.1),
   }),
+  /**
+   * Moving framing when the rush and the output differ in aspect (16:9 → 9:16):
+   * a virtual camera that holds still while the subject stays in the dead zone and
+   * glides to it when it leaves.
+   */
+  reframe: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** The subject may drift this far from the crop centre (fraction of the crop) before the camera moves. */
+      deadZone: z.number().min(0).max(0.5).default(0.1),
+      /** …for at least this long (a glance or a nod does not move the camera). */
+      minDriftS: z.number().nonnegative().default(0.5),
+      /** Subject positions are median-filtered over this window first. */
+      smoothingS: z.number().positive().default(0.8),
+      /** Camera moves: as long as the subject's own move, within bounds (the acceleration bound wins). */
+      moveS: Range.default([0.4, 2]),
+      /** Camera ease: ease-in-out has the lowest peak acceleration of the named curves. */
+      ease: z.string().default("ease-in-out"),
+      /** QA: share of the face box that must be inside the frame. */
+      minFaceInFrame: z.number().min(0).max(1).default(0.95),
+      /** QA: largest distance of the face centre from the frame centre (fraction of the frame). */
+      maxFaceOffset: z.number().min(0).max(0.5).default(0.25),
+      /** QA: largest acceleration of the crop centre, px/frame² (output pixels): no jolt. */
+      maxAccelPx: z.number().positive().default(3),
+    })
+    .default({
+      enabled: true,
+      deadZone: 0.1,
+      minDriftS: 0.5,
+      smoothingS: 0.8,
+      moveS: [0.4, 2],
+      ease: "ease-in-out",
+      minFaceInFrame: 0.95,
+      maxFaceOffset: 0.25,
+      maxAccelPx: 3,
+    }),
+  /** Grading: every shot's skin tone matched to the edit's reference, then a look LUT. */
+  color: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** Look preset (`presets/look/`). */
+      look: z.string().default("clean@1"),
+      maxExposureEv: z.number().positive().default(1.5),
+      /** Largest white-balance gain change per channel (fraction). */
+      maxBalance: z.number().positive().default(0.3),
+      /** Corrections smaller than this are left out (EV, and fraction for balance). */
+      minCorrection: z.number().nonnegative().default(0.04),
+      /**
+       * Skin lightness floor (CIE L*): a darker reference skin is under-exposed whatever
+       * the skin type (backlit face) and is lifted, up to maxExposureEv.
+       */
+      minSkinLightness: z.number().min(0).max(100).default(25),
+      /** A shot whose own skin is further than this (CIE ΔE76) from its source's is matched on its own. */
+      shotMatchDeltaE: z.number().positive().default(4),
+      /** QA: largest skin difference between a shot and the edit's reference, CIELAB lightness and chroma. */
+      maxSkinDeltaL: z.number().positive().default(6),
+      maxSkinDeltaAb: z.number().positive().default(6),
+    })
+    .default({
+      enabled: true,
+      look: "clean@1",
+      maxExposureEv: 1.5,
+      maxBalance: 0.3,
+      minCorrection: 0.04,
+      minSkinLightness: 25,
+      shotMatchDeltaE: 4,
+      maxSkinDeltaL: 6,
+      maxSkinDeltaAb: 6,
+    }),
   montage: z.object({
     maxSilenceMs: z.number().positive().default(350),
     wordMarginMs: Range.default([80, 120]),

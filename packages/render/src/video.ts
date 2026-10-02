@@ -1,9 +1,11 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { CaptionTimeline } from "@cutkiller/captions";
+import { gradeKey } from "@cutkiller/color";
 import {
   clipEnd,
   clipFrames,
+  clipFraming,
   type Edl,
   edlDurationFrames,
   framesToSeconds,
@@ -39,11 +41,12 @@ export function decoderChain(
   clip: VideoClip,
   baseDir: string,
   k = 1,
+  looks: ReadonlyMap<string, string> = new Map(),
 ): { input: string[]; vf: string; duration: number; width: number; height: number } {
   const { width: outW, height: outH, fps } = edl.output;
   // Decoded k× larger than the output when the clip zooms in later, so the punch-in stays sharp.
-  const W = Math.round((outW * k) / 2) * 2;
-  const H = Math.round((outH * k) / 2) * 2;
+  let W = Math.round((outW * k) / 2) * 2;
+  let H = Math.round((outH * k) / 2) * 2;
   const source = edl.sources[clip.source];
   if (!source) throw new Error(`source inconnue ${clip.source}`);
   const path = resolve(baseDir, source.path);
@@ -52,23 +55,61 @@ export function decoderChain(
   const { scale, x, y } = clip.transform;
   const cw = `min(iw,ih*${outW}/${outH})`;
   const ch = `min(ih,iw*${outH}/${outW})`;
-  const fit =
-    clip.fit === "contain"
-      ? `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`
-      : `crop=w='${cw}/${scale}':h='${ch}/${scale}':x='clip(iw/2+${x}*${cw}-ow/2,0,iw-ow)':y='clip(ih/2+${y}*${ch}-oh/2,0,ih-oh)',scale=${W}:${H}:flags=lanczos`;
+  const framing = clip.fit === "cover" ? clipFraming(edl, clip) : undefined;
+  // Grade on whichever is smaller, the source crop or the output: same result, fewer pixels.
+  const filters = gradeFilters(clip, looks);
+  let graded = false;
+  const grade = (cropPixels: number) => {
+    if (filters.length === 0 || cropPixels > W * H) return "";
+    graded = true;
+    return `,${filters.join(",")}`;
+  };
+  let fit: string;
+  if (framing) {
+    // Moving framing: the whole band the crop travels over, panned by the compositor.
+    const { band, outPerSrc, axis } = framing;
+    if (axis === "x") W = Math.max(2, Math.round((band.w * outPerSrc * k) / 2) * 2);
+    else H = Math.max(2, Math.round((band.h * outPerSrc * k) / 2) * 2);
+    fit = `crop=${band.w}:${band.h}:${band.x}:${band.y}${grade(band.w * band.h)},scale=${W}:${H}:flags=lanczos`;
+  } else if (clip.fit === "contain")
+    fit = `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`;
+  else {
+    const cropArea =
+      source.width && source.height
+        ? Math.min(
+            source.width * source.width * (outH / outW),
+            source.height * source.height * (outW / outH),
+            source.width * source.height,
+          ) /
+          scale ** 2
+        : W * H;
+    fit = `crop=w='${cw}/${scale}':h='${ch}/${scale}':x='clip(iw/2+${x}*${cw}-ow/2,0,iw-ow)':y='clip(ih/2+${y}*${ch}-oh/2,0,ih-oh)'${grade(cropArea)},scale=${W}:${H}:flags=lanczos`;
+  }
   return {
     input: source.still ? ["-loop", "1", "-i", path] : ["-ss", clip.in.toFixed(6), "-i", path],
     // start_time=0: output time 0 is the seek point; if the video stream starts
     // later than that (offset streams), its first frame is held, never shifted.
-    vf: `fps=${fps}:start_time=0:round=near,${fit}`,
+    vf: [`fps=${fps}:start_time=0:round=near`, fit, ...(graded ? [] : filters)].join(","),
     duration: framesToSeconds(frames, fps) + 0.5 / fps,
     width: W,
     height: H,
   };
 }
 
-export function decoderArgs(edl: Edl, clip: VideoClip, baseDir: string, k = 1): string[] {
-  const { input, vf, duration } = decoderChain(edl, clip, baseDir, k);
+/** Grading filter of a clip: its exposure, balance and look, baked into one LUT (`grades` by gradeKey). */
+export function gradeFilters(clip: VideoClip, grades: ReadonlyMap<string, string>): string[] {
+  const lut = clip.color ? grades.get(gradeKey(clip.color)) : undefined;
+  return lut ? [`lut3d=file='${lut}':interp=tetrahedral`] : [];
+}
+
+export function decoderArgs(
+  edl: Edl,
+  clip: VideoClip,
+  baseDir: string,
+  k = 1,
+  looks: ReadonlyMap<string, string> = new Map(),
+): string[] {
+  const { input, vf, duration } = decoderChain(edl, clip, baseDir, k, looks);
   return [
     "-hide_banner",
     "-nostdin",
@@ -218,6 +259,8 @@ export async function renderVideo(
   outPath: string,
   registry: PresetRegistry,
   onProgress?: (frame: number, total: number) => void,
+  /** Look LUT files (`.cube`) by preset reference. */
+  looks: ReadonlyMap<string, string> = new Map(),
 ): Promise<VideoLog & { motion: MotionLog }> {
   const { width: W, height: H, fps, motionBlur } = edl.output;
   const total = edlDurationFrames(edl);
@@ -247,8 +290,8 @@ export async function renderVideo(
     const existing = decoders.get(clip.id);
     if (existing) return existing;
     const k = Math.min(1.5, maxAnimatedScale(timeline.index, clip.id, fps));
-    const { width, height } = decoderChain(edl, clip, baseDir, k);
-    const child = spawn(ffmpegBin(), decoderArgs(edl, clip, baseDir, k), {
+    const { width, height } = decoderChain(edl, clip, baseDir, k, looks);
+    const child = spawn(ffmpegBin(), decoderArgs(edl, clip, baseDir, k, looks), {
       stdio: ["ignore", "pipe", "pipe"],
     });
     const canvas = createCanvas(width, height);

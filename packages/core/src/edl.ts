@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EaseSchema } from "./ease";
 
-export const EDL_VERSION = "1.3.0";
+export const EDL_VERSION = "1.4.0";
 
 const Id = z.string().regex(/^[A-Za-z0-9_.-]+$/, "identifiant alphanumérique");
 const Seconds = z.number().nonnegative();
@@ -24,6 +24,13 @@ export const ReasonSchema = z.object({
   kind: z.string(),
   note: z.string().optional(),
   wordIds: z.array(z.number().int()).optional(),
+});
+
+export const KeyframeSchema = z.object({
+  frame: Frame,
+  value: z.number(),
+  /** Curve used to reach this key from the previous one. */
+  ease: EaseSchema.optional(),
 });
 
 export const VideoClipSchema = z.object({
@@ -54,6 +61,34 @@ export const VideoClipSchema = z.object({
     })
     .default({ scale: 1, x: 0, y: 0 }),
   gainDb: z.number().default(0),
+  /**
+   * Moving framing (9:16 from 16:9, or the reverse): the crop's centre along
+   * `axis`, as a fraction of the source's width (x) or height (y), keyed on
+   * timeline frames with eased curves (holds, then smooth moves). The crop keeps
+   * the output's aspect and the static `transform.scale`.
+   */
+  reframe: z
+    .object({
+      axis: z.enum(["x", "y"]),
+      keys: z.array(KeyframeSchema).min(1),
+      why: ReasonSchema.optional(),
+    })
+    .optional(),
+  /**
+   * Grading: exposure and white balance (linear-light gains) matching the shot to
+   * the edit's reference skin tone, then the look LUT (preset `look/`).
+   */
+  color: z
+    .object({
+      exposureEv: z.number().min(-3).max(3).default(0),
+      /** Per-channel linear gains (white balance), luminance-neutral. */
+      balance: z
+        .tuple([z.number().positive(), z.number().positive(), z.number().positive()])
+        .default([1, 1, 1]),
+      look: z.string().optional(),
+      why: ReasonSchema.optional(),
+    })
+    .optional(),
   why: ReasonSchema.optional(),
 });
 
@@ -91,13 +126,6 @@ export const AudioClipSchema = z.object({
   /** Visual event a sound effect lands on: `transition:<id>` or `keyframes:<target>`. */
   syncTo: z.string().optional(),
   why: ReasonSchema.optional(),
-});
-
-export const KeyframeSchema = z.object({
-  frame: Frame,
-  value: z.number(),
-  /** Curve used to reach this key from the previous one. */
-  ease: EaseSchema.optional(),
 });
 
 /**

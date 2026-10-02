@@ -70,12 +70,13 @@ export async function clipFrameStats(
   baseDir: string,
   blackThreshold: number,
 ): Promise<FrameStats> {
-  const { input, vf: fit, duration } = decoderChain(edl, clip, baseDir);
+  // Decoded size: the output's, or wider/taller for a moving framing (the band it pans over).
+  const { input, vf: fit, duration, width: dw, height: dh } = decoderChain(edl, clip, baseDir);
   // A clip that zooms in (animated punch-in) only shows its centre: compare the
   // source on that same centre, or motion at the edges would hide repeated pictures.
   const zoom = maxAnimatedScale(animationIndex(edl), clip.id, edl.output.fps);
-  const width = Math.round(edl.output.width / zoom / 2) * 2;
-  const height = Math.round(edl.output.height / zoom / 2) * 2;
+  const width = Math.round(dw / zoom / 2) * 2;
+  const height = Math.round(dh / zoom / 2) * 2;
   const vf = zoom > 1 ? `${fit},crop=${width}:${height}` : fit;
   const stats: FrameStats = { diffs: [], black: [] };
   const limit = Math.round(16 + blackThreshold * 219); // limited-range luma, as blackdetect sees it

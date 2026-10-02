@@ -152,6 +152,22 @@ export function validateEdl(edl: Edl): Diagnostic[] {
     lastEnd = t.atFrame + half;
   }
 
+  // Moving framing: keys inside the clip, positions inside the source.
+  for (const track of edl.video)
+    for (const clip of track.clips) {
+      if (!clip.reframe) continue;
+      const path = `video.${clip.id}.reframe`;
+      const end = clipEnd(clip, fps);
+      for (const k of clip.reframe.keys) {
+        if (k.frame < clip.at || k.frame > end)
+          err("reframe.range", `clé de recadrage hors du clip « ${clip.id} »`, path);
+        if (k.value < 0 || k.value > 1)
+          err("reframe.range", "position de recadrage hors de la source (0–1)", path);
+        if (isLinearEase(k.ease) && k !== clip.reframe.keys[0])
+          err("motion.linear", `recadrage de « ${clip.id} » en interpolation linéaire`, path);
+      }
+    }
+
   // Captions: in order, never overlapping, words inside their caption and in spoken order.
   let captionEnd = 0;
   edl.captions.forEach((c, k) => {

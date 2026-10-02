@@ -2,7 +2,7 @@
 
 Montage automatique de rushes pour YouTube (16:9) et Shorts / TikTok / Reels (9:16), piloté par une **EDL JSON éditable à la main** et vérifié par des **règles de qualité mesurables**.
 
-> Statut : **phase 5 (audio) livrée**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké dans les safe zones avec export SRT, mix audio à -14 LUFS (true peak ≤ -1 dBTP) avec musique sous la voix, ducking sans pompage et effets sonores procéduraux synchronisés, rendu et quality-check. L'image (recadrage 9:16 et étalonnage) arrive en phase 6. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
+> Statut : **phase 6 (image) livrée**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké dans les safe zones avec export SRT, mix audio à -14 LUFS (true peak ≤ -1 dBTP) avec ducking et effets sonores synchronisés, recadrage 9:16 qui suit le visage comme une caméra posée, étalonnage qui égalise la peau d'un plan à l'autre sous un look commun, rendu et quality-check sur les 25 règles. La phase 7 consolide la QA. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
 
 ## Prérequis
 
@@ -15,7 +15,7 @@ pnpm install
 (cd workers && uv sync)
 ```
 
-Au premier lancement, les modèles sont téléchargés dans `~/.cache/cutkiller` : Whisper `large-v3-turbo` (~1,6 Go) et wav2vec2 français (~1,3 Go). Sur CPU, compter environ 1× le temps réel pour l'analyse d'un rush. Les résultats sont mis en cache par contenu dans `.cache/analysis`.
+Au premier lancement, les modèles sont téléchargés dans `~/.cache/cutkiller` : Whisper `large-v3-turbo` (~1,6 Go), wav2vec2 français (~1,3 Go) et le détecteur de visages YuNet (230 Ko). Sur CPU, compter environ 1× le temps réel pour l'analyse d'un rush. Les résultats sont mis en cache par contenu dans `.cache/analysis`.
 
 ## Utilisation
 
@@ -39,14 +39,15 @@ pnpm cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --md out/qual
 
 | Étape | Module | Rôle |
 |---|---|---|
-| Analyse | `@cutkiller/analyze` + `workers/` (Python) | Probe des rushes ; transcription, beats, suivi du sujet à partir de la phase 2 |
+| Analyse | `@cutkiller/analyze` + `workers/` (Python) | Probe des rushes ; transcription au mot, VAD, prosodie, beats, visages et couleur de peau (YuNet / OpenCV) |
 | Planification | `cut → reframe → color → motion → captions → audio` | Passes pures `EDL → EDL`, dans cet ordre fixe |
 | EDL | `@cutkiller/core` | Schéma, validateur, temps en frames entières ([référence](docs/EDL.md), [JSON Schema](schema/edl-1.schema.json)) |
+| Image | `@cutkiller/reframe`, `@cutkiller/color` + [`presets/look/`](presets) | Caméra virtuelle 9:16 sur le visage (zone morte, glissements anticipés, accélération bornée) ; peau égalisée par source, plancher d'exposition, look en LUT générée |
 | Motion | `@cutkiller/motion` + [`presets/`](presets) | Punch-ins sur l'emphase, transitions, timeline d'animation partagée par le rendu et la QA |
 | Audio | `@cutkiller/audio` + [`presets/sfx/`](presets) | Ducking sur la parole, effets sonores synthétisés et calés à l'impact |
 | Sous-titres | `@cutkiller/captions` | Mots sur la timeline, découpage, mise en page dans les safe zones, rendu karaoké, export SRT |
-| Rendu | `@cutkiller/render` | Décodage FFmpeg par clip → compositeur Cairo (animations, flou de mouvement, glitch, sous-titres) → encodage FFmpeg CFR ; mix audio par stems (voix compressée, musique placée et baissée, effets), loudness EBU R128 + limiteur |
-| QA | `@cutkiller/qa` | `quality-check` : 25 règles, score /100 sur les règles évaluées, taux de couverture |
+| Rendu | `@cutkiller/render` | Décodage FFmpeg par clip (bande recadrée, étalonnage cuit en une LUT 3D) → compositeur Cairo (animations, flou de mouvement, glitch, sous-titres) → encodage FFmpeg CFR ; mix audio par stems (voix compressée, musique placée et baissée, effets), loudness EBU R128 + limiteur |
+| QA | `@cutkiller/qa` | `quality-check` : 25 règles, toutes contrôlées ; score /100 sur les règles applicables au rendu, taux de couverture |
 
 ## Développement
 

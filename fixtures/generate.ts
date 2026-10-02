@@ -9,8 +9,10 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ffmpeg } from "@cutkiller/media";
+import { faceGradingFixtures, facePanFixture } from "./face";
 import { generateSpeech, type SpeechTruth } from "./speech";
 
+export { FACE_PAN, facePanX } from "./face";
 export { SCRIPT, type SpeechTruth, type TruthWord } from "./speech";
 
 export interface Fixtures {
@@ -29,10 +31,25 @@ export interface Fixtures {
   speechWav: string;
   speechVideo: string;
   speechTruth: SpeechTruth;
+  /** Real face (public-domain portrait) gliding from 30 % to 70 % of a 16:9 frame: see FACE_PAN / facePanX. */
+  facePan: string;
+  /** Same face, still: as shot, and a stop darker with a blue cast. */
+  faceNeutral: string;
+  faceGraded: string;
 }
 
 const SPECS: Record<
-  Exclude<keyof Fixtures, "dir" | "speechWav" | "speechVideo" | "speechTruth" | "avOffset">,
+  Exclude<
+    keyof Fixtures,
+    | "dir"
+    | "speechWav"
+    | "speechVideo"
+    | "speechTruth"
+    | "avOffset"
+    | "facePan"
+    | "faceNeutral"
+    | "faceGraded"
+  >,
   { file: string; args: string[] }
 > = {
   cam16x9: {
@@ -157,6 +174,10 @@ export async function generateFixtures(dir = resolve(".cache/fixtures")): Promis
   result.speechWav = speech.wav;
   result.speechVideo = speech.video;
   result.speechTruth = speech.truth;
+  result.facePan = await facePanFixture(dir);
+  const faces = await faceGradingFixtures(dir);
+  result.faceNeutral = faces.neutral;
+  result.faceGraded = faces.graded;
   return result;
 }
 

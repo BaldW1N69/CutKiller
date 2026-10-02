@@ -4,9 +4,11 @@ import {
   animationIndex,
   animStateAt,
   clipEnd,
+  clipFraming,
   displacement,
   type Edl,
   easeProgress,
+  type Framing,
   framesToSeconds,
   sortedClips,
   type VideoClip,
@@ -45,6 +47,15 @@ export class MotionTimeline {
     this.overlays = edl.video.slice(1).map((t, i) => ({ track: i + 1, clips: sortedClips(t.clips) }));
   }
 
+  private readonly framings = new Map<string, Framing | undefined>();
+
+  /** Moving-framing geometry of a clip (undefined when its framing is static). */
+  framing(clip: VideoClip): Framing | undefined {
+    if (!this.framings.has(clip.id))
+      this.framings.set(clip.id, clip.fit === "cover" ? clipFraming(this.edl, clip) : undefined);
+    return this.framings.get(clip.id);
+  }
+
   /** Transition whose window contains frame f. */
   transitionAt(f: number): ResolvedTransition | undefined {
     return this.transitions.find((t) => f >= t.window[0] && f < t.window[1]);
@@ -73,6 +84,13 @@ export class MotionTimeline {
       image,
       state: (t) => {
         const s = animStateAt(this.index, clip.id, t, this.fps);
+        // Moving framing: the decoded band pans so that the crop centre stays mid-picture.
+        const framing = this.framing(clip);
+        if (framing) {
+          const [dx, dy] = framing.shiftAt(t);
+          s.x += (dx * s.scale) / this.edl.output.width;
+          s.y += (dy * s.scale) / this.edl.output.height;
+        }
         if (offset) {
           const [dx, dy] = offset(t);
           s.x += dx;

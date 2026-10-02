@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { gradeCube, gradeKey, LookParamsSchema } from "@cutkiller/color";
 import type { Edl } from "@cutkiller/core";
 import { PresetRegistry } from "@cutkiller/style";
 import { type AudioMixLog, renderAudio } from "./audio";
@@ -19,6 +20,7 @@ export {
   decoderArgs,
   decoderChain,
   encoderArgs,
+  gradeFilters,
   type MotionLog,
   shutterSamples,
   type VideoLog,
@@ -59,7 +61,23 @@ export async function render(edl: Edl, opts: RenderOptions): Promise<RenderLog> 
       opts.keepStems ? opts.outPath : undefined,
     );
     const voice = `${opts.outPath}.voice.wav`;
-    const video = await renderVideo(edl, opts.baseDir, mix, opts.outPath, registry, opts.onProgress);
+    // Grades (exposure × balance, then the look) baked into one LUT per distinct grade.
+    const looks = new Map<string, string>();
+    for (const clip of edl.video.flatMap((t) => t.clips)) {
+      const c = clip.color;
+      if (!c) continue;
+      const key = gradeKey(c);
+      if (looks.has(key)) continue;
+      const preset = c.look ? registry.resolve(c.look) : undefined;
+      const gains = c.balance.map((b) => 2 ** c.exposureEv * b) as [number, number, number];
+      const cube = join(work, `grade-${looks.size}.cube`);
+      await writeFile(
+        cube,
+        gradeCube(preset ? LookParamsSchema.parse(preset.params) : undefined, gains, preset?.name ?? "grade"),
+      );
+      looks.set(key, cube);
+    }
+    const video = await renderVideo(edl, opts.baseDir, mix, opts.outPath, registry, opts.onProgress, looks);
     const log: RenderLog = {
       ...video,
       audio,

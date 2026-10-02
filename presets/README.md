@@ -3,7 +3,7 @@
 Presets nommés et versionnés, chargés par `PresetRegistry` (`@cutkiller/style`) :
 
 ```
-presets/<kind>/<nom>@<x.y.z>.json      kind ∈ motion | transition | captions | sfx
+presets/<kind>/<nom>@<x.y.z>.json      kind ∈ motion | transition | captions | sfx | look
 ```
 
 Une EDL référence un preset par `nom@x` (dernière version x.*.*), `nom@x.y` ou `nom@x.y.z`. Une modification incompatible impose une nouvelle version majeure, pour que les EDL existantes se rendent à l'identique.
@@ -24,5 +24,6 @@ Une EDL référence un preset par `nom@x` (dernière version x.*.*), `nom@x.y` o
 | `whoosh-soft@1` | sfx | transitions (long) : souffle plus grave et plus doux | 500 ms | impact à 250 ms |
 | `glitch-burst@1` | sfx | glitch-cut : rafales numériques 4 bits | 300 ms | impact à 120 ms |
 | `punch-tick@1` | sfx | punch-in : impact sourd 180 → 60 Hz avec clic | 160 ms | impact à 4 ms |
+| `clean@1` | look | étalonnage par défaut : courbe en S douce (+8 % autour de 0,45), noirs relevés de 1 %, saturation +6 %, sans virage de teinte ; LUT 33³ générée | — | — |
 
 La QA (`motion.presets`, `motion.durations`, `motion.no-linear`, `motion.overshoot`) vérifie que chaque animation de l'EDL vient d'un preset existant et respecte les plages du cahier des charges.
