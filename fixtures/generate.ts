@@ -9,10 +9,10 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ffmpeg } from "@cutkiller/media";
-import { faceGradingFixtures, facePanFixture } from "./face";
+import { faceGradingFixtures, facePanFixture, talkingHeadFixture } from "./face";
 import { generateSpeech, type SpeechTruth } from "./speech";
 
-export { FACE_PAN, facePanX } from "./face";
+export { FACE_PAN, facePanX, TALKING_HEAD, talkingHeadX } from "./face";
 export { SCRIPT, type SpeechTruth, type TruthWord } from "./speech";
 
 export interface Fixtures {
@@ -36,6 +36,8 @@ export interface Fixtures {
   /** Same face, still: as shot, and a stop darker with a blue cast. */
   faceNeutral: string;
   faceGraded: string;
+  /** The portrait over the synthetic speech, shifting sideways once: see TALKING_HEAD. */
+  talkingHead: string;
 }
 
 const SPECS: Record<
@@ -49,6 +51,7 @@ const SPECS: Record<
     | "facePan"
     | "faceNeutral"
     | "faceGraded"
+    | "talkingHead"
   >,
   { file: string; args: string[] }
 > = {
@@ -178,6 +181,7 @@ export async function generateFixtures(dir = resolve(".cache/fixtures")): Promis
   const faces = await faceGradingFixtures(dir);
   result.faceNeutral = faces.neutral;
   result.faceGraded = faces.graded;
+  result.talkingHead = await talkingHeadFixture(dir, speech.wav, speech.truth.durationS);
   return result;
 }
 

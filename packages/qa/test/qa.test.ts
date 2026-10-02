@@ -7,7 +7,19 @@ import { ffmpeg } from "@cutkiller/media";
 import { render } from "@cutkiller/render";
 import { loadProfile } from "@cutkiller/style";
 import { beforeAll, describe, expect, it } from "vitest";
-import { buildReport, type CheckResult, graded, notEvaluated, pass, qualityCheck, RULES } from "../src";
+import {
+  buildReport,
+  type CheckResult,
+  graded,
+  notEvaluated,
+  pass,
+  qualityCheck,
+  ReportSchema,
+  RULES,
+  reportMarkdown,
+  ruleThreshold,
+  timecode,
+} from "../src";
 import { checkJlCuts, checkNoLinear } from "../src/checks/edl";
 
 const edlOf = (input: EdlInput): Edl => {
@@ -62,6 +74,30 @@ describe("score", () => {
     expect(report.categories.image.score).toBe(60);
     expect(report.categories.motion.score).toBeNull();
     expect(report.results.find((r) => r.ruleId === "captions.sync")?.status).toBe("not-evaluated");
+  });
+});
+
+describe("rapport", () => {
+  it("donne seuil, origine de la mesure et timecode, et suit son schéma JSON", async () => {
+    const profile = await loadProfile("short");
+    const report = buildReport(
+      { video: "v.mp4", profile: "short@1.0.0" },
+      [graded("image.black-frames", 10, [{ message: "2 frame(s) noire(s)", frame: 95 }])],
+      { profile, fps: 30, seconds: 12.4 },
+    );
+    expect(ReportSchema.parse(JSON.parse(JSON.stringify(report)))).toBeTruthy();
+    const black = report.results.find((r) => r.ruleId === "image.black-frames");
+    expect(black?.violations[0]?.time).toBe("00:03.05");
+    expect(black?.measuredOn).toBe("rendu");
+    for (const r of report.results) expect(r.threshold, r.ruleId).not.toBe("");
+    expect(ruleThreshold("audio.loudness", profile)).toBe("-14 ±1 LUFS ; TP ≤ -1 dBTP");
+    expect(timecode(1799, 30)).toBe("00:59.29");
+    expect(timecode(3600, 60)).toBe("01:00.00");
+    const md = reportMarkdown(report);
+    expect(md).toContain("## Écarts à corriger");
+    expect(md).toContain("- 00:03.05 (f95) — 2 frame(s) noire(s)");
+    expect(md).toContain("## Non évaluées");
+    expect(md).toContain("| Image | 90 | 2/20 |");
   });
 });
 

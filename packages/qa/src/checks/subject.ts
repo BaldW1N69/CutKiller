@@ -48,7 +48,7 @@ interface SteadySample {
 /**
  * Render samples that show one main-track shot steadily: the top layer is the main
  * track, at least 2 frames from its cuts, outside transitions (a whip-pan moves
- * and blurs the picture on purpose).
+ * and blurs the picture on purpose), not black.
  */
 function steadySamples(edl: Edl, subjects: Subjects): SteadySample[] {
   const fps = edl.output.fps;
@@ -64,6 +64,8 @@ function steadySamples(edl: Edl, subjects: Subjects): SteadySample[] {
     if (!clip || !main.has(clip.id)) continue;
     if (frame - clip.at < 2 || clipEnd(clip, fps) - frame <= 2) continue;
     if (busy.some(([a, b]) => frame >= a && frame <= b)) continue;
+    // A black frame is image.black-frames' finding: not counted again as a lost face.
+    if (Math.max(...s.rgb) < 0.05) continue;
     out.push({ frame, clip, faces: s.faces });
   }
   return out;

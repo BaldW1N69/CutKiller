@@ -19,6 +19,7 @@ import {
 } from "./checks/motion";
 import { checkColor, checkReframe } from "./checks/subject";
 import { buildReport, type CheckResult, type Report } from "./report";
+import { checkCaptionSyncTruth, checkFillersTruth, type Label } from "./truth";
 
 export { audioEditFrames, clickScore } from "./checks/audio";
 export { contrastRatio, luminance, parseColor } from "./checks/captions";
@@ -26,6 +27,7 @@ export { DUPLICATE_MAD } from "./checks/image";
 export { renderSubjects } from "./checks/subject";
 export * from "./report";
 export * from "./rules";
+export * from "./truth";
 
 export interface QualityCheckInput {
   video: string;
@@ -42,6 +44,8 @@ export interface QualityCheckInput {
   alignCaptions?: boolean;
   /** Preset library the EDL refers to (default: the repo's presets/). */
   registry?: PresetRegistry;
+  /** Human annotation of the render (word onsets, hesitations heard): replaces the models for captions.sync and montage.fillers. */
+  truth?: Label[];
 }
 
 /**
@@ -50,56 +54,60 @@ export interface QualityCheckInput {
  * not evaluated and left out of the score.
  */
 export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
+  const started = Date.now();
+  const registry = input.registry ?? (await PresetRegistry.load());
   const ctx = {
     video: input.video,
     profile: input.profile,
     baseDir: input.baseDir ?? ".",
+    registry,
     ...(input.edl ? { edl: input.edl } : {}),
   };
-  const results: CheckResult[] = [
-    ...(await checkExportFormat(ctx)),
-    await checkBitrate(ctx),
-    await checkBlackFrames(ctx),
-    await checkDuplicateFrames(ctx),
-  ];
-  if (input.edl) {
-    const errors = edlErrors(input.edl);
+  const results: CheckResult[] = [];
+  /** Runs one check and records how long it took. */
+  const run = async (check: () => CheckResult | CheckResult[] | Promise<CheckResult | CheckResult[]>) => {
+    const t0 = Date.now();
+    const out = await check();
+    const list = Array.isArray(out) ? out : [out];
+    for (const r of list) results.push({ ...r, ms: Date.now() - t0 });
+  };
+  await run(() => checkExportFormat(ctx));
+  await run(() => checkBitrate(ctx));
+  await run(() => checkBlackFrames(ctx));
+  await run(() => checkDuplicateFrames(ctx));
+  const edl = input.edl;
+  if (edl) {
+    const errors = edlErrors(edl);
     if (errors.length > 0) throw new Error(`EDL invalide : ${errors.map((e) => e.message).join("; ")}`);
-    results.push(checkNoLinear(input.edl), checkJlCuts(input.edl, input.profile));
-    results.push(await checkCutClicks(input.video, input.edl, input.profile));
-    results.push(
-      await checkLoudness(input.video, input.profile),
-      await checkSfxSync(input.video, input.edl, input.profile),
-    );
-    if (Object.keys(input.analysis?.transcripts ?? {}).length > 0)
-      results.push(await checkDucking(input.video, input.edl, input.profile));
-    results.push(checkStaticShots(input.edl, input.profile), checkPunchIns(input.edl, input.profile));
-    const registry = input.registry ?? (await PresetRegistry.load());
-    results.push(
-      checkPresets(input.edl, registry, input.profile),
-      checkDurations(input.edl, input.profile),
-      checkOvershoot(input.edl, registry, input.profile),
-      checkMotionBlur(input.video, input.edl, registry, input.profile),
-    );
-    results.push(checkBeatCuts(input.edl, input.profile, input.analysis));
-    results.push(
-      await checkReframe(input.video, input.edl, input.profile, input.analysis),
-      await checkColor(input.video, input.edl, input.profile),
-    );
-    results.push(
-      checkCaptionDensity(input.edl, input.profile),
-      checkSafeZones(input.edl, input.profile, registry),
-      await checkCaptionContrast(input.video, input.edl, input.profile, registry),
-    );
-    if (input.alignCaptions !== false)
-      results.push(
-        await checkCaptionSync(input.video, input.edl, input.profile, input.analysis, ctx.baseDir),
-      );
-    const hasSpeech = Object.keys(input.analysis?.transcripts ?? {}).length > 0;
+    const { profile, analysis, video } = input;
+    await run(() => checkNoLinear(edl));
+    await run(() => checkJlCuts(edl, profile));
+    await run(() => checkCutClicks(video, edl, profile));
+    await run(() => checkLoudness(video, profile));
+    await run(() => checkSfxSync(video, edl, profile));
+    const hasSpeech = Object.keys(analysis?.transcripts ?? {}).length > 0;
+    if (hasSpeech) await run(() => checkDucking(video, edl, profile));
+    await run(() => checkStaticShots(edl, profile));
+    await run(() => checkPunchIns(edl, profile));
+    await run(() => checkPresets(edl, registry, profile));
+    await run(() => checkDurations(edl, profile));
+    await run(() => checkOvershoot(edl, registry, profile));
+    await run(() => checkMotionBlur(video, edl, registry, profile));
+    await run(() => checkBeatCuts(edl, profile, analysis));
+    await run(() => checkReframe(video, edl, profile, analysis));
+    await run(() => checkColor(video, edl, profile));
+    await run(() => checkCaptionDensity(edl, profile));
+    await run(() => checkSafeZones(edl, profile, registry));
+    await run(() => checkCaptionContrast(video, edl, profile, registry));
+    const truth = input.truth;
+    if (truth) await run(() => checkCaptionSyncTruth(edl, profile, truth));
+    else if (input.alignCaptions !== false)
+      await run(() => checkCaptionSync(video, edl, profile, analysis, ctx.baseDir));
     if (hasSpeech) {
-      results.push(await checkSilences(input.video, input.edl, input.profile, input.analysis));
-      if (input.transcribeOutput !== false)
-        results.push(await checkFillers(input.video, input.profile, input.edl.output.fps));
+      await run(() => checkSilences(video, edl, profile, analysis));
+      if (truth) await run(() => checkFillersTruth(truth, profile, edl.output.fps));
+      else if (input.transcribeOutput !== false)
+        await run(() => checkFillers(video, profile, edl.output.fps));
     }
   }
   return buildReport(
@@ -109,5 +117,10 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
       ...(input.edlPath ? { edl: input.edlPath } : {}),
     },
     results,
+    {
+      profile: input.profile,
+      ...(input.edl ? { fps: input.edl.output.fps } : {}),
+      seconds: (Date.now() - started) / 1000,
+    },
   );
 }

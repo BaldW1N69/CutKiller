@@ -2,7 +2,7 @@
 
 Montage automatique de rushes pour YouTube (16:9) et Shorts / TikTok / Reels (9:16), piloté par une **EDL JSON éditable à la main** et vérifié par des **règles de qualité mesurables**.
 
-> Statut : **phase 6 (image) livrée**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké dans les safe zones avec export SRT, mix audio à -14 LUFS (true peak ≤ -1 dBTP) avec ducking et effets sonores synchronisés, recadrage 9:16 qui suit le visage comme une caméra posée, étalonnage qui égalise la peau d'un plan à l'autre sous un look commun, rendu et quality-check sur les 25 règles. La phase 7 consolide la QA. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
+> Statut : **phases 0 à 7 livrées**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké dans les safe zones avec export SRT, mix audio à -14 LUFS (true peak ≤ -1 dBTP) avec ducking et effets sonores synchronisés, recadrage 9:16 qui suit le visage comme une caméra posée, étalonnage qui égalise la peau d'un plan à l'autre sous un look commun, rendu et quality-check sur les 25 règles. La QA est calibrée : un défaut injecté par règle sur un montage propre, détection et fausses alertes mesurées ([rapport](docs/phases/phase-7.md)) ; la synchro peut être vérifiée contre une annotation humaine. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
 
 ## Prérequis
 
@@ -27,13 +27,21 @@ pnpm cutkiller auto rushes/*.mp4 musique.wav -p short -o out --min-score 90
 pnpm cutkiller plan rushes/*.mp4 -p long -o out/edit.edl.json
 pnpm cutkiller validate out/edit.edl.json
 pnpm cutkiller render out/edit.edl.json -o out/final.mp4 [--draft]
-pnpm cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --md out/quality.md
+pnpm cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --md out/quality.md --json out/quality.json
+
+# Vérité terrain humaine : mots surlignés à corriger à l'oreille dans Audacity, puis contrôle contre l'annotation
+pnpm cutkiller annotate out/edit.edl.json -o out/labels.txt
+pnpm cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --truth out/labels.txt
+
+# Calibration de la QA : un défaut injecté par règle sur un montage propre (≈ 45 min)
+pnpm cutkiller calibrate -o out/calibration
 ```
 
 - `-p short|long` ou chemin vers un profil `.yaml` : tous les réglages de style vivent dans [`profiles/`](profiles).
 - `--draft` : encodage rapide (x264 `veryfast`) pour itérer ; le rendu final utilise le preset de l'EDL (`medium` par défaut).
 - `--fast` : sans analyse de la parole ni des beats (assemblage + zoom-cuts uniquement).
-- `plan` écrit aussi `<edl>.analysis.json` (transcript au mot, VAD, beats), que `check` réutilise.
+- `plan` écrit aussi `<edl>.analysis.json` (transcript au mot, VAD, beats, visages), que `check` réutilise.
+- Le rapport (`--json`, schéma [`schema/report-1.schema.json`](schema/report-1.schema.json)) donne pour chaque règle le seuil du profil, ce que la mesure lit (rendu, EDL, journal de rendu), les écarts avec leur timecode et la durée du contrôle.
 
 ## Architecture
 

@@ -1,9 +1,14 @@
+import { CaptionTimeline } from "@cutkiller/captions";
 import { type Edl, edlDurationFrames, type StyleProfile, type VideoClip } from "@cutkiller/core";
 import { ffmpeg, ffprobe, isVariableFrameRate, parseRate } from "@cutkiller/media";
-import { clipAt, clipFrameStats, type FrameStats, frameDiffs } from "../decode";
+import { MotionTimeline, resolveTransitions } from "@cutkiller/motion";
+import type { PresetRegistry } from "@cutkiller/style";
+import { clipAt, clipFrameStats, clipMotion, type FrameStats, frameDiffs, STATIC_MOTION } from "../decode";
 import { type CheckResult, graded, pass, type Violation } from "../report";
 
 export interface VideoContext {
+  /** Presets of the EDL's transitions and captions (to know where the render animates). */
+  registry?: PresetRegistry;
   video: string;
   edl?: Edl;
   baseDir: string;
@@ -98,20 +103,75 @@ export async function checkBlackFrames(ctx: VideoContext): Promise<CheckResult> 
 
 /** Luma MAD under which two consecutive frames count as the same picture. */
 export const DUPLICATE_MAD = 0.3;
+/**
+ * Where the render animates, a stricter bound: a frozen frame re-encoded measures
+ * ≤ 0.01, while a small legitimate change (a short word appearing, a transition
+ * over a plain background) can stay under DUPLICATE_MAD.
+ */
+export const FROZEN_MAD = 0.05;
+/** Render motion (px/frame) from which consecutive frames must differ. */
+export const MOVING_PX = 2;
 
-/** Repeated pictures in the render that the source does not repeat (held/duplicated frames). */
+/**
+ * Repeated pictures in the render while the source moves or the render animates
+ * (held/duplicated frames): a still source, or one whose only change is grain,
+ * legitimately renders as near-identical frames, unless a camera move, punch-in,
+ * transition, caption appearing or leaving is due at that frame.
+ */
 export async function checkDuplicateFrames(ctx: VideoContext): Promise<CheckResult> {
   const info = await ffprobe(ctx.video);
   const v = info.streams.find((s) => s.codec_type === "video");
-  const diffs = await frameDiffs(ctx.video, v?.width ?? 0, v?.height ?? 0);
-  const dups = diffs.flatMap((d, i) => (d < DUPLICATE_MAD ? [i] : []));
-  const unexpected = ctx.edl ? await filterUnexplained(ctx, dups, (d) => d.duplicate) : dups;
+  const means: number[] = [];
+  const diffs = await frameDiffs(ctx.video, v?.width ?? 0, v?.height ?? 0, means);
+  // Black frames are image.black-frames' finding, not repeated pictures as well.
+  const limit = 16 + ctx.profile.export.blackPixelThreshold * 219;
+  const dups = diffs.flatMap((d, i) => (d < DUPLICATE_MAD && (means[i] ?? 255) > limit ? [i] : []));
+  // Where the render itself animates (camera, punch-in, transition, caption pop or
+  // highlight), the picture must change whatever the source does.
+  const animated = ctx.edl && ctx.registry ? animatedFrames(ctx.edl, ctx.registry) : new Set<number>();
+  const unexpected = ctx.edl
+    ? [
+        ...(await filterUnexplained(
+          ctx,
+          dups.filter((f) => !animated.has(f)),
+          (d) => d.duplicate,
+        )),
+        ...dups.filter((f) => animated.has(f) && (diffs[f] as number) < FROZEN_MAD),
+      ].sort((a, b) => a - b)
+    : dups;
   return graded(
     "image.duplicate-frames",
     diffs.length,
     runs(unexpected).map(([a, b]) => ({ message: `${b - a + 1} frame(s) dupliquée(s)`, frame: a })),
-    { duplicates: dups.length, unexpected: unexpected.length, thresholdMad: DUPLICATE_MAD },
+    {
+      duplicates: dups.length,
+      unexpected: unexpected.length,
+      thresholdMad: DUPLICATE_MAD,
+      frozenMad: FROZEN_MAD,
+      staticMotion: STATIC_MOTION,
+      animatedFrames: animated.size,
+    },
   );
+}
+
+/** Frames whose picture differs from the previous one by construction of the render. */
+export function animatedFrames(edl: Edl, registry: PresetRegistry): Set<number> {
+  const out = new Set<number>();
+  const motion = new MotionTimeline(edl, resolveTransitions(edl, registry));
+  const captions = new CaptionTimeline(edl, registry);
+  const total = edlDurationFrames(edl);
+  // Displacement from frame f − 1 to frame f (velocity at f − ½); sub-pixel motion,
+  // like the tail of a spring, does not change the picture: MOVING_PX at least.
+  for (let f = 1; f < total; f++)
+    if (motion.velocityAt(f - 0.5) > MOVING_PX || captions.velocityAt(f - 0.5) > MOVING_PX) out.add(f);
+  // A caption appearing or leaving (a highlight moving to the next word changes too
+  // few pixels to tell from encoder noise: not counted).
+  for (const c of edl.captions) {
+    out.add(c.fromFrame);
+    out.add(c.toFrame);
+  }
+  out.delete(0);
+  return out;
 }
 
 interface SourceFrameFacts {
@@ -131,6 +191,16 @@ async function filterUnexplained(
 ): Promise<number[]> {
   const edl = ctx.edl as Edl;
   const cache = new Map<string, FrameStats>();
+  // Source stats of the clips concerned, decoded 4 at a time.
+  const clips = [
+    ...new Map(frames.flatMap((f) => clipAt(edl, f) ?? []).map((c) => [c.id, c])).values(),
+  ].filter((c) => !edl.sources[c.source]?.still);
+  for (let k = 0; k < clips.length; k += 4)
+    await Promise.all(
+      clips.slice(k, k + 4).map(async (c) => {
+        cache.set(c.id, await clipFrameStats(edl, c, ctx.baseDir, ctx.profile.export.blackPixelThreshold));
+      }),
+    );
   const out: number[] = [];
   for (const f of frames) {
     const clip = clipAt(edl, f);
@@ -158,10 +228,15 @@ async function sourceFacts(
     cache.set(clip.id, stats);
   }
   const d = stats.diffs[local];
-  return {
-    duplicate: local > 0 && d !== undefined && d < DUPLICATE_MAD,
-    black: stats.black[local] === true,
-  };
+  const black = stats.black[local] === true;
+  // A repeated picture is the source's own when it repeats there too, or when the
+  // source does not move (only its grain changes: the encoder flattens it). The
+  // motion decode is only paid for when the first answer is not enough.
+  if (local === 0) return { duplicate: false, black };
+  if (d !== undefined && d < DUPLICATE_MAD) return { duplicate: true, black };
+  stats.motion ??= await clipMotion(edl, clip, ctx.baseDir);
+  const m = stats.motion[local];
+  return { duplicate: m !== undefined && m < STATIC_MOTION, black };
 }
 
 function runs(frames: number[]): [number, number][] {

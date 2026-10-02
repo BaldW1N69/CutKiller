@@ -19,9 +19,7 @@
     "@cutkiller/captions": "workspace:*",
     "@cutkiller/audio": "workspace:*",
     "@cutkiller/media": "workspace:*",
-    "@cutkiller/analyze": "workspace:*"
-  },
-  "devDependencies": {
+    "@cutkiller/analyze": "workspace:*",
     "@cutkiller/fixtures": "workspace:*"
   }
 }

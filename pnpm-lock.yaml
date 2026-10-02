@@ -97,6 +97,9 @@ importers:
       '@cutkiller/cut':
         specifier: workspace:*
         version: link:../cut
+      '@cutkiller/fixtures':
+        specifier: workspace:*
+        version: link:../../fixtures
       '@cutkiller/media':
         specifier: workspace:*
         version: link:../media
@@ -115,10 +118,6 @@ importers:
       '@cutkiller/style':
         specifier: workspace:*
         version: link:../style
-    devDependencies:
-      '@cutkiller/fixtures':
-        specifier: workspace:*
-        version: link:../../fixtures
 
   packages/color:
     dependencies:

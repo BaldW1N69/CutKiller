@@ -38,6 +38,8 @@ Phase 5 (audio) : aucun code tiers et aucun fichier audio tiers.
 - Les effets sonores sont **synthétisés** par le dépôt (`packages/audio/src/sfx.ts` : bruit pseudo-aléatoire, filtre à variables d'état, enveloppes) à partir des presets `presets/sfx/`.
 - La mesure de loudness et le limiteur sont ceux de FFmpeg (`ebur128`, `alimiter`), utilisé comme exécutable externe, comme ailleurs.
 
+Phase 7 (QA) : aucun code tiers. Le banc de calibration, le format de rapport et la lecture des étiquettes Audacity (format texte documenté, sans code repris) sont écrits pour ce dépôt.
+
 Phase 6 (image) : aucun code tiers. La caméra virtuelle (filtre médian, zone morte, glissement posé sur le déplacement du sujet, borne d'accélération), l'égalisation sur la peau, l'épaulement des hautes lumières, la génération des LUT `.cube` et la conversion CIELAB (formules CIE publiques) sont écrits pour ce dépôt. MediaPipe, prévu à l'audit, n'a pas été retenu : YuNet (OpenCV) fournit visages et points du visage avec une seule dépendance déjà prévue, et un modèle MIT de 230 Ko.
 
 Phase 4 (sous-titres) : aucun code tiers. L'export SRT (`packages/captions/src/srt.ts`) est un writer d'une vingtaine de lignes écrit pour ce dépôt : le parseur SRT d'opencut-classic, prévu à l'audit, n'a pas été nécessaire (pas d'import de sous-titres). Le découpage remplace `chunk()` du toolkit, réécrit comme prévu. Le ratio de contraste suit la définition WCAG 2.x (luminance relative sRGB).

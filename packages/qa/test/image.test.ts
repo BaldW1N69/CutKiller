@@ -12,10 +12,12 @@ import {
   type Subjects,
 } from "@cutkiller/core";
 import { FACE_PAN, type Fixtures, facePanX, generateFixtures } from "@cutkiller/fixtures";
+import { ffmpeg } from "@cutkiller/media";
 import { reframePass } from "@cutkiller/reframe";
 import { render } from "@cutkiller/render";
 import { loadProfile, PresetRegistry } from "@cutkiller/style";
 import { beforeAll, describe, expect, it } from "vitest";
+import { checkDuplicateFrames } from "../src/checks/image";
 import { checkColor, checkReframe, renderSubjects } from "../src/checks/subject";
 import { clipFrameStats, frameDiffs } from "../src/decode";
 
@@ -204,5 +206,64 @@ describe("étalonnage entre deux caméras (QA image.color)", () => {
     expect(result.status).toBe("pass");
     expect(result.measured?.maxDeltaL).toBeLessThan(2);
     expect(result.measured?.maxDeltaAb).toBeLessThan(2);
+  });
+});
+
+describe("frames figées (QA image.duplicate-frames)", () => {
+  it("accepte une image fixe qui ne bouge pas, refuse un gel pendant un punch-in animé", async () => {
+    const edl = edlOf({
+      version: "1.4.0",
+      output: {
+        format: "short",
+        width: 540,
+        height: 960,
+        fps: 30,
+        video: { bitrateMbps: 8, preset: "veryfast" },
+        audio: {},
+      },
+      sources: { s: { path: fx.still, still: true, hasAudio: false } },
+      video: [{ id: "main", clips: [{ id: "c1", source: "s", in: 0, out: 3, at: 0 }] }],
+      keyframes: [
+        {
+          target: "c1.scale",
+          role: "micro",
+          preset: "zoom-punch@1.0.0",
+          keys: [
+            { frame: 40, value: 1 },
+            { frame: 46, value: 1.1, ease: { spring: { stiffness: 1310, damping: 50, mass: 1 } } },
+          ],
+          why: { kind: "emphasis", wordIds: [0] },
+        },
+      ],
+    });
+    const clean = join(dir, "still.mp4");
+    await render(edl, { baseDir: fx.dir, outPath: clean });
+    const ctx = { edl, baseDir: fx.dir, profile, registry };
+    // A still picture repeats itself everywhere except during the zoom: that is expected.
+    const ok = await checkDuplicateFrames({ ...ctx, video: clean });
+    expect(ok.violations).toEqual([]);
+    expect((ok.measured?.duplicates as number) > 50).toBe(true);
+    const frozen = join(dir, "still-frozen.mp4");
+    await ffmpeg([
+      "-v",
+      "error",
+      "-i",
+      clean,
+      "-vf",
+      "split[a][b];[a][b]freezeframes=first=41:last=44:replace=40,format=yuv420p",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "12",
+      "-y",
+      frozen,
+    ]);
+    const bad = await checkDuplicateFrames({ ...ctx, video: frozen });
+    expect(bad.status).toBe("fail");
+    // Frozen while the zoom moves by 2 px/frame or more (the last, sub-2-px frame of
+    // the spring at this small output size is not required to change).
+    expect(bad.violations).toEqual([{ message: "3 frame(s) dupliquée(s)", frame: 41 }]);
   });
 });

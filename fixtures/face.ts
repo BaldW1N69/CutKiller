@@ -155,3 +155,63 @@ export async function faceGradingFixtures(dir: string): Promise<{ neutral: strin
   }
   return { neutral, graded };
 }
+
+/** Face path of `talking-head.mp4` (fraction of the frame width): holds, shifts once, holds. */
+export const TALKING_HEAD = { from: 0.42, to: 0.6, moveS: [6, 7.2] as const, size: 420 };
+
+export function talkingHeadX(t: number): number {
+  const { from, to, moveS } = TALKING_HEAD;
+  const p = Math.min(1, Math.max(0, (t - moveS[0]) / (moveS[1] - moveS[0])));
+  return from + (to - from) * (p * p * (3 - 2 * p));
+}
+
+/**
+ * A talking head for the QA calibration: the portrait in a 1920×1080 frame, who
+ * shifts sideways once (the 9:16 camera has to follow), over the synthetic French
+ * speech (word-level ground truth). Every rule of the standards applies to it.
+ */
+export async function talkingHeadFixture(dir: string, speechWav: string, durationS: number): Promise<string> {
+  const path = join(dir, "talking-head.mp4");
+  if (existsSync(path)) return path;
+  const portrait = await astronaut(dir);
+  const { size, moveS } = TALKING_HEAD;
+  const at = (fx: number) => (fx * 1920 - FACE_IN_CROP.x * size).toFixed(2);
+  const p = `clip((t-${moveS[0]})/${moveS[1] - moveS[0]},0,1)`;
+  const x = `${at(TALKING_HEAD.from)}+(${at(TALKING_HEAD.to)}-${at(TALKING_HEAD.from)})*${p}*${p}*(3-2*${p})`;
+  const y = (1080 * 0.42 - FACE_IN_CROP.y * size).toFixed(2);
+  await ffmpeg([
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    `gradients=s=1920x1080:r=30:d=${durationS}:c0=0x55606a:c1=0xa8b2a0:speed=0.01`,
+    "-loop",
+    "1",
+    "-i",
+    portrait,
+    "-i",
+    speechWav,
+    "-filter_complex",
+    `[1:v]crop=${CROP.size}:${CROP.size}:${CROP.x}:${CROP.y},scale=${size}:${size}[face];[0:v][face]overlay=x='${x}':y=${y}:shortest=1,noise=alls=6:allf=t,format=yuv420p[v]`,
+    "-map",
+    "[v]",
+    "-map",
+    "2:a",
+    "-t",
+    String(durationS),
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "18",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "160k",
+    "-y",
+    path,
+  ]);
+  return path;
+}
