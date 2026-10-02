@@ -736,6 +736,109 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
+        },
+        "renderTruePeakDbtp": {
+          "default": -1.5,
+          "type": "number",
+          "maximum": 0
+        },
+        "musicBedLu": {
+          "default": -6,
+          "type": "number"
+        },
+        "voiceCompression": {
+          "default": {
+            "thresholdLu": 4,
+            "ratio": 3,
+            "attackMs": 10,
+            "releaseMs": 150
+          },
+          "type": "object",
+          "properties": {
+            "thresholdLu": {
+              "default": 4,
+              "type": "number"
+            },
+            "ratio": {
+              "default": 3,
+              "type": "number",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "attackMs": {
+              "default": 10,
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "releaseMs": {
+              "default": 150,
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "duck": {
+          "default": {
+            "depthDb": -15,
+            "attackMs": 120,
+            "releaseMs": 350,
+            "mergeGapMs": 700,
+            "holdMs": 150
+          },
+          "type": "object",
+          "properties": {
+            "depthDb": {
+              "default": -15,
+              "type": "number",
+              "maximum": 0
+            },
+            "attackMs": {
+              "default": 120,
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "releaseMs": {
+              "default": 350,
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "mergeGapMs": {
+              "default": 700,
+              "type": "number",
+              "minimum": 0
+            },
+            "holdMs": {
+              "default": 150,
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "sfx": {
+          "default": {
+            "transitions": {},
+            "gainDb": -10
+          },
+          "type": "object",
+          "properties": {
+            "transitions": {
+              "default": {},
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "punchIn": {
+              "type": "string"
+            },
+            "gainDb": {
+              "default": -10,
+              "type": "number"
+            }
+          }
         }
       }
     }

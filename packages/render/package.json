@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@cutkiller/audio": "workspace:*",
     "@cutkiller/captions": "workspace:*",
     "@cutkiller/core": "workspace:*",
     "@cutkiller/media": "workspace:*",

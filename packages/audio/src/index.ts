@@ -1,4 +1,10 @@
-import { identityPass, type Pass } from "@cutkiller/core";
-
-/** Passe « audio » (loudness, ducking, SFX, fondus aux coupes). Implémentée en phase 5 ; identité d'ici là. */
-export const audioPass: Pass = identityPass("audio");
+export { audioPass, speechRegions } from "./pass";
+export {
+  envelopePeak,
+  SFX_PREROLL_S,
+  type SfxParams,
+  SfxParamsSchema,
+  type SfxSound,
+  sfxTiming,
+  synthesize,
+} from "./sfx";

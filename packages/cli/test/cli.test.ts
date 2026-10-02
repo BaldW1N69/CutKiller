@@ -85,6 +85,9 @@ describe("cutkiller CLI (bout en bout)", () => {
       "captions.density": "pass",
       "captions.safe-zones": "pass",
       "captions.contrast": "pass",
+      "audio.loudness": "pass",
+      "audio.ducking": "pass",
+      "audio.cut-clicks": "pass",
     });
     expect(await readFile(join(dir, "final.srt"), "utf8")).toMatch(/^1\n00:00:\d\d,\d{3} --> /);
     const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}']/gu, "");

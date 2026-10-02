@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EaseSchema } from "./ease";
 
-export const EDL_VERSION = "1.2.0";
+export const EDL_VERSION = "1.3.0";
 
 const Id = z.string().regex(/^[A-Za-z0-9_.-]+$/, "identifiant alphanumérique");
 const Seconds = z.number().nonnegative();
@@ -57,15 +57,39 @@ export const VideoClipSchema = z.object({
   why: ReasonSchema.optional(),
 });
 
+/** `name@major`, `name@major.minor` or `name@x.y.z`, resolved by the preset registry. */
+export const PresetRefSchema = z
+  .string()
+  .regex(/^[a-z0-9-]+@\d+(\.\d+){0,2}$/, "référence de preset nom@version");
+
+/**
+ * Music ducking: from `fromFrame` to `toFrame` the clip plays `depthDb` lower,
+ * reached by a raised-cosine ramp of `attackMs` ending at `fromFrame` and left by
+ * a ramp of `releaseMs` starting at `toFrame` (no step, no pumping).
+ */
+export const DuckSchema = z.object({
+  fromFrame: Frame,
+  toFrame: Frame,
+  depthDb: z.number().max(0),
+  attackMs: z.number().nonnegative(),
+  releaseMs: z.number().nonnegative(),
+});
+
 export const AudioClipSchema = z.object({
   id: Id,
-  source: Id,
+  /** A source of the EDL… */
+  source: Id.optional(),
+  /** …or a generated sound effect (preset `sfx/`), whose `in`/`out` are within the synthesized sound. */
+  asset: PresetRefSchema.optional(),
   in: Seconds,
   out: Seconds,
   at: Frame,
   gainDb: z.number().default(0),
   fadeInMs: z.number().nonnegative().default(0),
   fadeOutMs: z.number().nonnegative().default(0),
+  duck: z.array(DuckSchema).default([]),
+  /** Visual event a sound effect lands on: `transition:<id>` or `keyframes:<target>`. */
+  syncTo: z.string().optional(),
   why: ReasonSchema.optional(),
 });
 
@@ -75,11 +99,6 @@ export const KeyframeSchema = z.object({
   /** Curve used to reach this key from the previous one. */
   ease: EaseSchema.optional(),
 });
-
-/** `name@major`, `name@major.minor` or `name@x.y.z`, resolved by the preset registry. */
-export const PresetRefSchema = z
-  .string()
-  .regex(/^[a-z0-9-]+@\d+(\.\d+){0,2}$/, "référence de preset nom@version");
 
 /**
  * Animated property of a clip, on top of its static framing. Frames are timeline
@@ -189,6 +208,29 @@ export const OutputSchema = z.object({
     }),
   audio: z.object({
     sampleRate: z.number().int().positive().default(48_000),
+    /** Integrated loudness of the final mix (EBU R128), LUFS. */
+    targetLufs: z.number().default(-14),
+    /** True-peak ceiling of the mix before encoding (kept under the delivery limit with a margin for the codec). */
+    truePeakDbtp: z.number().max(0).default(-1.5),
+    /**
+     * Music bed level relative to the dialogue, in LU, before ducking: the
+     * renderer measures both and sets the music so that its loudness sits this far
+     * under the voice. Unset: the clips' own gains only.
+     */
+    musicBedLu: z.number().optional(),
+    /**
+     * Light compression of the dialogue before the mix, so that the final limiter
+     * only catches stray peaks. `thresholdLu` is relative to the dialogue's own
+     * integrated loudness (measured at render).
+     */
+    voiceCompression: z
+      .object({
+        thresholdLu: z.number(),
+        ratio: z.number().min(1).max(20),
+        attackMs: z.number().positive(),
+        releaseMs: z.number().positive(),
+      })
+      .optional(),
     bitrateKbps: z.number().int().positive().default(192),
     /** Micro-fade applied at every audio edit point to avoid clicks. */
     cutFadeMs: z.number().nonnegative().default(8),
@@ -221,6 +263,7 @@ export type Edl = z.infer<typeof EdlSchema>;
 export type EdlInput = z.input<typeof EdlSchema>;
 export type VideoClip = z.infer<typeof VideoClipSchema>;
 export type AudioClip = z.infer<typeof AudioClipSchema>;
+export type Duck = z.infer<typeof DuckSchema>;
 export type Source = z.infer<typeof SourceSchema>;
 export type Output = z.infer<typeof OutputSchema>;
 export type KeyframeTrack = z.infer<typeof KeyframeTrackSchema>;

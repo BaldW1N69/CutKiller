@@ -1,6 +1,6 @@
 import type { Analysis, Edl, StyleProfile } from "@cutkiller/core";
 import { PresetRegistry } from "@cutkiller/style";
-import { checkCutClicks } from "./checks/audio";
+import { checkCutClicks, checkDucking, checkLoudness, checkSfxSync } from "./checks/audio";
 import {
   checkCaptionContrast,
   checkCaptionDensity,
@@ -65,6 +65,12 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
     if (errors.length > 0) throw new Error(`EDL invalide : ${errors.map((e) => e.message).join("; ")}`);
     results.push(checkNoLinear(input.edl), checkJlCuts(input.edl, input.profile));
     results.push(await checkCutClicks(input.video, input.edl, input.profile));
+    results.push(
+      await checkLoudness(input.video, input.profile),
+      await checkSfxSync(input.video, input.edl, input.profile),
+    );
+    if (Object.keys(input.analysis?.transcripts ?? {}).length > 0)
+      results.push(await checkDucking(input.video, input.edl, input.profile));
     results.push(checkStaticShots(input.edl, input.profile), checkPunchIns(input.edl, input.profile));
     const registry = input.registry ?? (await PresetRegistry.load());
     results.push(

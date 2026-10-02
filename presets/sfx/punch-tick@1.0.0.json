@@ -1,0 +1,16 @@
+{
+  "name": "punch-tick",
+  "version": "1.0.0",
+  "kind": "sfx",
+  "description": "Impact sourd et court sous un punch-in : sinus de 180 à 60 Hz avec un clic d'attaque (160 ms, impact à 4 ms).",
+  "params": {
+    "type": "tick",
+    "durationMs": 160,
+    "hitMs": 4,
+    "fromHz": 180,
+    "toHz": 60,
+    "decayMs": 45,
+    "click": 0.25,
+    "seed": 5
+  }
+}

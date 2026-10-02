@@ -34,6 +34,10 @@ Idées **réimplémentées sans copie**, attribuées par courtoisie :
 - l'épinglage FFmpeg par sha256 (OpenCut `crates/media/setup`) ;
 - le test render-baseline A/B (toolkit `tests/render-baseline`).
 
+Phase 5 (audio) : aucun code tiers et aucun fichier audio tiers.
+- Les effets sonores sont **synthétisés** par le dépôt (`packages/audio/src/sfx.ts` : bruit pseudo-aléatoire, filtre à variables d'état, enveloppes) à partir des presets `presets/sfx/`.
+- La mesure de loudness et le limiteur sont ceux de FFmpeg (`ebur128`, `alimiter`), utilisé comme exécutable externe, comme ailleurs.
+
 Phase 4 (sous-titres) : aucun code tiers. L'export SRT (`packages/captions/src/srt.ts`) est un writer d'une vingtaine de lignes écrit pour ce dépôt : le parseur SRT d'opencut-classic, prévu à l'audit, n'a pas été nécessaire (pas d'import de sous-titres). Le découpage remplace `chunk()` du toolkit, réécrit comme prévu. Le ratio de contraste suit la définition WCAG 2.x (luminance relative sRGB).
 
 Phase 3 (motion) : aucun code tiers. Le solveur cubic-bezier suit la définition CSS (W3C *CSS Easing Functions*) et les ressorts suivent l'équation de l'oscillateur amorti. Les transitions (whip-pan, smooth-slide, glitch-cut) et le flou de mouvement sont écrits pour ce dépôt. Les transitions du toolkit, qui dépendent de Remotion, n'ont pas été reprises.

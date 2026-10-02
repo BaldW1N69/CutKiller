@@ -274,6 +274,41 @@ export const StyleProfileSchema = z.object({
     duckingDb: Range.default([-18, -12]),
     cutFadeMs: Range.default([5, 10]),
     sfxToleranceFrames: z.number().int().nonnegative().default(1),
+    /** True-peak target of the rendered mix: under the delivery limit, with room for the AAC encoder's overshoot. */
+    renderTruePeakDbtp: z.number().max(0).default(-1.5),
+    /** Music loudness relative to the dialogue before ducking, in LU. */
+    musicBedLu: z.number().default(-6),
+    /** Dialogue compressor (threshold relative to the dialogue's integrated loudness). */
+    voiceCompression: z
+      .object({
+        thresholdLu: z.number().default(4),
+        ratio: z.number().min(1).max(20).default(3),
+        attackMs: z.number().positive().default(10),
+        releaseMs: z.number().positive().default(150),
+      })
+      .default({ thresholdLu: 4, ratio: 3, attackMs: 10, releaseMs: 150 }),
+    duck: z
+      .object({
+        /** How far the music goes down under speech. */
+        depthDb: z.number().max(0).default(-15),
+        /** Ramps (raised cosine): down before speech starts, back up after it ends. */
+        attackMs: z.number().positive().default(120),
+        releaseMs: z.number().positive().default(350),
+        /** Pauses shorter than this keep the music down: no pumping between sentences. */
+        mergeGapMs: z.number().nonnegative().default(700),
+        /** Extra time kept down after the last word. */
+        holdMs: z.number().nonnegative().default(150),
+      })
+      .default({ depthDb: -15, attackMs: 120, releaseMs: 350, mergeGapMs: 700, holdMs: 150 }),
+    sfx: z
+      .object({
+        /** SFX preset per transition type (push = whip-pan, slide, glitch). */
+        transitions: z.record(z.string(), z.string()).default({}),
+        /** SFX on animated punch-ins (none if unset). */
+        punchIn: z.string().optional(),
+        gainDb: z.number().default(-10),
+      })
+      .default({ transitions: {}, gainDb: -10 }),
   }),
 });
 

@@ -20,5 +20,9 @@ Une EDL référence un preset par `nom@x` (dernière version x.*.*), `nom@x.y` o
 | `caption-fade@1` | motion | entrée d'un sous-titre (opacité 0 → 1) | 160 ms | ease-out cubique |
 | `karaoke-pop@1` | captions | court : 1–3 mots, Poppins ExtraBold en capitales, mot actif jaune | — | entrée `caption-pop@1` |
 | `subtitle-clean@1` | captions | long : 2 lignes × 32 caractères, Poppins SemiBold, mot actif jaune | — | entrée `caption-fade@1` |
+| `whoosh@1` | sfx | whip-pan (court) : bruit filtré balayé 300 → 3 500 Hz, panoramique G → D | 450 ms | impact à 220 ms |
+| `whoosh-soft@1` | sfx | transitions (long) : souffle plus grave et plus doux | 500 ms | impact à 250 ms |
+| `glitch-burst@1` | sfx | glitch-cut : rafales numériques 4 bits | 300 ms | impact à 120 ms |
+| `punch-tick@1` | sfx | punch-in : impact sourd 180 → 60 Hz avec clic | 160 ms | impact à 4 ms |
 
 La QA (`motion.presets`, `motion.durations`, `motion.no-linear`, `motion.overshoot`) vérifie que chaque animation de l'EDL vient d'un preset existant et respecte les plages du cahier des charges.

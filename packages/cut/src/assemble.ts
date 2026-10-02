@@ -14,7 +14,7 @@ export interface AssembleOptions {
   edlDir: string;
   /** Seconds a still image stays on screen. */
   stillSeconds?: number;
-  /** Gain applied to audio-only inputs (music) until ducking lands in phase 5. */
+  /** Trim on audio-only inputs (music); their level under the voice is set at render (`output.audio.musicBedLu`). */
   musicGainDb?: number;
 }
 
@@ -65,7 +65,7 @@ export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: Ass
         in: 0,
         out: Math.min(duration, totalS),
         at: 0,
-        gainDb: opts.musicGainDb ?? -12,
+        gainDb: opts.musicGainDb ?? 0,
         fadeOutMs: 1000,
         why: { kind: "music" },
       },

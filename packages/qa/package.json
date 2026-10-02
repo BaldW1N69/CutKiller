@@ -17,7 +17,8 @@
     "@cutkiller/cut": "workspace:*",
     "@cutkiller/motion": "workspace:*",
     "@cutkiller/captions": "workspace:*",
-    "canvas": "3.2.3"
+    "canvas": "3.2.3",
+    "@cutkiller/audio": "workspace:*"
   },
   "devDependencies": {
     "@cutkiller/fixtures": "workspace:*",

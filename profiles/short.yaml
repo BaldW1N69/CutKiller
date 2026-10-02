@@ -55,3 +55,10 @@ audio:
   duckingDb: [-18, -12]
   cutFadeMs: [5, 10]
   sfxToleranceFrames: 1
+  renderTruePeakDbtp: -1.5
+  musicBedLu: -5
+  duck: { depthDb: -15, attackMs: 100, releaseMs: 300, mergeGapMs: 600, holdMs: 120 }
+  sfx:
+    transitions: { push: whoosh@1, slide: whoosh-soft@1, glitch: glitch-burst@1 }
+    punchIn: punch-tick@1
+    gainDb: -8

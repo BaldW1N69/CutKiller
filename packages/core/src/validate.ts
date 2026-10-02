@@ -93,10 +93,14 @@ export function validateEdl(edl: Edl): Diagnostic[] {
       const path = `audio.${t}.${clip.id}`;
       checkId(clip.id, path);
       if (clip.out <= clip.in) err("clip.empty", "out doit être > in", path);
-      checkSourceRange(clip.source, clip.in, clip.out, path);
+      if ((clip.source === undefined) === (clip.asset === undefined))
+        err("audio.source", "un clip audio a soit une source, soit un asset (SFX)", path);
+      if (clip.source !== undefined) checkSourceRange(clip.source, clip.in, clip.out, path);
       const prev = clips[i - 1];
       if (prev && clipEnd(prev, fps) > clip.at)
         err("track.overlap", `chevauche « ${prev.id} » sur la piste ${track.id}`, path);
+      for (const d of clip.duck)
+        if (d.toFrame < d.fromFrame) err("audio.duck", "ducking : toFrame < fromFrame", path);
     });
   });
 

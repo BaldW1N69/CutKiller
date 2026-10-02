@@ -112,6 +112,30 @@ Au rendu :
 
 `render` écrit aussi `<vidéo>.srt` avec les mêmes écrans.
 
+## Audio
+
+Le mix est construit à partir de trois stems :
+- **voix** : l'audio de la piste principale, avec ses coupes et ses J/L cuts ;
+- **musique** : tous les clips `audio[]` qui ont une `source` ;
+- **effets** : les clips `audio[]` qui ont un `asset`.
+
+Les règles de mixage sont décrites ci-dessous.
+
+- **Niveau de la musique** (`output.audio.musicBedLu`) : le moteur de rendu mesure la loudness de la voix et celle de la musique, puis place la musique `musicBedLu` LU sous la voix. Le `gainDb` d'un clip s'ajoute ensuite comme correction manuelle.
+- **Ducking** : `duck[]` d'un clip de musique, au format `{ fromFrame, toFrame, depthDb, attackMs, releaseMs }`.
+  - La musique atteint `depthDb` à `fromFrame`, après une rampe en cosinus surélevé de `attackMs`.
+  - Elle reste à ce niveau jusqu'à `toFrame`, puis remonte en `releaseMs`. Il n'y a jamais de marche.
+  - La passe `audio` pose un duck sur chaque phrase du montage. Les pauses plus courtes que `mergeGapMs` (profil) sont fusionnées, pour éviter le pompage.
+- **Effets sonores** : un clip de type `{ id, asset: "whoosh@1", in, out, at, syncTo: "transition:t001" }`.
+  - L'asset est un preset `sfx/` **synthétisé** au rendu (bruit filtré, rafales, impact) : le dépôt ne contient aucun fichier audio.
+  - Chaque son commence par 50 ms de silence. `in` en retire juste assez pour que l'**impact** du son (son instant le plus fort) tombe exactement sur l'événement de `syncTo`, qui peut être une coupe de transition ou le début d'un punch-in (`keyframes:<cible>`).
+- **Loudness** : `output.audio.targetLufs` (intégrée, EBU R128) et `output.audio.truePeakDbtp`.
+  - Le mix est d'abord mesuré, puis amené à la cible par un gain et un limiteur à anticipation.
+  - Il est remesuré et corrigé jusqu'à ce que les deux contraintes tiennent.
+  - Le plafond du rendu, à -1,5 dBTP, laisse 0,5 dB de marge à l'encodeur AAC sous la limite de livraison de -1 dBTP.
+
+`render --keep-stems` écrit `<vidéo>.voice.wav`, `.music.wav` (avec ducking), `.music-dry.wav` (même musique sans ducking) et `.sfx.wav`. La QA s'en sert pour mesurer le ducking et la synchronisation des effets.
+
 ## Traçabilité
 
 Chaque clip porte un champ `why: { kind, note?, wordIds? }` qui explique pourquoi il existe, pour qu'un humain puisse auditer et corriger les décisions automatiques :
@@ -135,3 +159,5 @@ Chaque clip porte un champ `why: { kind, note?, wordIds? }` qui explique pourquo
 | `captions.range` / `captions.overlap` | Sous-titre vide / qui chevauche le précédent |
 | `captions.word-range` / `captions.word-order` | Mot hors de son sous-titre / mots dans le désordre |
 | `captions.lines` | Lignes qui ne commencent pas à 0 ou sautent une ligne |
+| `audio.source` | Clip audio sans source ni asset, ou avec les deux |
+| `audio.duck` | Zone de ducking à l'envers (`toFrame < fromFrame`) |

@@ -1,6 +1,15 @@
 import { existsSync } from "node:fs";
-import { type Edl, framesToSeconds, mainAudioSpans, type StyleProfile } from "@cutkiller/core";
-import { decodeMono } from "@cutkiller/media";
+import { resolve } from "node:path";
+import { runWorker } from "@cutkiller/analyze";
+import { envelopePeak } from "@cutkiller/audio";
+import {
+  type Edl,
+  framesToSeconds,
+  mainAudioSpans,
+  type StyleProfile,
+  type VoiceActivity,
+} from "@cutkiller/core";
+import { decodeMono, measureLoudness, readWavF32 } from "@cutkiller/media";
 import { type CheckResult, graded, notEvaluated, type Violation } from "../report";
 
 const RATE = 48_000;
@@ -75,5 +84,180 @@ export async function checkCutClicks(video: string, edl: Edl, profile: StyleProf
     edits: edits.length,
     clicks,
     cutFadeMs: fade,
+  });
+}
+
+/** Integrated loudness and true peak of the delivered file (EBU R128, after encoding). */
+export async function checkLoudness(video: string, profile: StyleProfile): Promise<CheckResult> {
+  const a = profile.audio;
+  const l = await measureLoudness(video);
+  if (!Number.isFinite(l.integrated)) return notEvaluated("audio.loudness", "piste audio silencieuse");
+  const violations: Violation[] = [];
+  if (Math.abs(l.integrated - a.integratedLufs) > a.lufsTolerance + 1e-9)
+    violations.push({
+      message: `${l.integrated.toFixed(1)} LUFS (cible ${a.integratedLufs} ±${a.lufsTolerance})`,
+    });
+  if (l.truePeak > a.truePeakDbtp + 1e-9)
+    violations.push({ message: `true peak ${l.truePeak.toFixed(1)} dBTP (max ${a.truePeakDbtp})` });
+  return graded("audio.loudness", 2, violations, {
+    lufs: l.integrated,
+    truePeakDbtp: l.truePeak,
+    lra: l.range,
+  });
+}
+
+/** Short-term level (dBFS) of a stereo float stem, per window. */
+function levels(samples: Float32Array, rate: number, windowS: number): Float64Array {
+  const win = Math.round(windowS * rate);
+  const n = Math.floor(samples.length / 2 / win);
+  const out = new Float64Array(n);
+  for (let k = 0; k < n; k++) {
+    let acc = 0;
+    for (let i = k * win; i < (k + 1) * win; i++) {
+      const l = samples[i * 2] as number;
+      const r = samples[i * 2 + 1] as number;
+      acc += (l * l + r * r) / 2;
+    }
+    out[k] = 10 * Math.log10(acc / win + 1e-20);
+  }
+  return out;
+}
+
+/** Below this the dry music is too quiet for its gain to be measured. */
+const AUDIBLE_DB = -55;
+/** Steepest gain change allowed between two 10 ms windows (a 15 dB duck in 80 ms ≈ 3 dB/10 ms). */
+const MAX_SLOPE_DB = 4;
+
+/**
+ * Ducking: wherever the dialogue speaks (independent VAD on the dialogue stem),
+ * the music must play 12–18 dB under its own level (rendered music stem vs the
+ * same music without ducking), and the gain must move smoothly (no step, no
+ * up-and-down shorter than 300 ms between two sentences).
+ */
+export async function checkDucking(
+  video: string,
+  edl: Edl,
+  profile: StyleProfile,
+  vadOverride?: VoiceActivity,
+): Promise<CheckResult> {
+  const hasMusic = edl.audio.some((t) => t.clips.some((c) => c.source !== undefined));
+  if (!hasMusic) return notEvaluated("audio.ducking", "pas de musique");
+  const ducked = `${video}.music.wav`;
+  const dryPath = `${video}.music-dry.wav`;
+  if (!existsSync(ducked) || !existsSync(dryPath))
+    return notEvaluated("audio.ducking", "stems musique absents (rendu sans --keep-stems)");
+  const vad = vadOverride ?? (await runWorker<VoiceActivity>("vad", { path: resolve(`${video}.voice.wav`) }));
+  const wet = await readWavF32(ducked);
+  const dry = await readWavF32(dryPath);
+  const W = 0.01;
+  const gw = levels(wet.samples, wet.rate, W);
+  const gd = levels(dry.samples, dry.rate, W);
+  const gain = (k: number) =>
+    (gd[k] as number) > AUDIBLE_DB ? (gw[k] as number) - (gd[k] as number) : Number.NaN;
+  const [lo, hi] = profile.audio.duckingDb;
+  const fps = edl.output.fps;
+  const violations: Violation[] = [];
+  let items = 0;
+  const depths: number[] = [];
+  for (const s of vad.speech) {
+    if (s.end - s.start < 0.4) continue;
+    const g: number[] = [];
+    for (let k = Math.ceil((s.start + 0.05) / W); k < Math.floor((s.end - 0.05) / W); k++) {
+      const v = gain(k);
+      if (Number.isFinite(v)) g.push(v);
+    }
+    if (g.length < 10) continue;
+    items++;
+    g.sort((a, b) => a - b);
+    const depth = g[Math.floor(g.length / 2)] as number;
+    depths.push(depth);
+    if (depth < lo - 0.5 || depth > hi + 0.5)
+      violations.push({
+        message: `musique à ${depth.toFixed(1)} dB sous la parole (attendu ${lo}–${hi} dB)`,
+        frame: Math.round(s.start * fps),
+      });
+  }
+  // Smoothness: no gain step, no short release-attack cycle.
+  items++;
+  let steep = 0;
+  let worst = 0;
+  for (let k = 1; k < gw.length; k++) {
+    const d = Math.abs(gain(k) - gain(k - 1));
+    if (Number.isFinite(d) && d > MAX_SLOPE_DB) {
+      steep++;
+      worst = Math.max(worst, d);
+    }
+  }
+  if (steep > 0)
+    violations.push({
+      message: `${steep} variation(s) brusque(s) du gain (jusqu'à ${worst.toFixed(1)} dB en 10 ms)`,
+    });
+  const up = (k: number) => gain(k) > lo / 3;
+  let pumps = 0;
+  let k = 0;
+  while (k < gw.length) {
+    if (!(up(k) && k > 0 && !up(k - 1))) {
+      k++;
+      continue;
+    }
+    let j = k;
+    while (j < gw.length && up(j)) j++;
+    if (j < gw.length && (j - k) * W < 0.3) pumps++;
+    k = j;
+  }
+  if (pumps > 0)
+    violations.push({ message: `${pumps} remontée(s) de la musique de moins de 300 ms (pompage)` });
+  if (items === 1 && depths.length === 0)
+    return notEvaluated("audio.ducking", "aucune parole sous la musique");
+  depths.sort((a, b) => a - b);
+  return graded("audio.ducking", items, violations, {
+    speech: depths.length,
+    medianDepthDb: depths.length
+      ? Math.round((depths[Math.floor(depths.length / 2)] as number) * 10) / 10
+      : null,
+    steepSteps: steep,
+    pumps,
+  });
+}
+
+/**
+ * Sound effects: each effect's loudest instant, measured on the rendered effects
+ * stem, must fall within ±1 frame of the visual event it is synced to (the cut
+ * of its transition, the start of its punch-in).
+ */
+export async function checkSfxSync(video: string, edl: Edl, profile: StyleProfile): Promise<CheckResult> {
+  const fps = edl.output.fps;
+  const clips = edl.audio.flatMap((t) => t.clips.filter((c) => c.asset !== undefined && c.syncTo));
+  if (clips.length === 0) return notEvaluated("audio.sfx-sync", "aucun effet sonore");
+  const path = `${video}.sfx.wav`;
+  if (!existsSync(path))
+    return notEvaluated("audio.sfx-sync", "stem des effets absent (rendu sans --keep-stems)");
+  const { samples, rate } = await readWavF32(path);
+  const tol = profile.audio.sfxToleranceFrames;
+  const violations: Violation[] = [];
+  const errors: number[] = [];
+  for (const c of clips) {
+    const [kind, id] = (c.syncTo as string).split(/:(.*)/s);
+    let expected: number | undefined;
+    if (kind === "transition") expected = edl.transitions.find((t) => t.id === id)?.atFrame;
+    else if (kind === "keyframes") expected = edl.keyframes.find((k) => k.target === id)?.keys[0]?.frame;
+    if (expected === undefined) {
+      violations.push({ message: `${c.id} : événement « ${c.syncTo} » introuvable`, frame: c.at });
+      continue;
+    }
+    const from = Math.round(framesToSeconds(c.at, fps) * rate);
+    const to = Math.min(samples.length / 2, from + Math.round((c.out - c.in) * rate));
+    const peak = from + envelopePeak(samples.subarray(from * 2, to * 2), rate);
+    const err = (peak / rate) * fps - expected;
+    errors.push(Math.abs(err));
+    if (Math.abs(err) > tol + 1e-9)
+      violations.push({
+        message: `${c.id} (${c.asset}) : impact à ${err > 0 ? "+" : ""}${err.toFixed(1)} frame(s) de ${c.syncTo}`,
+        frame: expected,
+      });
+  }
+  return graded("audio.sfx-sync", clips.length, violations, {
+    sfx: clips.length,
+    maxErrorFrames: errors.length ? Math.round(Math.max(...errors) * 100) / 100 : null,
   });
 }

@@ -134,6 +134,7 @@ describe("quality-check sur des rendus réels", () => {
     expect(evaluated.map((r) => r.ruleId).sort()).toEqual(
       [
         "audio.cut-clicks",
+        "audio.loudness",
         "image.black-frames",
         "image.bitrate",
         "image.duplicate-frames",
