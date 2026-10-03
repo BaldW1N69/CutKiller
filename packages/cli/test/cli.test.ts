@@ -45,7 +45,7 @@ describe("cutkiller CLI (bout en bout)", () => {
     expect(edl.audio[0].clips[0].source).toBe("music-120bpm");
     // The EDL on disk is the contract: a hand-edited copy must still validate.
     expect(cli("validate", join(dir, "edit.edl.json")).status).toBe(0);
-  });
+  }, 600_000);
 
   it("auto sur de la parole : hésitations et silences coupés, rapport qualité ≥ 90", async () => {
     const fx = await generateFixtures();

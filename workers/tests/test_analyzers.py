@@ -80,6 +80,27 @@ def test_merge_apostrophes():
     assert merge_apostrophes(words) == [{"text": "aujourd'hui", "start": 0.0, "end": 0.5, "prob": 1.0}]
 
 
+def test_merge_split_words_and_punctuation():
+    from cutkiller_workers.align import merge_apostrophes
+
+    words = [
+        {"text": "que", "start": 7.92, "end": 8.0, "prob": 0.9},
+        {"text": "pensez", "start": 8.04, "end": 8.3, "prob": 0.9},
+        {"text": "-vous", "start": 8.34, "end": 8.7, "prob": 0.8},
+        {"text": "du", "start": 9.59, "end": 9.68, "prob": 0.9},
+        {"text": "projet", "start": 9.7, "end": 9.9, "prob": 0.9},
+        # Detached « ? », timestamped inside the next word.
+        {"text": "?", "start": 9.94, "end": 10.2, "prob": 0.5},
+        {"text": "Alors,", "start": 10.92, "end": 11.2, "prob": 0.9},
+        {"text": "...", "start": 11.2, "end": 11.4, "prob": 0.3},
+    ]
+    out = merge_apostrophes(words)
+    assert [w["text"] for w in out] == ["que", "pensez-vous", "du", "projet?", "Alors,..."]
+    assert out[1]["end"] == 8.7
+    # The mark adds no duration to the word it joins.
+    assert out[3]["end"] == 9.9
+
+
 @pytest.mark.models
 @needs_speech
 def test_transcription_is_word_accurate_on_french_speech():

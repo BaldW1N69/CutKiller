@@ -48,7 +48,9 @@ export async function plan(
     const ratio = probe.fps ? profile.format.fps / probe.fps : 1;
     if (probe.fps && Math.abs(ratio - Math.round(ratio)) > 0.01)
       console.error(
-        `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${profile.format.fps} fps répète des images (saccade de pulldown)`,
+        probe.fps < profile.format.fps
+          ? `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${profile.format.fps} fps répète des images (saccade de pulldown)`
+          : `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${profile.format.fps} fps saute des images à intervalles irréguliers (mouvement moins fluide)`,
       );
   }
   const assembled = assembleEdl(analysis, profile, { edlDir: dirname(resolve(edlPath)) });

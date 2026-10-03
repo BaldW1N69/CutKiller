@@ -135,14 +135,26 @@ _APOSTROPHE = re.compile(r"^['’]")
 
 
 def merge_apostrophes(words: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Whisper splits « aujourd'hui » into « aujourd » + « 'hui »: glue them back."""
+    """Glue back what Whisper splits off a word.
+
+    - « aujourd » + « 'hui », « pensez » + « -vous », « Qu'est » + « -ce »: one word;
+    - French typography puts a space before « ? ! : ; », so Whisper returns « ? »
+      as a word of its own, with a timestamp of its own (often inside the next
+      word): the mark joins the previous word, which keeps its timing. A token
+      with no letter or digit is never a word: it would read as an empty
+      hesitation and cut speech.
+    """
     out: list[dict[str, Any]] = []
     for w in words:
-        if out and _APOSTROPHE.match(w["text"]):
+        text = w["text"]
+        if out and (_APOSTROPHE.match(text) or (text.startswith("-") and len(text) > 1)):
             prev = out[-1]
-            prev["text"] += w["text"]
+            prev["text"] += text
             prev["end"] = w["end"]
             prev["prob"] = round(min(prev.get("prob", 1.0), w.get("prob", 1.0)), 3)
+        elif not any(ch.isalnum() for ch in text):
+            if out:
+                out[-1]["text"] += text
         else:
             out.append(dict(w))
     return out
