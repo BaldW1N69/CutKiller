@@ -143,3 +143,23 @@ describe("B-roll", () => {
     expect(brollPass.run(edl, { analysis, profile: long }).edl).toBe(edl);
   });
 });
+
+describe("rush sans parole de durée non alignée sur les frames", () => {
+  it("ne lit jamais au-delà de la fin du rush (20,02 s à 30 fps → 600 frames)", async () => {
+    const { cutPass } = await import("../src");
+    const { EdlSchema, validateEdl } = await import("@cutkiller/core");
+    // The raw assembly (out point = the rush's own duration, not on a frame), as the cut pass gets it.
+    const r = EdlSchema.safeParse({
+      version: "1.5.0",
+      output: { format: "short", width: 1080, height: 1920, fps: 30, video: { bitrateMbps: 20 }, audio: {} },
+      sources: { b: { path: "b.mp4", durationS: 20.02, hasAudio: true } },
+      video: [{ id: "main", clips: [{ id: "b", source: "b", in: 0, out: 20.02, at: 0 }] }],
+    });
+    if (!r.success) throw new Error(r.error.message);
+    const profile = await loadProfile("cinematic-short");
+    const { edl } = cutPass.run(r.data, { analysis: { sources: {} }, profile });
+    expect(validateEdl(edl).filter((d) => d.level === "error")).toEqual([]);
+    const clips = sortedClips(edl.video[0]?.clips ?? []);
+    expect(clipEnd(clips.at(-1) as never, 30)).toBe(600);
+  });
+});

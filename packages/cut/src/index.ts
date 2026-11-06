@@ -52,7 +52,9 @@ export const cutPass: Pass = {
       const source = edl.sources[clip.source];
       if (!transcript || transcript.words.length === 0 || !source) {
         // No speech to edit (B-roll, still, untranscribed rush): only keep it from going static.
-        const frames = Math.round((clip.out - clip.in) * fps);
+        // Whole frames, rounded down: a rush of 20.02 s at 30 fps gives 600 frames, never
+        // a 601st that would read past its end.
+        const frames = Math.floor((clip.out - clip.in) * fps + 1e-6);
         const bounds = [0, ...zoomSplits(frames, at, beats, ctx.profile, fps), frames];
         for (let j = 0; j < bounds.length - 1; j++) {
           const a = bounds[j] as number;
@@ -69,7 +71,7 @@ export const cutPass: Pass = {
             ...clip,
             id: bounds.length > 2 ? `${clip.id}-${String(j + 1).padStart(3, "0")}` : clip.id,
             in: still ? clip.in : clip.in + a / fps,
-            out: still ? clip.in + (b - a) / fps : j === bounds.length - 2 ? clip.out : clip.in + b / fps,
+            out: still ? clip.in + (b - a) / fps : Math.round((clip.in + b / fps) * 1e6) / 1e6,
             at: at + a,
             transform: { ...clip.transform, scale },
             ...(j > 0 ? { why: { kind: "zoom-cut" } } : {}),

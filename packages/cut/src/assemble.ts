@@ -44,7 +44,8 @@ export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: Ass
       music.push([id, probe.durationS]);
       continue;
     }
-    const out = probe.still ? (opts.stillSeconds ?? 3) : probe.durationS;
+    // Whole output frames, rounded down: the last frame never reads past the rush's end.
+    const out = probe.still ? (opts.stillSeconds ?? 3) : Math.floor(probe.durationS * fps + 1e-6) / fps;
     clips.push({
       id: `c${String(clips.length + 1).padStart(3, "0")}`,
       source: id,
