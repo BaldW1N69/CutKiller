@@ -5,6 +5,7 @@ import {
   parseEdl,
   type StyleProfile,
   sortedClips,
+  validateEdl,
 } from "@cutkiller/core";
 import { loadProfile } from "@cutkiller/style";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -127,7 +128,12 @@ describe("B-roll", () => {
 
   it("sans parole : montage d'un plan tous les 4 temps, aussi long que la musique", () => {
     const { edl, analysis } = edit(false);
+    // The music clip is « m001 », as assembled: the shots never reuse an id.
+    edl.audio[0]?.clips.forEach((c) => {
+      c.id = "m001";
+    });
     const { edl: out } = brollPass.run(edl, { analysis, profile: cine });
+    expect(validateEdl(out).filter((d) => d.level === "error")).toEqual([]);
     const main = sortedClips(out.video[0]?.clips ?? []);
     expect(out.video).toHaveLength(1);
     // 4 beats at 120 BPM = 2 s = 60 frames, on the bar lines (beat 0, 4, 8…).

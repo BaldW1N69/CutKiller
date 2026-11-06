@@ -237,6 +237,8 @@ export function duckEnvelope(edl: Edl): Float32Array | undefined {
 }
 
 export interface AudioMixLog {
+  /** True peak of the delivered file (after AAC encoding), dBTP. */
+  encodedTruePeakDbtp?: number;
   voiceLufs: number | null;
   musicLufs: number | null;
   /** Gain given to the music so that it sits `musicBedLu` under the voice. */

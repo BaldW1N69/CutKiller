@@ -249,7 +249,7 @@ export const brollPass: Pass = {
       let at = 0;
       mainClips = pieces.map((p, k) => {
         const clip = {
-          id: `m${String(k + 1).padStart(3, "0")}`,
+          id: `s${String(k + 1).padStart(3, "0")}`,
           source: p.source,
           in: Math.round(p.in * 1e6) / 1e6,
           out: Math.round((p.in + (frames[k] as number) / fps) * 1e6) / 1e6,

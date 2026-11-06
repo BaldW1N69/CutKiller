@@ -206,6 +206,10 @@ export function encoderArgs(edl: Edl, audioPath: string, outPath: string): strin
     "aac",
     "-b:a",
     `${audio.bitrateKbps}k`,
+    // FFmpeg's AAC encoder, left at its own bandwidth, can overshoot by several dB
+    // on dense mixes (measured: −1.8 dBTP in, +0.8 out); 18 kHz keeps it under 0.5.
+    "-cutoff",
+    "18000",
     "-ar",
     String(audio.sampleRate),
     "-movflags",

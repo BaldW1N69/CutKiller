@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { gradeCube, gradeKey, LookParamsSchema, sceneLook } from "@cutkiller/color";
 import type { Edl } from "@cutkiller/core";
+import { ffmpeg, measureLoudness } from "@cutkiller/media";
 import { PresetRegistry } from "@cutkiller/style";
 import { type AudioMixLog, renderAudio } from "./audio";
 import { type MotionLog, renderVideo, type VideoLog } from "./video";
@@ -83,9 +84,49 @@ export async function render(edl: Edl, opts: RenderOptions): Promise<RenderLog> 
       looks.set(key, cube);
     }
     const video = await renderVideo(edl, opts.baseDir, mix, opts.outPath, registry, opts.onProgress, looks);
+    // Delivered true peak: the AAC encode may overshoot the mix's. Over the delivery
+    // margin (mix target + 0.5 dB), the audio alone is encoded again at a higher
+    // bitrate and a lower bandwidth, the video stream copied as is.
+    const encoded = await measureLoudness(opts.outPath);
+    const ceiling = edl.output.audio.truePeakDbtp + 0.5;
+    let reencoded: { truePeakDbtp: number } | undefined;
+    if (encoded.truePeak > ceiling) {
+      const fixed = `${opts.outPath}.aac.mp4`;
+      await ffmpeg([
+        "-v",
+        "error",
+        "-i",
+        opts.outPath,
+        "-i",
+        mix,
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-b:a",
+        `${Math.max(256, edl.output.audio.bitrateKbps)}k`,
+        "-cutoff",
+        "16000",
+        "-ar",
+        String(edl.output.audio.sampleRate),
+        "-movflags",
+        "+faststart",
+        "-y",
+        fixed,
+      ]);
+      await rename(fixed, opts.outPath);
+      reencoded = { truePeakDbtp: (await measureLoudness(opts.outPath)).truePeak };
+      video.warnings.push(
+        `true peak de l'encodage AAC ${encoded.truePeak.toFixed(1)} dBTP > ${ceiling} : audio réencodé (${reencoded.truePeakDbtp.toFixed(1)} dBTP)`,
+      );
+    }
     const log: RenderLog = {
       ...video,
-      audio,
+      audio: { ...audio, encodedTruePeakDbtp: reencoded?.truePeakDbtp ?? encoded.truePeak },
       output: opts.outPath,
       stems: opts.keepStems ? { mix, voice } : {},
     };
