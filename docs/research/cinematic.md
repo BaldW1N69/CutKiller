@@ -99,19 +99,23 @@ Articles :
 
 ## Ce qui est intégré dans CutKiller
 
-Les deux profils `cinematic` (16:9) et `cinematic-short` (9:16) passent les mêmes 25 règles, mesurées de la même façon que pour `short` et `long`. Seuls les seuils changent.
+Les deux profils `cinematic` (16:9) et `cinematic-short` (9:16) passent les mêmes 26 règles, mesurées de la même façon que pour `short` et `long`. Seuls les seuils changent.
 
 | Technique apprise | Intégration | Règle / seuil (cinematic · cinematic-short) |
 |---|---|---|
 | Plans plus longs (ASL de film) | `montage.maxStaticShotS` : 10 s · 6 s (au lieu de 8 · 4) ; `minShotS` : 2 s · 1,5 s | `montage.static-shots` |
 | Laisser respirer | `maxSilenceMs` : 500 · 400 ms ; marges de mots 100–160 · 90–140 ms | `montage.silences`, `montage.jl-cuts` |
 | Poussée lente au lieu du punch-in à ressort | preset `push-in@1` (900 ms, ease-in-out, sans rebond), niveaux 104–107 %, emphase ≥ 1,8 · 1,6 σ, espacées de 10 · 6 s | `montage.punch-ins` (qui compte désormais les poussées), `motion.overshoot` |
-| Fondus plutôt que whip-pans | `cross-dissolve@1` au changement de source ; `dip-to-black@1` à une rupture dans la même caméra (≥ 2,5 · 1,5 s retirées, espacées de 20 · 10 s) | `motion.presets`, `motion.durations` ; `image.black-frames` ignore le noir voulu d'un dip |
-| Look « tirage film » | `film-print@1` : S plus marquée, noirs à 2 %, split toning (ombres froides, hautes lumières chaudes) à luminance constante, neutre au noir et au blanc | `image.color` (peau égalisée avant le look) |
-| Grain, vignette, letterbox | `output.texture` (EDL 1.5) : grain 0,07 · 0,06 (overlay, renouvelé à chaque nouvelle image source), vignette 0,35 · 0,3, letterbox 2,39 (16:9 seulement) | `image.duplicate-frames` : une image répétée garde le même grain, le gel reste détectable |
+| Fondus plutôt que whip-pans | `cross-dissolve@1` (1 s) au changement de source ; `dip-to-black@1` (1,2 s) à une rupture dans la même caméra (≥ 2,5 · 1,5 s retirées, espacées de 20 · 10 s). Pendant un fondu, les deux plans **continuent de jouer** : leurs poignées sont prises dans les rushes | `motion.durations` (plage propre aux fondus : 400–1 500 ms), `motion.presets` ; `image.black-frames` ignore le noir voulu d'un dip |
+| Look « tirage film » | `film-print@1` : S plus marquée, noirs à 2 %, split toning (ombres froides, hautes lumières chaudes) à luminance constante, neutre au noir et au blanc ; **teintes sélectives** : jaunes → orange, verts → jaune, bleus → cyan, peau protégée (ΔE < 1) | `image.color` (peau égalisée avant le look) |
+| Un étalonnage par scène | **contraste adapté par scène** : la plage tonale de chaque source (luma p5–p95) est rapprochée de moitié d'une cible commune, sous le même look | `image.color` (un seul look, peau raccordée) |
+| Grain, vignette, halation, letterbox | `output.texture` (EDL 1.5) : grain 0,07 · 0,06 (overlay, renouvelé à chaque nouvelle image source), **halation** 0,35 · 0,3 (halo chaud autour des hautes lumières), vignette 0,35 · 0,3, letterbox 2,39 (16:9 seulement) | `image.duplicate-frames` : une image répétée garde le même grain, le gel reste détectable |
 | Sous-titres sobres | `cinema-subtitle@1` (16:9, 2 lignes de 38 caractères) et `cinema-caption@1` (9:16, 2–4 mots), casse normale, fondu, contour fin | `captions.*` ; sous-titres gardés sur l'image, hors des bandes |
 | Pas de whoosh sans mouvement | aucun SFX sur les fondus ; ducking plus lent (attaque 250 ms, relâche 600 ms) | `audio.sfx-sync`, `audio.ducking` |
 | Débit pour le grain | facteur de débit 1,5 (au lieu de 1,25) | `image.bitrate` |
+| B-roll et plans de coupe | passe `broll` (`--broll`, ou vidéo sans parole) : plans de coupe de 2–4 s · 1,5–3 s sur une piste superposée, la voix continue dessous ; d'abord sur les jump cuts qu'ils masquent, puis sur les longues tirades ; calés sur les beats, espacés de 6 · 4 s, ≤ 40 % du montage, jamais dans les 3 · 2 premières secondes ; recadrés en 9:16 sur leur sujet | `montage.static-shots` (entrée et sortie d'un plan de coupe = changement d'image), `image.sharpness` |
+| Montage B-roll sur la musique | sans parole : un plan tous les 4 temps (une mesure), dans la plage de durée, aussi long que la musique ; son direct des plans à −20 dB | `montage.beat-cuts` (les coupes sans parole sont libres, donc mesurées) |
+| Netteté | règle **`image.sharpness`** : agrandissement source → sortie, poussées comprises, ≤ ×2 (×2,2 en `short` / `long`) ; accentuation CAS au décodage dès ×1,15 ; alerte au planning | `image.sharpness` |
 
 ## Ce qui n'est pas intégré, et pourquoi
 
@@ -119,7 +123,5 @@ Les deux profils `cinematic` (16:9) et `cinematic-short` (9:16) passent les mêm
 |---|---|
 | Sortie 24 fps | Les rushes de téléphone sont en 30 fps : 30 → 24 saute une image sur cinq, ce qui produit une saccade (CutKiller l'avertit déjà). Le « look 24p » vient de la prise de vue (obturateur à 180°), pas du montage. À ouvrir quand la source est en 24/25 fps. |
 | Rampes de vitesse, ralentis | Le moteur ne remappe pas encore le temps d'un plan. Il faudra aussi un flux haute cadence (48–120 fps), absent des rushes de test. |
-| Montage B-roll sur la musique (coupe tous les 2 temps) | Pas encore de planificateur B-roll : le cut actuel suit la parole, et cale les coupes libres sur les beats. C'est la prochaine brique, la plus utile pour le vlog / voyage. |
 | Riser → impact, room tone | Il faudra des presets SFX synthétisés de plus (riser, impact grave) et un placement sur les ruptures. |
-| Halation, gate weave, frame-fill flou | Coût de rendu par pixel (flou, masque des hautes lumières). Faisable dans le compositeur, mais il faut d'abord mesurer le temps de rendu. |
-| Teintes sélectives (hue-vs-hue : verts → jaune, bleus → cyan) | Elles demandent des courbes teinte/teinte dans la LUT. Il faudra d'abord vérifier que la peau reste sur la ligne des tons chair. |
+| Gate weave, frame-fill flou | Effets de style, pas des défauts relevés ; à ajouter comme presets. |

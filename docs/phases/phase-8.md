@@ -49,6 +49,35 @@
   - Chaque morceau de voix fond désormais à ses deux bords, sauf continuité exacte (zoom-cut).
   - Le fondu s'arrête aussi là où s'arrête un flux audio plus court que la vidéo (rush : audio 60,000 s, vidéo 60,008 s).
 
+### Réponse aux cinq critiques du monteur (deuxième passe)
+
+1. **B-roll, plans de coupe et montage sur la musique** (passe `broll`, entre `cut` et `reframe`). Une source est B-roll si elle est marquée `--broll` (elle n'est alors pas transcrite) ou si c'est une vidéo sans parole.
+   - **Avec de la parole** : plans de coupe sur une piste superposée, la voix continue dessous.
+     - Placement : d'abord centrés sur les jump cuts, qu'ils masquent ; ensuite sur les zoom-cuts des longues tirades.
+     - Durée : 2–4 s (1,5–3 s en vertical), début et fin calés sur un beat quand il y en a un à portée.
+     - Le locuteur reste à l'écran les 3 premières et les 2 dernières secondes, et 6 s au moins entre deux plans de coupe. Les plans de coupe couvrent au plus 40 % du montage.
+     - Chaque seconde de B-roll ne sert qu'une fois, en piochant tour à tour dans les rushes. En 9:16, les plans de coupe sont recadrés sur leur sujet.
+     - Aucun punch-in ni aucune transition n'est posé sous un plan de coupe.
+   - **Sans parole** : montage d'un plan tous les 4 temps (une mesure), dans la plage de durée, aussi long que la musique ; le son direct des plans reste à −20 dB sous elle.
+   - QA :
+     - `montage.static-shots` compte l'entrée et la sortie d'un plan de coupe comme des changements d'image ;
+     - `montage.beat-cuts` traite les coupes entre plans sans parole comme libres, donc mesurées sur les beats.
+2. **Fondus avec poignées** : le plan sortant continue après son point de sortie et le plan entrant commence avant son point d'entrée, avec la matière des rushes, décodée en plus par le moteur de rendu.
+   - Faute de matière (rush qui s'arrête au point de sortie), l'image est tenue comme avant.
+3. **Fondus de cinéma** : plage propre aux fondus (`motion.dissolveDurationMs`, 400–1 500 ms), distincte des transitions en mouvement (200–500 ms). `cross-dissolve@1` dure 1 s, `dip-to-black@1` 1,2 s.
+4. **Look par scène, teintes sélectives, halation** :
+   - `film-print@1` tourne les jaunes vers l'orange, les verts vers le jaune et les bleus vers le cyan (hue-vs-hue à luma et chroma constantes), en protégeant les tons chair : ΔE < 1 sur trois carnations ;
+   - **contraste par scène** : la plage tonale de chaque source (luma p5–p95, mesurée par le worker `subjects` v3) est rapprochée de moitié d'une cible commune (0,72), dans ±0,12, sous le même look. `image.color` ne voit toujours qu'un look ;
+   - **halation** : les hautes lumières (luma > 0,75) sont floutées et teintées rouge-orangé, puis ajoutées en `screen`, sous les sous-titres.
+5. **Netteté mesurée et corrigée** :
+   - nouvelle règle **`image.sharpness`** : agrandissement source → sortie de chaque plan, poussées et punch-ins compris, pondéré par la durée ;
+     - limite ×2 en `cinematic*`, ×2,2 en `short` / `long` (un 1080p recadré en 9:16 avec un punch-in de 120 % passe, un 720p à ×2,67 non) ;
+     - la catégorie image reste à 20 points : `image.reframe` passe de 6 à 5, `image.export-format` de 3 à 2, la netteté prend 2 ;
+     - variante de calibration `sharpness` : rush 1080p remplacé par sa copie 640×360, **détecté**, sans fausse alerte, témoin propre accepté ;
+   - accentuation CAS (contrast-adaptive sharpening) au décodage dès ×1,15, plus forte avec l'agrandissement ;
+   - alerte au planning quand une source est trop petite pour le format ;
+   - nouveaux rushes de test **HD** : le master ProRes 1080p de l'entretien et trois B-roll 1080p de la journée filmée (CC BY 3.0).
+
 ## Tests
 
 - **143 tests TS** au vert (132 en phase 7), **22 tests Python** inchangés ; typecheck et Biome propres.
