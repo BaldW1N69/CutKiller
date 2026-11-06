@@ -12,9 +12,23 @@ export:
   # Le grain coûte du débit : cible plus haute que le profil long.
   minBitrateMbps: { "30": 16, "60": 24 }
   targetBitrateFactor: 1.5
-texture: { grain: 0.07, vignette: 0.35, letterbox: 2.39 }
+  # Netteté : pas d'agrandissement au-delà de ×2 (un 1080p recadré en 9:16 : ×1,78).
+  maxUpscale: 2
+texture: { grain: 0.07, vignette: 0.35, halation: 0.35, letterbox: 2.39 }
 color:
   look: film-print@1
+  # Look par scène : une scène plate reçoit plus de courbe, une scène contrastée moins.
+  sceneContrast: { enabled: true, targetRange: 0.72, strength: 0.5, max: 0.12 }
+# B-roll : plans de coupe de 2–4 s sur les jump cuts puis les longues tirades (la voix
+# continue dessous), calés sur les beats ; sans parole, montage d'un plan par mesure.
+broll:
+  enabled: true
+  shotS: [2, 4]
+  minSpacingS: 6
+  headS: 3
+  tailS: 2
+  maxShare: 0.4
+  beatsPerShot: 4
 montage:
   # On laisse respirer : pauses jusqu'à 0,5 s, marges de mots plus larges.
   maxSilenceMs: 500
@@ -29,6 +43,8 @@ montage:
 motion:
   microDurationMs: [150, 300]
   transitionDurationMs: [200, 500]
+  # Fondus : le temps de lire un changement de lieu ou de chapitre (1 s, dip 1,2 s).
+  dissolveDurationMs: [400, 1500]
   motionBlurThresholdPxPerFrame: 12
   overshoot: [0.03, 0.08]
   # Poussée lente (900 ms, sans rebond) sur les seules phrases fortes, espacées.

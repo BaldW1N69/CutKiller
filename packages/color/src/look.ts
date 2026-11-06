@@ -24,6 +24,16 @@ export const LookParamsSchema = z.object({
    */
   shadowTint: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   highlightTint: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+  /**
+   * Selective hue shifts (hue-vs-hue, HSV degrees): colours near `hue` (Gaussian of
+   * `width`) turn by `shift`, at constant luma and chroma. The film-print moves:
+   * yellows towards orange, greens towards yellow, blues towards cyan.
+   */
+  hueShifts: z
+    .array(z.object({ hue: z.number(), width: z.number().positive(), shift: z.number().min(-45).max(45) }))
+    .default([]),
+  /** Skin tones (HSV hue 10–40°) keep their hue whatever the shifts: 1 = fully protected. */
+  skinProtect: z.number().min(0).max(1).default(1),
   size: z.number().int().min(9).max(65).default(33),
 });
 
@@ -52,7 +62,46 @@ export function applyLook(p: LookParams, rgb: [number, number, number]): [number
   const tone = (c: number) =>
     ws * ((p.shadowTint[c] as number) - luma(p.shadowTint)) +
     wh * ((p.highlightTint[c] as number) - luma(p.highlightTint));
-  return [clamp01(r + tone(0)), clamp01(g + tone(1)), clamp01(b + tone(2))];
+  const toned: [number, number, number] = [r + tone(0), g + tone(1), b + tone(2)];
+  return (p.hueShifts.length > 0 ? shiftHues(p, toned) : toned).map(clamp01) as [number, number, number];
+}
+
+/** HSV hue of a colour, degrees [0, 360); undefined for a grey. */
+function hsvHue([r, g, b]: [number, number, number]): number | undefined {
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (d < 1e-6) return undefined;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+const hueDistance = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
+
+/**
+ * Hue-vs-hue: rotates the colour's chroma about the grey axis of the same luma
+ * (Rodrigues), by the weighted sum of the shifts near its hue; skin hues are held.
+ */
+function shiftHues(p: LookParams, rgb: [number, number, number]): [number, number, number] {
+  const h = hsvHue(rgb);
+  if (h === undefined) return rgb;
+  let deg = 0;
+  for (const s of p.hueShifts) deg += s.shift * Math.exp(-((hueDistance(h, s.hue) / s.width) ** 2));
+  const skin = Math.exp(-((hueDistance(h, 25) / 15) ** 2));
+  deg *= 1 - p.skinProtect * skin;
+  if (Math.abs(deg) < 1e-6) return rgb;
+  // Rotation about the grey axis (1,1,1)/√3 keeps the chroma; the luma is restored after.
+  const y0 = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  const m = (rgb[0] + rgb[1] + rgb[2]) / 3;
+  const v = rgb.map((c) => c - m) as [number, number, number];
+  const a = (deg * Math.PI) / 180;
+  const k = 1 / Math.sqrt(3);
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  // k × v (axis (1,1,1)/√3)
+  const cross: [number, number, number] = [k * (v[2] - v[1]), k * (v[0] - v[2]), k * (v[1] - v[0])];
+  const out = v.map((c, i) => m + c * cos + (cross[i] as number) * sin) as [number, number, number];
+  const y1 = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2];
+  return out.map((c) => c + (y0 - y1)) as [number, number, number];
 }
 
 const luma = (v: readonly number[]) => 0.2126 * (v[0] ?? 0) + 0.7152 * (v[1] ?? 0) + 0.0722 * (v[2] ?? 0);
@@ -105,5 +154,14 @@ export function gradeCube(
 }
 
 /** Key of a clip's grade (same key, same LUT). */
-export const gradeKey = (c: { exposureEv: number; balance: number[]; look?: string | undefined }) =>
-  `${c.look ?? "-"}|${c.exposureEv}|${c.balance.join(",")}`;
+export const gradeKey = (c: {
+  exposureEv: number;
+  balance: number[];
+  look?: string | undefined;
+  contrast?: number | undefined;
+}) => `${c.look ?? "-"}|${c.exposureEv}|${c.balance.join(",")}${c.contrast ? `|${c.contrast}` : ""}`;
+
+/** The look with a scene's contrast adjustment (clamped to the S-curve's monotonic range). */
+export function sceneLook(look: LookParams, contrast = 0): LookParams {
+  return contrast === 0 ? look : { ...look, contrast: Math.max(0, Math.min(0.5, look.contrast + contrast)) };
+}

@@ -54,7 +54,8 @@ export interface Subjects {
   width: number;
   height: number;
   sampleFps: number;
-  samples: { t: number; faces: Face[]; rgb: [number, number, number] }[];
+  /** `luma`: 5th, 50th and 95th percentiles of the picture's luma (gamma-encoded, 0–1), when measured. */
+  samples: { t: number; faces: Face[]; rgb: [number, number, number]; luma?: [number, number, number] }[];
 }
 
 /** Per-source analyzer results, keyed by source id. */

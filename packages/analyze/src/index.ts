@@ -15,10 +15,12 @@ export interface AnalyzeOptions {
   whisperModel?: string;
   cacheDir?: string;
   log?: (message: string) => void;
+  /** Inputs that are B-roll (resolved paths): probed and analysed for faces and colour, never transcribed. */
+  broll?: ReadonlySet<string>;
 }
 
 /** Bump when an analyzer's output changes, to invalidate cached results. */
-const ANALYZER_VERSION = { transcribe: "8", vad: "2", beats: "3", prosody: "1", subjects: "2" } as const;
+const ANALYZER_VERSION = { transcribe: "8", vad: "2", beats: "3", prosody: "1", subjects: "3" } as const;
 
 /**
  * Stage 1 of the pipeline. Every input is probed; with `deep`, rushes with speech
@@ -32,6 +34,7 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
   const language = opts.language ?? "fr";
   for (const path of paths) {
     const probe = await probeSource(resolve(path));
+    if (opts.broll?.has(resolve(path)) && probe.hasVideo) probe.role = "broll";
     const id = sourceId(path, analysis.sources);
     analysis.sources[id] = probe;
     if (!opts.deep) continue;
@@ -43,7 +46,7 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
       );
       analysis.subjects = { ...analysis.subjects, [id]: subjects };
     }
-    if (!probe.hasAudio) continue;
+    if (!probe.hasAudio || probe.role === "broll") continue;
     if (probe.hasVideo && !probe.still) {
       opts.log?.(`transcription de ${id}…`);
       const transcript = await cached<Transcript>(

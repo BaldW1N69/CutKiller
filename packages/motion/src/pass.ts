@@ -43,6 +43,10 @@ export const motionPass: Pass = {
     const keyframes: EdlInput["keyframes"] = [...edl.keyframes];
     const transitions: EdlInput["transitions"] = [...edl.transitions];
 
+    // A cutaway (overlay) hides the speaker: no punch-in nor transition under it.
+    const overlays = edl.video.slice(1).flatMap((t) => t.clips);
+    const hidden = (from: number, to: number) => overlays.some((o) => o.at < to && clipEnd(o, fps) > from);
+
     // Punch-ins.
     const punchPreset = presets.resolve(m.punchPreset);
     const punch = MotionParamsSchema.parse(punchPreset.params);
@@ -72,6 +76,7 @@ export const motionPass: Pass = {
         const frame = clip.at + secondsToFrames(w.start - clip.in, fps) - LEAD_FRAMES;
         if (frame < clip.at + EDGE_HEAD_FRAMES || frame + punchFrames > end - EDGE_TAIL_FRAMES) continue;
         if ((frame - lastPunchFrame) / fps < m.punchMinSpacingS) continue;
+        if (hidden(frame, frame + punchFrames)) continue;
         if (!best || score > best.score) best = { id, frame, score };
       }
       if (!best) return;
@@ -126,6 +131,7 @@ export const motionPass: Pass = {
       const duration = Math.max(2, secondsToFrames(params.durationMs / 1000, fps));
       const half = Math.ceil(duration / 2);
       if (half > cur.at - prev.at || half > clipEnd(cur, fps) - cur.at) continue;
+      if (hidden(cur.at - half, cur.at + half)) continue;
       transitions.push({
         id: `t${String(transitions.length + 1).padStart(3, "0")}`,
         atFrame: cur.at,

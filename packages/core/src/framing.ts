@@ -66,3 +66,19 @@ export function clipFraming(edl: Edl, clip: VideoClip): Framing | undefined {
     },
   };
 }
+
+/**
+ * Enlargement of a clip's picture: output pixels per source pixel, at its static
+ * framing (fit, punch-in) and at its largest animated scale (`maxScale`). Above
+ * ~2, the picture is visibly soft whatever the sharpening: a 640×360 rush shown
+ * full-screen in 1080×1920 is enlarged ×5.3. Undefined when the source size is unknown.
+ */
+export function clipUpscale(edl: Edl, clip: VideoClip, maxScale = 1): number | undefined {
+  const source = edl.sources[clip.source];
+  if (!source?.width || !source.height) return undefined;
+  const { width: W, height: H } = edl.output;
+  const framing = clipFraming(edl, clip);
+  if (framing) return framing.outPerSrc * maxScale;
+  const fit = clip.fit === "contain" ? Math.min : Math.max;
+  return fit(W / source.width, H / source.height) * clip.transform.scale * maxScale;
+}

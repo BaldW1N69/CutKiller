@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { gradeCube, gradeKey, LookParamsSchema } from "@cutkiller/color";
+import { gradeCube, gradeKey, LookParamsSchema, sceneLook } from "@cutkiller/color";
 import type { Edl } from "@cutkiller/core";
 import { PresetRegistry } from "@cutkiller/style";
 import { type AudioMixLog, renderAudio } from "./audio";
@@ -74,7 +74,11 @@ export async function render(edl: Edl, opts: RenderOptions): Promise<RenderLog> 
       const cube = join(work, `grade-${looks.size}.cube`);
       await writeFile(
         cube,
-        gradeCube(preset ? LookParamsSchema.parse(preset.params) : undefined, gains, preset?.name ?? "grade"),
+        gradeCube(
+          preset ? sceneLook(LookParamsSchema.parse(preset.params), c.contrast) : undefined,
+          gains,
+          preset?.name ?? "grade",
+        ),
       );
       looks.set(key, cube);
     }

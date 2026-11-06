@@ -20,6 +20,51 @@
       "attribution": "Global Lives Project — voir ci-dessus"
     },
     {
+      "file": "gl-vallee-hd-300-180.mp4",
+      "url": "https://archive.org/download/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-010004-013005_life_story_interview/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-010004-013005_life_story_interview.mov",
+      "start": 300,
+      "duration": 180,
+      "use": "profils cinematic (16:9) — même entretien, master ProRes 1920×1080 à 23,976 fps : assez défini pour le 9:16 (×1,78)",
+      "license": "CC BY 3.0",
+      "attribution": "Global Lives Project — voir ci-dessus"
+    },
+    {
+      "file": "gl-vallee-hd-360-60.mp4",
+      "from": "gl-vallee-hd-300-180.mp4",
+      "start": 60,
+      "duration": 60,
+      "use": "profils cinematic (9:16) — extrait de 60 s du master HD (même passage que gl-vallee-360-60)",
+      "license": "CC BY 3.0",
+      "attribution": "Global Lives Project — voir ci-dessus"
+    },
+    {
+      "file": "gl-vallee-broll-terrasse.mp4",
+      "url": "https://archive.org/download/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-120000-122959/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-120000-122959.mov",
+      "start": 950,
+      "duration": 20,
+      "use": "B-roll : sur la terrasse (12:15:50), master 1920×1080 à 23,976 fps — plans de coupe et montage B-roll (profils cinematic)",
+      "license": "CC BY 3.0",
+      "attribution": "Global Lives Project — « Pierre Vallee, Trois-Rivières », journée filmée (12:00–12:29), https://archive.org/details/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-120000-122959"
+    },
+    {
+      "file": "gl-vallee-broll-cuisine.mp4",
+      "url": "https://archive.org/download/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-120000-122959/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-120000-122959.mov",
+      "start": 595,
+      "duration": 20,
+      "use": "B-roll : à la cuisine (12:09:55), master 1920×1080 à 23,976 fps — plans de coupe et montage B-roll (profils cinematic)",
+      "license": "CC BY 3.0",
+      "attribution": "Global Lives Project — « Pierre Vallee, Trois-Rivières », journée filmée (12:00–12:29), https://archive.org/details/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-120000-122959"
+    },
+    {
+      "file": "gl-vallee-broll-repas.mp4",
+      "url": "https://archive.org/download/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-173000-175959/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-173000-175959.mov",
+      "start": 235,
+      "duration": 20,
+      "use": "B-roll : repas en famille (17:33:55), master 1920×1080 à 23,976 fps — plans de coupe et montage B-roll (profils cinematic)",
+      "license": "CC BY 3.0",
+      "attribution": "Global Lives Project — « Pierre Vallee, Trois-Rivières », journée filmée (17:30–17:59), https://archive.org/details/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-173000-175959"
+    },
+    {
       "file": "cely-grande-thunder.mp3",
       "url": "https://archive.org/download/CelyGrande-Thunderhip-hopInstrumental/CelyFeat.Rainymood-GromhiphopInstrumental.mp3",
       "use": "musique (92 BPM) pour le calage des coupes sur les beats",

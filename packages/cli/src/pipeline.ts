@@ -13,14 +13,14 @@ import {
   runPasses,
   type StyleProfile,
 } from "@cutkiller/core";
-import { assembleEdl, cutPass } from "@cutkiller/cut";
+import { assembleEdl, brollPass, cutPass } from "@cutkiller/cut";
 import { motionPass } from "@cutkiller/motion";
 import { parseLabels, qualityCheck, reportMarkdown } from "@cutkiller/qa";
 import { reframePass } from "@cutkiller/reframe";
 import { render } from "@cutkiller/render";
 import { PresetRegistry } from "@cutkiller/style";
 
-export const PASSES = [cutPass, reframePass, colorPass, motionPass, captionsPass, audioPass];
+export const PASSES = [cutPass, brollPass, reframePass, colorPass, motionPass, captionsPass, audioPass];
 
 export function printDiagnostics(diagnostics: Diagnostic[]): void {
   const icon = { error: "✖", warning: "⚠", info: "ℹ" } as const;
@@ -40,10 +40,27 @@ export async function plan(
   profile: StyleProfile,
   edlPath: string,
   deep: boolean,
+  /** Inputs that are B-roll (cutaways, montage material), also listed in `inputs` or not. */
+  broll: readonly string[] = [],
 ): Promise<Edl> {
-  const analysis = await analyzeSources(inputs, { deep, log: (m) => console.error(`… ${m}`) });
+  const all = [...inputs, ...broll.filter((b) => !inputs.includes(b))];
+  const analysis = await analyzeSources(all, {
+    deep,
+    log: (m) => console.error(`… ${m}`),
+    broll: new Set(broll.map((b) => resolve(b))),
+  });
   await mkdir(dirname(resolve(edlPath)), { recursive: true });
   await writeFile(analysisPath(edlPath), `${JSON.stringify(analysis)}\n`);
+  for (const [id, probe] of Object.entries(analysis.sources)) {
+    if (!probe.hasVideo || !probe.width || !probe.height) continue;
+    const { width: W, height: H } = profile.format;
+    // Full-frame enlargement before any punch-in (cover fit).
+    const up = Math.max(W / probe.width, H / probe.height);
+    if (up > profile.export.maxUpscale)
+      console.error(
+        `⚠ [source.resolution] ${id} (${probe.width}×${probe.height}) sera agrandi ×${up.toFixed(1)} en ${W}×${H} : image molle (limite ×${profile.export.maxUpscale}, règle image.sharpness). Une source ≥ ${Math.ceil(W / profile.export.maxUpscale)}×${Math.ceil(H / profile.export.maxUpscale)} est nécessaire.`,
+      );
+  }
   for (const [id, probe] of Object.entries(analysis.sources)) {
     const ratio = probe.fps ? profile.format.fps / probe.fps : 1;
     if (probe.fps && Math.abs(ratio - Math.round(ratio)) > 0.01)

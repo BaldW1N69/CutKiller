@@ -1,5 +1,4 @@
 import {
-  type Analysis,
   type Diagnostic,
   type Edl,
   type EdlInput,
@@ -9,10 +8,13 @@ import {
   type PassContext,
   sortedClips,
 } from "@cutkiller/core";
+import { timelineBeats } from "./beats";
 import { planClips, zoomSplits } from "./plan";
 import { speechTokens } from "./words";
 
 export { type AssembleOptions, assembleEdl } from "./assemble";
+export { timelineBeats } from "./beats";
+export { brollPass, isBroll } from "./broll";
 export { buildRuns, type PlannedClip, planClips, type Run, snapJumpCuts, zoomSplits } from "./plan";
 export {
   classifyWords,
@@ -22,19 +24,6 @@ export {
   speechTokens,
   type Token,
 } from "./words";
-
-/** Music beats projected onto the output timeline (frames), from the EDL's audio clips. */
-export function timelineBeats(edl: Edl, analysis: Pick<Analysis, "beats">): number[] {
-  const fps = edl.output.fps;
-  const out: number[] = [];
-  for (const track of edl.audio)
-    for (const clip of track.clips) {
-      const grid = clip.source === undefined ? undefined : analysis.beats?.[clip.source];
-      if (!grid) continue;
-      for (const b of grid.beats) if (b >= clip.in && b <= clip.out) out.push(clip.at + (b - clip.in) * fps);
-    }
-  return out.sort((a, b) => a - b);
-}
 
 /**
  * Passe « cut » : chaque rush transcrit est remplacé par ses passages utiles —

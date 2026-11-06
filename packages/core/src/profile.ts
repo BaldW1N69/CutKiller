@@ -24,6 +24,12 @@ export const StyleProfileSchema = z.object({
     targetBitrateFactor: z.number().min(1).default(1.25),
     allowedFps: z.array(z.number().int()).default([30, 60]),
     blackPixelThreshold: z.number().min(0).max(1).default(0.1),
+    /**
+     * Sharpness: largest enlargement of a source picture (output pixels per source
+     * pixel, punch-ins included). A 1080p rush reframed to 9:16 is ×1.78, ×2.1 with
+     * a 120 % punch-in; a 720p one ×2.67: the detail is not there to show.
+     */
+    maxUpscale: z.number().min(1).default(2.2),
   }),
   /**
    * Moving framing when the rush and the output differ in aspect (16:9 → 9:16):
@@ -82,6 +88,19 @@ export const StyleProfileSchema = z.object({
       /** QA: largest skin difference between a shot and the edit's reference, CIELAB lightness and chroma. */
       maxSkinDeltaL: z.number().positive().default(6),
       maxSkinDeltaAb: z.number().positive().default(6),
+      /**
+       * Scene-adaptive look: each source's tonal range (median p5–p95 luma span over
+       * the kept samples) is brought `strength` of the way to `targetRange` by the
+       * look's S-curve, within ±max. Off by default.
+       */
+      sceneContrast: z
+        .object({
+          enabled: z.boolean().default(false),
+          targetRange: z.number().min(0.2).max(1).default(0.72),
+          strength: z.number().min(0).max(1).default(0.5),
+          max: z.number().min(0).max(0.3).default(0.12),
+        })
+        .default({ enabled: false, targetRange: 0.72, strength: 0.5, max: 0.12 }),
     })
     .default({
       enabled: true,
@@ -93,6 +112,7 @@ export const StyleProfileSchema = z.object({
       shotMatchDeltaE: 4,
       maxSkinDeltaL: 6,
       maxSkinDeltaAb: 6,
+      sceneContrast: { enabled: false, targetRange: 0.72, strength: 0.5, max: 0.12 },
     }),
   /**
    * Film texture of the render (copied into the EDL's output): grain strength,
@@ -102,9 +122,44 @@ export const StyleProfileSchema = z.object({
     .object({
       grain: z.number().min(0).max(0.3).default(0),
       vignette: z.number().min(0).max(1).default(0),
+      /** Halation: warm glow bleeding around the brightest areas (0–1). */
+      halation: z.number().min(0).max(1).default(0),
       letterbox: z.number().min(1).max(4).optional(),
     })
-    .default({ grain: 0, vignette: 0 }),
+    .default({ grain: 0, vignette: 0, halation: 0 }),
+  /**
+   * B-roll (sources with role broll, or video without speech): cutaways over the
+   * speech, on an overlay track (the voice goes on underneath), first over the
+   * jump cuts they hide, then over long stretches; without any speech, a montage
+   * cut every `beatsPerShot` beats of the music. Off by default.
+   */
+  broll: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** Length of a cutaway or of a montage shot. */
+      shotS: Range.default([2, 4]),
+      /** Least time on the speaker between two cutaways. */
+      minSpacingS: z.number().nonnegative().default(6),
+      /** The speaker opens and closes the edit: no cutaway in the first / last seconds. */
+      headS: z.number().nonnegative().default(3),
+      tailS: z.number().nonnegative().default(2),
+      /** Largest share of the speech covered by cutaways. */
+      maxShare: z.number().min(0).max(1).default(0.4),
+      /** Montage without speech: one shot every N beats (N = 4: a bar in 4/4). */
+      beatsPerShot: z.number().int().positive().default(4),
+      /** Seconds skipped at the head of each B-roll rush (camera settling). */
+      skipHeadS: z.number().nonnegative().default(0.5),
+    })
+    .default({
+      enabled: false,
+      shotS: [2, 4],
+      minSpacingS: 6,
+      headS: 3,
+      tailS: 2,
+      maxShare: 0.4,
+      beatsPerShot: 4,
+      skipHeadS: 0.5,
+    }),
   montage: z.object({
     maxSilenceMs: z.number().positive().default(350),
     wordMarginMs: Range.default([80, 120]),
@@ -132,6 +187,11 @@ export const StyleProfileSchema = z.object({
   motion: z.object({
     microDurationMs: Range.default([150, 300]),
     transitionDurationMs: Range.default([200, 500]),
+    /**
+     * Dissolves (cross-dissolve, dip to black) are not moves: their time is the
+     * time a change of place or of chapter takes to read, longer than a whip pan.
+     */
+    dissolveDurationMs: Range.default([400, 1500]),
     motionBlurThresholdPxPerFrame: z.number().positive().default(12),
     overshoot: Range.default([0.03, 0.08]),
     /** Animated punch-in levels (framing relative to the wide shot), cycled, never repeating the previous punch. */

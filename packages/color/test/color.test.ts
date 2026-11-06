@@ -10,6 +10,7 @@ import {
   lightnessToY,
   linearToSrgb,
   type Rgb,
+  sceneLook,
   shoulder,
   srgbToLab,
   srgbToLinear,
@@ -104,7 +105,12 @@ function skinOf(rgb: Rgb, duration = 4): Subjects {
   };
 }
 
-function graded(skins: Record<string, Rgb>, durations: Record<string, number>) {
+function graded(
+  skins: Record<string, Rgb>,
+  durations: Record<string, number>,
+  profile?: Awaited<ReturnType<typeof loadProfile>>,
+  luma?: Record<string, [number, number, number]>,
+) {
   const ids = Object.keys(skins);
   let at = 0;
   const clips = ids.flatMap((s, k) =>
@@ -129,14 +135,22 @@ function graded(skins: Record<string, Rgb>, durations: Record<string, number>) {
         { path: `${s}.mp4`, durationS: durations[s] as number, hasVideo: true, hasAudio: true },
       ]),
     ),
-    subjects: Object.fromEntries(ids.map((s) => [s, skinOf(skins[s] as Rgb, durations[s])])),
+    subjects: Object.fromEntries(
+      ids.map((s) => {
+        const subjects = skinOf(skins[s] as Rgb, durations[s]);
+        const l = luma?.[s];
+        if (l) for (const x of subjects.samples) x.luma = l;
+        return [s, subjects];
+      }),
+    ),
   };
-  return colorPass.run(edl.edl, { analysis, profile: short, presets: registry });
+  return colorPass.run(edl.edl, { analysis, profile: profile ?? short, presets: registry });
 }
 
 const lab = (rgb: Rgb) => srgbToLab(rgb);
 
 describe("look film-print (split toning)", () => {
+  const warm: Rgb = [0.78, 0.58, 0.48];
   const luma = ([r, g, b]: Rgb) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
   it("refroidit les ombres, réchauffe les hautes lumières, sans toucher la luminance", async () => {
@@ -156,6 +170,58 @@ describe("look film-print (split toning)", () => {
       const end = applyLook(look, [v, v, v]);
       expect(Math.max(...end) - Math.min(...end)).toBeLessThan(0.01);
     }
+  });
+
+  it("tourne les teintes : verts vers le jaune, bleus vers le cyan, peau intacte", () => {
+    const look = LookParamsSchema.parse(registry.resolve("film-print@1").params);
+    const neutral = {
+      ...look,
+      contrast: 0,
+      lift: 0,
+      shadowTint: [0, 0, 0],
+      highlightTint: [0, 0, 0],
+    } as typeof look;
+    const hue = ([r, g, b]: Rgb) => {
+      const max = Math.max(r, g, b);
+      const d = max - Math.min(r, g, b);
+      const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      return (h * 60 + 360) % 360;
+    };
+    const green: Rgb = [0.3, 0.55, 0.3];
+    const blue: Rgb = [0.25, 0.35, 0.65];
+    expect(hue(applyLook(neutral, green))).toBeLessThan(hue(green) - 6);
+    expect(hue(applyLook(neutral, blue))).toBeLessThan(hue(blue) - 6);
+    expect(luma(applyLook(neutral, green))).toBeCloseTo(luma(green), 6);
+    for (const skin of [warm, [0.55, 0.38, 0.3] as Rgb, [0.92, 0.75, 0.66] as Rgb]) {
+      const out = applyLook(neutral, skin);
+      const [l0, a0, b0] = lab(skin);
+      const [l1, a1, b1] = lab(out);
+      expect(Math.hypot(l1 - l0, a1 - a0, b1 - b0)).toBeLessThan(1);
+    }
+  });
+
+  it("adapte la courbe à chaque scène : plus de contraste à une scène plate, moins à une scène dure", async () => {
+    const cine = await loadProfile("cinematic");
+    const { edl, diagnostics } = graded({ a: warm, b: warm }, { a: 4, b: 4 }, cine, {
+      a: [0.3, 0.45, 0.6],
+      b: [0.05, 0.4, 0.95],
+    });
+    const contrast = (s: string) => edl.video[0]?.clips.find((c) => c.source === s)?.color?.contrast;
+    expect(contrast("a")).toBeCloseTo(0.12, 3); // span 0.3: strength 0.5 × (0.72/0.3 − 1) = 0.7, capped
+    expect(contrast("b")).toBeCloseTo(Math.round(500 * (0.72 / 0.9 - 1)) / 1000, 6); // span 0.9: −0.1
+    expect(diagnostics.find((d) => d.code === "color.summary")?.message).toMatch(
+      /contraste adapté sur 2 scène/,
+    );
+    // Same look everywhere: the scene adjustment is a parameter of it, not another look.
+    expect(new Set(edl.video[0]?.clips.map((c) => c.color?.look))).toEqual(new Set(["film-print@1.0.0"]));
+    const flat = sceneLook(LookParamsSchema.parse(registry.resolve("film-print@1").params), 0.12);
+    expect(flat.contrast).toBeCloseTo(0.26, 6);
+    expect(gradeKey({ exposureEv: 0, balance: [1, 1, 1], look: "x", contrast: 0.1 })).not.toBe(
+      gradeKey({ exposureEv: 0, balance: [1, 1, 1], look: "x" }),
+    );
+    // Off in the other profiles.
+    const plain = graded({ a: warm }, { a: 4 }, short, { a: [0.3, 0.45, 0.6] });
+    expect(plain.edl.video[0]?.clips[0]?.color?.contrast).toBeUndefined();
   });
 
   it("laisse le look clean@1 identique (teintes par défaut nulles)", () => {

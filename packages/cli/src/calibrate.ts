@@ -6,7 +6,7 @@
  * talk). The defects are defined from the edit, never from the checks' code.
  */
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import {
   type Analysis,
   clipEnd,
@@ -550,6 +550,23 @@ export const VARIANTS: Variant[] = [
         video,
         reencodeVideo("drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill:enable='between(n,100,104)'"),
       ),
+  },
+  {
+    id: "sharpness",
+    rule: "image.sharpness",
+    expect: "fail",
+    what: "rush 1080p remplacé par sa copie au tiers de la définition (640×360) : image agrandie ×5,3 au lieu de ×1,78 (limite ×2,2)",
+    async edl(edl, base) {
+      const clip = must(main(edl)[0], "aucun plan");
+      const source = must(edl.sources[clip.source], "source inconnue");
+      const from = resolve(base.baseDir, source.path);
+      const low = join(dirname(from), `lowres-${clip.source}.mp4`);
+      await ffmpeg(["-v", "error", "-i", from, "-vf", "scale=trunc(iw/6)*2:-2", "-c:a", "copy", "-y", low]);
+      source.path = relative(base.baseDir, low);
+      source.width = Math.trunc((source.width ?? 1920) / 6) * 2;
+      source.height = Math.trunc((source.height ?? 1080) / 6) * 2;
+    },
+    consequences: ["image.reframe", "image.color"],
   },
   {
     id: "freeze-static",

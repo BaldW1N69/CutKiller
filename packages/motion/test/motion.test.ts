@@ -96,9 +96,13 @@ describe("fondus (profils cinematic)", () => {
       ["A", "live", 1],
       ["B", "first", 0],
     ]);
+    // A's rush goes on after its out point (10 s source): A keeps playing (handle);
+    // B starts at its rush's first frame: no material before, its first picture holds.
+    expect(tl.handles(edl.video[0]?.clips[0] as never)).toEqual({ head: 0, tail: 8 });
+    expect(tl.handles(edl.video[0]?.clips[1] as never)).toEqual({ head: 0, tail: 0 });
     const mid = tl.layersAt(60);
     expect(mid.map((l) => [l.clip.id, l.image])).toEqual([
-      ["A", "last"],
+      ["A", "live"],
       ["B", "live"],
     ]);
     expect(mid[1]?.state(60.5).opacity).toBeCloseTo(0.5, 1);
@@ -111,6 +115,29 @@ describe("fondus (profils cinematic)", () => {
       expect(tl.velocityAt(f)).toBe(0);
     }
     expect(tl.layersAt(68).map((l) => l.clip.id)).toEqual(["B"]);
+  });
+
+  it("cross-dissolve : poignées des deux côtés quand les rushes ont la matière, sinon image tenue", () => {
+    const input = base([{ id: "t", atFrame: 60, preset: "cross-dissolve@1", durationFrames: 30 }]);
+    const clips = input.video[0]?.clips ?? [];
+    (clips[1] as { in: number; out: number }).in = 3;
+    (clips[1] as { in: number; out: number }).out = 5;
+    const edl = edlOf(input);
+    const tl = new MotionTimeline(edl, resolveTransitions(edl, registry));
+    const [a, b] = edl.video[0]?.clips ?? [];
+    expect(tl.handles(a as never)).toEqual({ head: 0, tail: 15 });
+    expect(tl.handles(b as never)).toEqual({ head: 15, tail: 0 });
+    expect(tl.layersAt(50).map((l) => l.image)).toEqual(["live", "live"]);
+    expect(tl.layersAt(70).map((l) => l.image)).toEqual(["live", "live"]);
+    // Outgoing rush ending on its out point: no handle, its last picture holds.
+    const short = base([{ id: "t", atFrame: 60, preset: "cross-dissolve@1", durationFrames: 30 }]);
+    short.sources.a = { path: "a.mp4", durationS: 2 };
+    const edl2 = edlOf(short);
+    const tl2 = new MotionTimeline(edl2, resolveTransitions(edl2, registry));
+    expect(tl2.layersAt(70).map((l) => [l.clip.id, l.image])).toEqual([
+      ["A", "last"],
+      ["B", "live"],
+    ]);
   });
 
   it("dip-to-black : le sortant s'éteint, noir sur la coupe, l'entrant s'allume", () => {

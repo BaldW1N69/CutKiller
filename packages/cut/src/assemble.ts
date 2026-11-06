@@ -38,6 +38,7 @@ export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: Ass
       ...(probe.fps ? { fps: probe.fps } : {}),
       ...(probe.width ? { width: probe.width, height: probe.height } : {}),
       ...(probe.still ? { still: true } : {}),
+      ...(probe.role ? { role: probe.role } : {}),
     };
     if (!probe.hasVideo) {
       music.push([id, probe.durationS]);
@@ -87,7 +88,10 @@ export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: Ass
       },
       audio: { cutFadeMs: (profile.audio.cutFadeMs[0] + profile.audio.cutFadeMs[1]) / 2 },
       motionBlur: { thresholdPxPerFrame: profile.motion.motionBlurThresholdPxPerFrame },
-      ...(profile.texture.grain > 0 || profile.texture.vignette > 0 || profile.texture.letterbox
+      ...(profile.texture.grain > 0 ||
+      profile.texture.vignette > 0 ||
+      profile.texture.halation > 0 ||
+      profile.texture.letterbox
         ? { texture: profile.texture }
         : {}),
     },

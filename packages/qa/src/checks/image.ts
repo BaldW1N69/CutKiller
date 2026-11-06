@@ -1,10 +1,19 @@
 import { CaptionTimeline } from "@cutkiller/captions";
-import { type Edl, edlDurationFrames, type StyleProfile, type VideoClip } from "@cutkiller/core";
+import {
+  animationIndex,
+  clipFrames,
+  clipUpscale,
+  type Edl,
+  edlDurationFrames,
+  maxAnimatedScale,
+  type StyleProfile,
+  type VideoClip,
+} from "@cutkiller/core";
 import { ffmpeg, ffprobe, isVariableFrameRate, parseRate } from "@cutkiller/media";
 import { MotionTimeline, resolveTransitions } from "@cutkiller/motion";
 import type { PresetRegistry } from "@cutkiller/style";
 import { clipAt, clipFrameStats, clipMotion, type FrameStats, frameDiffs, STATIC_MOTION } from "../decode";
-import { type CheckResult, graded, pass, type Violation } from "../report";
+import { type CheckResult, graded, notEvaluated, pass, type Violation } from "../report";
 
 export interface VideoContext {
   /** Presets of the EDL's transitions and captions (to know where the render animates). */
@@ -261,4 +270,47 @@ function runs(frames: number[]): [number, number][] {
     else out.push([f, f]);
   }
   return out;
+}
+
+/**
+ * image.sharpness — no picture enlarged beyond the profile's limit: for every clip
+ * of every track, output pixels per source pixel at its framing and its largest
+ * animated scale (punch-in, push-in), from the sources' probed size. Scored by
+ * duration: the share of the timeline shown at a sharp enough enlargement.
+ */
+export function checkSharpness(edl: Edl, profile: StyleProfile): CheckResult {
+  const max = profile.export.maxUpscale;
+  const fps = edl.output.fps;
+  const index = animationIndex(edl);
+  const violations: Violation[] = [];
+  let total = 0;
+  let soft = 0;
+  let worst = 0;
+  for (const clip of edl.video.flatMap((t) => t.clips)) {
+    const up = clipUpscale(edl, clip, maxAnimatedScale(index, clip.id, fps));
+    if (up === undefined) continue;
+    const frames = clipFrames(clip, fps);
+    total += frames;
+    worst = Math.max(worst, up);
+    if (up > max + 1e-6) {
+      soft += frames;
+      const src = edl.sources[clip.source];
+      violations.push({
+        message: `${clip.id} : image agrandie ×${up.toFixed(2)} (source ${src?.width}×${src?.height} → ${edl.output.width}×${edl.output.height}), max ×${max}`,
+        frame: clip.at,
+      });
+    }
+  }
+  if (total === 0) return notEvaluated("image.sharpness", "taille des sources inconnue");
+  return {
+    ruleId: "image.sharpness",
+    status: violations.length === 0 ? "pass" : "fail",
+    score: (total - soft) / total,
+    violations,
+    measured: {
+      maxUpscale: Math.round(worst * 100) / 100,
+      limit: max,
+      softShare: Math.round((soft / total) * 1000) / 1000,
+    },
+  };
 }

@@ -2,6 +2,11 @@
   "name": "dip-to-black",
   "version": "1.0.0",
   "kind": "transition",
-  "description": "Fondu au noir : le plan sortant s'éteint, le plan entrant s'allume (ease-in-out, 500 ms, noir au milieu). Marque une rupture de chapitre.",
-  "params": { "type": "dissolve", "durationMs": 500, "via": "black", "ease": "ease-in-out" }
+  "description": "Fondu au noir : le plan sortant s'éteint, le plan entrant s'allume (ease-in-out, 1,2 s, noir tenu au milieu). Marque une rupture de chapitre.",
+  "params": {
+    "type": "dissolve",
+    "durationMs": 1200,
+    "via": "black",
+    "ease": "ease-in-out"
+  }
 }

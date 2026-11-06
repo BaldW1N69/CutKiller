@@ -154,3 +154,34 @@ def test_prosody_finds_the_loud_high_word(tmp_path):
     assert out[1]["rmsDb"] > out[0]["rmsDb"] + 15
     assert abs(out[0]["pitchSt"] - 12 * np.log2(1.2)) < 0.5
     assert abs(out[1]["pitchSt"] - 12 * np.log2(2.2)) < 0.5
+
+
+def test_subjects_measure_the_tonal_range(tmp_path):
+    """Each sample carries the picture's luma p5 / p50 / p95 (scene-adaptive look)."""
+    from cutkiller_workers.subjects import subjects
+
+    video = tmp_path / "split.mp4"
+    # Left 40 % black, right 60 % white: p5 ≈ 0, p50 and p95 ≈ 1.
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=white:s=320x180:d=1:r=25",
+            "-vf",
+            "drawbox=x=0:y=0:w=128:h=180:color=black:t=fill,format=yuv420p",
+            "-y",
+            str(video),
+        ],
+        check=True,
+    )
+    out = subjects({"path": str(video), "fps": 5})
+    assert len(out["samples"]) == 5
+    for s in out["samples"]:
+        p5, p50, p95 = s["luma"]
+        assert p5 < 0.1
+        assert p50 > 0.9
+        assert p95 > 0.9

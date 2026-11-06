@@ -10,9 +10,23 @@ export:
   codec: h264
   minBitrateMbps: { "30": 16, "60": 24 }
   targetBitrateFactor: 1.5
-texture: { grain: 0.06, vignette: 0.3 }
+  # Netteté : pas d'agrandissement au-delà de ×2 (un 1080p recadré en 9:16 : ×1,78).
+  maxUpscale: 2
+texture: { grain: 0.06, vignette: 0.3, halation: 0.3 }
 color:
   look: film-print@1
+  # Look par scène : une scène plate reçoit plus de courbe, une scène contrastée moins.
+  sceneContrast: { enabled: true, targetRange: 0.72, strength: 0.5, max: 0.12 }
+# B-roll : plans de coupe de 2–4 s sur les jump cuts puis les longues tirades (la voix
+# continue dessous), calés sur les beats ; sans parole, montage d'un plan par mesure.
+broll:
+  enabled: true
+  shotS: [1.5, 3]
+  minSpacingS: 4
+  headS: 2
+  tailS: 2
+  maxShare: 0.4
+  beatsPerShot: 4
 montage:
   maxSilenceMs: 400
   wordMarginMs: [90, 140]
@@ -25,6 +39,8 @@ montage:
 motion:
   microDurationMs: [150, 300]
   transitionDurationMs: [200, 500]
+  # Fondus : le temps de lire un changement de lieu ou de chapitre (1 s, dip 1,2 s).
+  dissolveDurationMs: [400, 1500]
   motionBlurThresholdPxPerFrame: 12
   overshoot: [0.03, 0.08]
   punchPreset: push-in@1

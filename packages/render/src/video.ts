@@ -6,6 +6,7 @@ import {
   clipEnd,
   clipFrames,
   clipFraming,
+  clipUpscale,
   type Edl,
   edlDurationFrames,
   framesToSeconds,
@@ -43,6 +44,8 @@ export function decoderChain(
   baseDir: string,
   k = 1,
   looks: ReadonlyMap<string, string> = new Map(),
+  /** Extra frames decoded before the in point and after the out point (dissolve handles). */
+  pad: { head: number; tail: number } = { head: 0, tail: 0 },
 ): { input: string[]; vf: string; duration: number; width: number; height: number } {
   const { width: outW, height: outH, fps } = edl.output;
   // Decoded k× larger than the output when the clip zooms in later, so the punch-in stays sharp.
@@ -51,7 +54,8 @@ export function decoderChain(
   const source = edl.sources[clip.source];
   if (!source) throw new Error(`source inconnue ${clip.source}`);
   const path = resolve(baseDir, source.path);
-  const frames = clipFrames(clip, fps);
+  const frames = clipFrames(clip, fps) + pad.head + pad.tail;
+  const start = Math.max(0, clip.in - pad.head / fps);
   // Crop before scaling: resampling only the kept area is several times cheaper.
   const { scale, x, y } = clip.transform;
   const cw = `min(iw,ih*${outW}/${outH})`;
@@ -65,15 +69,19 @@ export function decoderChain(
     graded = true;
     return `,${filters.join(",")}`;
   };
+  // Enlarged pictures are sharpened after the resize (contrast-adaptive, stronger
+  // the more the source is enlarged); a downscale is never sharpened.
+  const up = (clipUpscale(edl, clip) ?? 1) * k;
+  const sharpen = up > 1.15 ? `,cas=${Math.min(0.7, 0.25 + 0.35 * (up - 1)).toFixed(2)}` : "";
   let fit: string;
   if (framing) {
     // Moving framing: the whole band the crop travels over, panned by the compositor.
     const { band, outPerSrc, axis } = framing;
     if (axis === "x") W = Math.max(2, Math.round((band.w * outPerSrc * k) / 2) * 2);
     else H = Math.max(2, Math.round((band.h * outPerSrc * k) / 2) * 2);
-    fit = `crop=${band.w}:${band.h}:${band.x}:${band.y}${grade(band.w * band.h)},scale=${W}:${H}:flags=lanczos`;
+    fit = `crop=${band.w}:${band.h}:${band.x}:${band.y}${grade(band.w * band.h)},scale=${W}:${H}:flags=lanczos${sharpen}`;
   } else if (clip.fit === "contain")
-    fit = `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`;
+    fit = `scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos${sharpen},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`;
   else {
     const cropArea =
       source.width && source.height
@@ -84,10 +92,10 @@ export function decoderChain(
           ) /
           scale ** 2
         : W * H;
-    fit = `crop=w='${cw}/${scale}':h='${ch}/${scale}':x='clip(iw/2+${x}*${cw}-ow/2,0,iw-ow)':y='clip(ih/2+${y}*${ch}-oh/2,0,ih-oh)'${grade(cropArea)},scale=${W}:${H}:flags=lanczos`;
+    fit = `crop=w='${cw}/${scale}':h='${ch}/${scale}':x='clip(iw/2+${x}*${cw}-ow/2,0,iw-ow)':y='clip(ih/2+${y}*${ch}-oh/2,0,ih-oh)'${grade(cropArea)},scale=${W}:${H}:flags=lanczos${sharpen}`;
   }
   return {
-    input: source.still ? ["-loop", "1", "-i", path] : ["-ss", clip.in.toFixed(6), "-i", path],
+    input: source.still ? ["-loop", "1", "-i", path] : ["-ss", start.toFixed(6), "-i", path],
     // start_time=0: output time 0 is the seek point; if the video stream starts
     // later than that (offset streams), its first frame is held, never shifted.
     vf: [`fps=${fps}:start_time=0:round=near`, fit, ...(graded ? [] : filters)].join(","),
@@ -109,8 +117,9 @@ export function decoderArgs(
   baseDir: string,
   k = 1,
   looks: ReadonlyMap<string, string> = new Map(),
+  pad: { head: number; tail: number } = { head: 0, tail: 0 },
 ): string[] {
-  const { input, vf, duration } = decoderChain(edl, clip, baseDir, k, looks);
+  const { input, vf, duration } = decoderChain(edl, clip, baseDir, k, looks, pad);
   return [
     "-hide_banner",
     "-nostdin",
@@ -221,6 +230,8 @@ interface Decoded {
   read: number;
   /** Count of the source pictures put into `canvas` (a held frame does not count): seeds the grain. */
   shown: number;
+  /** Handle frames decoded before the clip's first frame. */
+  head: number;
   log: ClipLog;
   stopped: boolean;
 }
@@ -294,13 +305,19 @@ export async function renderVideo(
     const existing = decoders.get(clip.id);
     if (existing) return existing;
     const k = Math.min(1.5, maxAnimatedScale(timeline.index, clip.id, fps));
-    const { width, height } = decoderChain(edl, clip, baseDir, k, looks);
-    const child = spawn(ffmpegBin(), decoderArgs(edl, clip, baseDir, k, looks), {
+    const pad = timeline.handles(clip);
+    const { width, height } = decoderChain(edl, clip, baseDir, k, looks, pad);
+    const child = spawn(ffmpegBin(), decoderArgs(edl, clip, baseDir, k, looks, pad), {
       stdio: ["ignore", "pipe", "pipe"],
     });
     const canvas = createCanvas(width, height);
     const cctx = canvas.getContext("2d") as CanvasRenderingContext2D;
-    const log: ClipLog = { id: clip.id, track: "", frames: clipFrames(clip, fps), held: 0 };
+    const log: ClipLog = {
+      id: clip.id,
+      track: "",
+      frames: clipFrames(clip, fps) + pad.head + pad.tail,
+      held: 0,
+    };
     logs.push(log);
     const d: Decoded = {
       clip,
@@ -315,6 +332,7 @@ export async function renderVideo(
       done: waitFor(child, `décodeur ${clip.id}`),
       read: 0,
       shown: 0,
+      head: pad.head,
       log,
       stopped: false,
     };
@@ -392,8 +410,8 @@ export async function renderVideo(
       const layers = timeline.layersAt(f);
       for (const layer of layers) {
         const d = open(layer.clip);
-        if (layer.image === "live") await advance(d, f - layer.clip.at);
-        else if (layer.image === "first") await advance(d, 0);
+        if (layer.image === "live") await advance(d, f - layer.clip.at + d.head);
+        else if (layer.image === "first") await advance(d, d.head);
       }
       // Clips no longer on screen and past their end will not come back.
       for (const d of [...decoders.values()])

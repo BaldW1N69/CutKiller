@@ -57,7 +57,9 @@ export const reframePass: Pass = {
     const video = edl.video.map((track, t) => ({
       ...track,
       clips: track.clips.map((clip): VideoClip => {
-        if (t > 0) return clip;
+        // Overlays keep their framing, except B-roll cutaways: full-frame shots whose
+        // subject the 9:16 crop follows like the speaker's.
+        if (t > 0 && clip.why?.kind !== "broll") return clip;
         const source = edl.sources[clip.source];
         const subjects = ctx.analysis.subjects?.[clip.source];
         if (!source?.width || !source.height || !subjects || source.still || clip.fit !== "cover")

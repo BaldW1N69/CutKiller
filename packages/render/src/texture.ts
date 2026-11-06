@@ -74,12 +74,61 @@ export class TexturePainter {
   }
 
   get active(): boolean {
-    return this.texture.grain > 0 || this.texture.vignette > 0 || this.bar > 0;
+    return this.texture.grain > 0 || this.texture.vignette > 0 || this.texture.halation > 0 || this.bar > 0;
+  }
+
+  private glow?: { canvas: Canvas; ctx: CanvasRenderingContext2D; w: number; h: number };
+
+  /**
+   * Halation: the highlights (luma above 0,75), taken at 1/8 resolution, blurred
+   * and tinted red-orange, then added back in `screen` mode: the warm bleed of
+   * film around bright edges (a window, a lamp), absent from shadows and midtones.
+   */
+  private halation(ctx: CanvasRenderingContext2D): void {
+    const { width: W, height: H } = this;
+    if (!this.glow) {
+      const w = Math.max(8, Math.round(W / 8));
+      const h = Math.max(8, Math.round(H / 8));
+      const canvas = createCanvas(w, h);
+      this.glow = { canvas, ctx: canvas.getContext("2d"), w, h };
+    }
+    const { canvas, ctx: g, w, h } = this.glow;
+    g.globalCompositeOperation = "copy";
+    g.drawImage(ctx.canvas, 0, 0, w, h);
+    const img = g.getImageData(0, 0, w, h);
+    const d = img.data;
+    let mask: Float32Array = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      const y =
+        (0.2126 * (d[4 * i] as number) +
+          0.7152 * (d[4 * i + 1] as number) +
+          0.0722 * (d[4 * i + 2] as number)) /
+        255;
+      mask[i] = Math.max(0, (y - 0.75) / 0.25);
+    }
+    // Two box blurs (radius 2 at 1/8 resolution ≈ 16 px in the output).
+    for (let pass = 0; pass < 2; pass++) mask = boxBlur(mask, w, h, 2);
+    const k = this.texture.halation;
+    for (let i = 0; i < w * h; i++) {
+      const m = Math.min(1, (mask[i] as number) * k);
+      d[4 * i] = Math.round(255 * m);
+      d[4 * i + 1] = Math.round(90 * m);
+      d[4 * i + 2] = Math.round(40 * m);
+      d[4 * i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(canvas, 0, 0, W, H);
+    ctx.restore();
   }
 
   paint(ctx: CanvasRenderingContext2D, seed: number): void {
     const { width: W, height: H } = this;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (this.texture.halation > 0) this.halation(ctx);
     if (this.texture.grain > 0) {
       const s = Math.abs(Math.imul(seed | 0, 2654435761)) >>> 0;
       const tile = this.tiles[s % TILES] as Canvas;
@@ -122,4 +171,24 @@ export function hashString(s: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return h >>> 0;
+}
+
+/** Separable box blur of a w×h scalar field (radius r, edges clamped). */
+function boxBlur(src: Float32Array, w: number, h: number, r: number): Float32Array {
+  const tmp = new Float32Array(w * h);
+  const out = new Float32Array(w * h);
+  const n = 2 * r + 1;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let k = -r; k <= r; k++) s += src[y * w + Math.min(w - 1, Math.max(0, x + k))] as number;
+      tmp[y * w + x] = s / n;
+    }
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let s = 0;
+      for (let k = -r; k <= r; k++) s += tmp[Math.min(h - 1, Math.max(0, y + k)) * w + x] as number;
+      out[y * w + x] = s / n;
+    }
+  return out;
 }

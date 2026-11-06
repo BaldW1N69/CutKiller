@@ -6,6 +6,7 @@ export {
   type LookParams,
   LookParamsSchema,
   lookCube,
+  sceneLook,
   shoulder,
 } from "./look";
 export { colorPass, skinTone, toLinear } from "./pass";

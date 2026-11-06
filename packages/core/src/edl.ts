@@ -17,6 +17,8 @@ export const SourceSchema = z.object({
   hasAudio: z.boolean().optional(),
   /** Still image: the renderer holds one frame, repeated frames are expected. */
   still: z.boolean().optional(),
+  /** B-roll: illustration footage, shown as cutaways over the speech or cut on the music. */
+  role: z.enum(["broll"]).optional(),
 });
 
 /** Why a clip exists: kept so a human can audit and override automatic decisions. */
@@ -86,6 +88,12 @@ export const VideoClipSchema = z.object({
         .tuple([z.number().positive(), z.number().positive(), z.number().positive()])
         .default([1, 1, 1]),
       look: z.string().optional(),
+      /**
+       * Scene adjustment of the look's S-curve (added to its contrast): a flat scene
+       * gets more, a contrasty one less, so that every scene reads with the same
+       * tonal range under one look.
+       */
+      contrast: z.number().min(-0.3).max(0.3).optional(),
       why: ReasonSchema.optional(),
     })
     .optional(),
@@ -219,6 +227,8 @@ export const OutputSchema = z.object({
     .object({
       grain: z.number().min(0).max(0.3).default(0),
       vignette: z.number().min(0).max(1).default(0),
+      /** Halation: warm glow bleeding around the brightest areas (0–1). */
+      halation: z.number().min(0).max(1).default(0),
       letterbox: z.number().min(1).max(4).optional(),
     })
     .optional(),

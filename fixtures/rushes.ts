@@ -12,7 +12,9 @@ import { ffmpeg } from "@cutkiller/media";
 
 interface Rush {
   file: string;
-  url: string;
+  /** Remote source, or `from`: an excerpt of a rush listed before (no second download). */
+  url?: string;
+  from?: string;
   start?: number;
   duration?: number;
   license: string;
@@ -30,6 +32,8 @@ export async function fetchRushes(dir = resolve(".cache/rushes")): Promise<strin
     out.push(path);
     if (existsSync(path)) continue;
     console.error(`téléchargement de ${r.file} (${r.license})`);
+    const input = r.from ? join(dir, r.from) : r.url;
+    if (!input) throw new Error(`${r.file} : ni url ni from`);
     if (r.start !== undefined) {
       // Re-encoding the excerpt keeps both streams starting together (a stream copy
       // would start the video on the next keyframe).
@@ -39,7 +43,7 @@ export async function fetchRushes(dir = resolve(".cache/rushes")): Promise<strin
         "-ss",
         String(r.start),
         "-i",
-        r.url,
+        input,
         "-t",
         String(r.duration),
         "-c:v",
@@ -56,8 +60,8 @@ export async function fetchRushes(dir = resolve(".cache/rushes")): Promise<strin
         path,
       ]);
     } else {
-      const res = await fetch(r.url);
-      if (!res.ok) throw new Error(`${r.url} : HTTP ${res.status}`);
+      const res = await fetch(input);
+      if (!res.ok) throw new Error(`${input} : HTTP ${res.status}`);
       await writeFile(path, Buffer.from(await res.arrayBuffer()));
     }
   }

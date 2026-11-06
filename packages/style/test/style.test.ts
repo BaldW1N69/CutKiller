@@ -41,9 +41,9 @@ describe("style profiles", () => {
     expect(cineShort.montage.maxStaticShotS).toBeGreaterThan(short.montage.maxStaticShotS);
     expect(cine.motion.punchMinSpacingS).toBeGreaterThan(long.motion.punchMinSpacingS);
     expect(cine.motion.emphasisMinScore).toBeGreaterThan(long.motion.emphasisMinScore);
-    expect(cine.texture).toEqual({ grain: 0.07, vignette: 0.35, letterbox: 2.39 });
+    expect(cine.texture).toEqual({ grain: 0.07, vignette: 0.35, halation: 0.35, letterbox: 2.39 });
     expect(cineShort.texture.letterbox).toBeUndefined();
-    expect(long.texture).toEqual({ grain: 0, vignette: 0 });
+    expect(long.texture).toEqual({ grain: 0, vignette: 0, halation: 0 });
     // Delivery standards do not change.
     for (const p of [cine, cineShort]) {
       expect(p.audio).toMatchObject({ integratedLufs: -14, truePeakDbtp: -1, cutFadeMs: [5, 10] });

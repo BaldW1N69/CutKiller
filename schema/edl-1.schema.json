@@ -133,6 +133,12 @@
               "minimum": 0,
               "maximum": 1
             },
+            "halation": {
+              "default": 0,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
             "letterbox": {
               "type": "number",
               "minimum": 1,
@@ -327,6 +333,12 @@
           },
           "still": {
             "type": "boolean"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "broll"
+            ]
           }
         },
         "required": [
@@ -598,6 +610,11 @@
                     },
                     "look": {
                       "type": "string"
+                    },
+                    "contrast": {
+                      "type": "number",
+                      "minimum": -0.3,
+                      "maximum": 0.3
                     },
                     "why": {
                       "type": "object",

@@ -8,7 +8,13 @@ import {
   checkSafeZones,
 } from "./checks/captions";
 import { checkJlCuts, checkNoLinear, edlErrors } from "./checks/edl";
-import { checkBitrate, checkBlackFrames, checkDuplicateFrames, checkExportFormat } from "./checks/image";
+import {
+  checkBitrate,
+  checkBlackFrames,
+  checkDuplicateFrames,
+  checkExportFormat,
+  checkSharpness,
+} from "./checks/image";
 import { checkBeatCuts, checkFillers, checkSilences, checkStaticShots } from "./checks/montage";
 import {
   checkDurations,
@@ -23,7 +29,7 @@ import { checkCaptionSyncTruth, checkFillersTruth, type Label } from "./truth";
 
 export { audioEditFrames, clickScore } from "./checks/audio";
 export { contrastRatio, luminance, parseColor } from "./checks/captions";
-export { DUPLICATE_MAD } from "./checks/image";
+export { checkSharpness, DUPLICATE_MAD } from "./checks/image";
 export { renderSubjects } from "./checks/subject";
 export * from "./report";
 export * from "./rules";
@@ -90,12 +96,13 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
     await run(() => checkStaticShots(edl, profile));
     await run(() => checkPunchIns(edl, profile));
     await run(() => checkPresets(edl, registry, profile));
-    await run(() => checkDurations(edl, profile));
+    await run(() => checkDurations(edl, profile, registry));
     await run(() => checkOvershoot(edl, registry, profile));
     await run(() => checkMotionBlur(video, edl, registry, profile));
     await run(() => checkBeatCuts(edl, profile, analysis));
     await run(() => checkReframe(video, edl, profile, analysis));
     await run(() => checkColor(video, edl, profile));
+    await run(() => checkSharpness(edl, profile));
     await run(() => checkCaptionDensity(edl, profile));
     await run(() => checkSafeZones(edl, profile, registry));
     await run(() => checkCaptionContrast(video, edl, profile, registry));

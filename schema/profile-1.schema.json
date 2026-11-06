@@ -102,6 +102,11 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "maxUpscale": {
+          "default": 2.2,
+          "type": "number",
+          "minimum": 1
         }
       },
       "required": [
@@ -196,7 +201,13 @@
         "minSkinLightness": 25,
         "shotMatchDeltaE": 4,
         "maxSkinDeltaL": 6,
-        "maxSkinDeltaAb": 6
+        "maxSkinDeltaAb": 6,
+        "sceneContrast": {
+          "enabled": false,
+          "targetRange": 0.72,
+          "strength": 0.5,
+          "max": 0.12
+        }
       },
       "type": "object",
       "properties": {
@@ -243,13 +254,47 @@
           "default": 6,
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "sceneContrast": {
+          "default": {
+            "enabled": false,
+            "targetRange": 0.72,
+            "strength": 0.5,
+            "max": 0.12
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            },
+            "targetRange": {
+              "default": 0.72,
+              "type": "number",
+              "minimum": 0.2,
+              "maximum": 1
+            },
+            "strength": {
+              "default": 0.5,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "max": {
+              "default": 0.12,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.3
+            }
+          }
         }
       }
     },
     "texture": {
       "default": {
         "grain": 0,
-        "vignette": 0
+        "vignette": 0,
+        "halation": 0
       },
       "type": "object",
       "properties": {
@@ -265,10 +310,88 @@
           "minimum": 0,
           "maximum": 1
         },
+        "halation": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
         "letterbox": {
           "type": "number",
           "minimum": 1,
           "maximum": 4
+        }
+      }
+    },
+    "broll": {
+      "default": {
+        "enabled": false,
+        "shotS": [
+          2,
+          4
+        ],
+        "minSpacingS": 6,
+        "headS": 3,
+        "tailS": 2,
+        "maxShare": 0.4,
+        "beatsPerShot": 4,
+        "skipHeadS": 0.5
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "shotS": {
+          "default": [
+            2,
+            4
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "minSpacingS": {
+          "default": 6,
+          "type": "number",
+          "minimum": 0
+        },
+        "headS": {
+          "default": 3,
+          "type": "number",
+          "minimum": 0
+        },
+        "tailS": {
+          "default": 2,
+          "type": "number",
+          "minimum": 0
+        },
+        "maxShare": {
+          "default": 0.4,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "beatsPerShot": {
+          "default": 4,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "skipHeadS": {
+          "default": 0.5,
+          "type": "number",
+          "minimum": 0
         }
       }
     },
@@ -437,6 +560,24 @@
           "default": [
             200,
             500
+          ],
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "dissolveDurationMs": {
+          "default": [
+            400,
+            1500
           ],
           "type": "array",
           "prefixItems": [

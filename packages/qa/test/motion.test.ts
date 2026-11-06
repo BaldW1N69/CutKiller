@@ -107,6 +107,15 @@ describe("animations de l'EDL", () => {
       }),
     );
     expect(checkDurations(ok, profile).status).toBe("pass");
+    // Dissolves have their own range (400–1 500 ms): 1 s passes, 2 s does not.
+    const fade = (frames: number) =>
+      edlOf(
+        input({
+          transitions: [{ id: "t", atFrame: 60, preset: "cross-dissolve@1", durationFrames: frames }],
+        }),
+      );
+    expect(checkDurations(fade(30), profile, registry).status).toBe("pass");
+    expect(checkDurations(fade(60), profile, registry).violations[0]?.message).toBe("t : 2000 ms");
     const slow = edlOf(input({ keyframes: [punch(10, 25)] }));
     expect(checkDurations(slow, profile).violations[0]?.message).toBe("A.scale : 500 ms");
     expect(checkPresets(slow, registry, profile).violations[0]?.message).toMatch(/ne suit plus zoom-punch@1/);

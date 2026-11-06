@@ -2,7 +2,7 @@
 
 Montage automatique de rushes pour YouTube (16:9) et Shorts / TikTok / Reels (9:16), piloté par une **EDL JSON éditable à la main** et vérifié par des **règles de qualité mesurables**.
 
-> Statut : **phases 0 à 8 livrées** (phase 8 : profils cinématiques). Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké dans les safe zones avec export SRT, mix audio à -14 LUFS (true peak ≤ -1 dBTP) avec ducking et effets sonores synchronisés, recadrage 9:16 qui suit le visage comme une caméra posée, étalonnage qui égalise la peau d'un plan à l'autre sous un look commun, rendu et quality-check sur les 25 règles. La QA est calibrée : un défaut injecté par règle sur un montage propre, détection et fausses alertes mesurées ([rapport](docs/phases/phase-7.md)) ; la synchro peut être vérifiée contre une annotation humaine. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
+> Statut : **phases 0 à 8 livrées** (phase 8 : profils cinématiques). Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké dans les safe zones avec export SRT, mix audio à -14 LUFS (true peak ≤ -1 dBTP) avec ducking et effets sonores synchronisés, recadrage 9:16 qui suit le visage comme une caméra posée, étalonnage qui égalise la peau d'un plan à l'autre sous un look commun, rendu et quality-check sur les 26 règles. La QA est calibrée : un défaut injecté par règle sur un montage propre, détection et fausses alertes mesurées ([rapport](docs/phases/phase-7.md)) ; la synchro peut être vérifiée contre une annotation humaine. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
 
 ## Prérequis
 
@@ -23,6 +23,9 @@ Au premier lancement, les modèles sont téléchargés dans `~/.cache/cutkiller`
 # Tout en une commande : EDL + rendu + rapport qualité dans out/
 pnpm cutkiller auto rushes/*.mp4 musique.wav -p short -o out --min-score 90
 
+# Cinéma : entretien + plans d'illustration (B-roll) + musique
+pnpm cutkiller auto interview.mp4 musique.wav --broll rue.mp4 --broll mains.mp4 -p cinematic -o out
+
 # Pas à pas, en retouchant l'EDL entre deux étapes
 pnpm cutkiller plan rushes/*.mp4 -p long -o out/edit.edl.json
 pnpm cutkiller validate out/edit.edl.json
@@ -37,7 +40,7 @@ pnpm cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --truth out/l
 pnpm cutkiller calibrate -o out/calibration
 ```
 
-- `-p short|long|cinematic|cinematic-short` ou chemin vers un profil `.yaml` : tous les réglages de style vivent dans [`profiles/`](profiles). Les profils `cinematic` (16:9) et `cinematic-short` (9:16) suivent l'[étude de 24 tutoriels et 9 articles](docs/research/cinematic.md) : plans plus longs, poussées lentes au lieu des punch-ins, fondus, look « tirage film », grain, vignette et letterbox 2,39:1, sous-titres sobres. Les 25 règles QA restent les mêmes, seuls les seuils changent.
+- `-p short|long|cinematic|cinematic-short` ou chemin vers un profil `.yaml` : tous les réglages de style vivent dans [`profiles/`](profiles). Les profils `cinematic` (16:9) et `cinematic-short` (9:16) suivent l'[étude de 24 tutoriels et 9 articles](docs/research/cinematic.md) : plans plus longs, poussées lentes au lieu des punch-ins, fondus, look « tirage film », grain, vignette et letterbox 2,39:1, sous-titres sobres. Les 26 règles QA sont les mêmes pour tous les profils, seuls les seuils changent. B-roll : `--broll plan.mp4` (répétable) pour des plans de coupe sur la parole, ou un montage calé sur la musique s'il n'y a pas de parole.
 - `--draft` : encodage rapide (x264 `veryfast`) pour itérer ; le rendu final utilise le preset de l'EDL (`medium` par défaut).
 - `--fast` : sans analyse de la parole ni des beats (assemblage + zoom-cuts uniquement).
 - `plan` écrit aussi `<edl>.analysis.json` (transcript au mot, VAD, beats, visages), que `check` réutilise.
@@ -48,14 +51,14 @@ pnpm cutkiller calibrate -o out/calibration
 | Étape | Module | Rôle |
 |---|---|---|
 | Analyse | `@cutkiller/analyze` + `workers/` (Python) | Probe des rushes ; transcription au mot, VAD, prosodie, beats, visages et couleur de peau (YuNet / OpenCV) |
-| Planification | `cut → reframe → color → motion → captions → audio` | Passes pures `EDL → EDL`, dans cet ordre fixe |
+| Planification | `cut → broll → reframe → color → motion → captions → audio` | Passes pures `EDL → EDL`, dans cet ordre fixe |
 | EDL | `@cutkiller/core` | Schéma, validateur, temps en frames entières ([référence](docs/EDL.md), [JSON Schema](schema/edl-1.schema.json)) |
 | Image | `@cutkiller/reframe`, `@cutkiller/color` + [`presets/look/`](presets) | Caméra virtuelle 9:16 sur le visage (zone morte, glissements anticipés, accélération bornée) ; peau égalisée par source, plancher d'exposition, look en LUT générée |
 | Motion | `@cutkiller/motion` + [`presets/`](presets) | Punch-ins sur l'emphase, transitions, timeline d'animation partagée par le rendu et la QA |
 | Audio | `@cutkiller/audio` + [`presets/sfx/`](presets) | Ducking sur la parole, effets sonores synthétisés et calés à l'impact |
 | Sous-titres | `@cutkiller/captions` | Mots sur la timeline, découpage, mise en page dans les safe zones, rendu karaoké, export SRT |
 | Rendu | `@cutkiller/render` | Décodage FFmpeg par clip (bande recadrée, étalonnage cuit en une LUT 3D) → compositeur Cairo (animations, flou de mouvement, glitch, sous-titres) → encodage FFmpeg CFR ; mix audio par stems (voix compressée, musique placée et baissée, effets), loudness EBU R128 + limiteur |
-| QA | `@cutkiller/qa` | `quality-check` : 25 règles, toutes contrôlées ; score /100 sur les règles applicables au rendu, taux de couverture |
+| QA | `@cutkiller/qa` | `quality-check` : 26 règles, toutes contrôlées ; score /100 sur les règles applicables au rendu, taux de couverture |
 
 ## Développement
 

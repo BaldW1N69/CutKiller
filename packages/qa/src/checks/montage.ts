@@ -163,7 +163,10 @@ export function checkBeatCuts(edl: Edl, profile: StyleProfile, analysis: Analysi
     const cur = clips[k] as VideoClip;
     const cut = cur.at;
     let window: [number, number];
-    if ((spans[k] as { continuesPrev: boolean }).continuesPrev) {
+    const silent = (c: VideoClip) => (c.why?.wordIds?.length ?? 0) === 0;
+    if ((spans[k] as { continuesPrev: boolean }).continuesPrev || (silent(prev) && silent(cur))) {
+      // Continuous take (zoom cut) or shots without speech (B-roll montage): the cut
+      // may go anywhere the shot lengths allow.
       window = [prev.at + minShot, Math.min(prev.at + maxShot, clipEnd(cur, fps) - minShot)];
     } else {
       // The adjustable margins belong to the whole speech run the previous clip ends,
@@ -214,7 +217,12 @@ export function checkStaticShots(edl: Edl, profile: StyleProfile): CheckResult {
     if (!prev || framingKey(prev) !== framingKey(c)) changes.add(c.at);
   });
   for (const track of edl.keyframes) for (const key of track.keys) changes.add(key.frame);
-  for (const track of edl.video.slice(1)) for (const c of track.clips) changes.add(c.at);
+  // An overlay (cutaway) changes the picture when it comes in and when it leaves.
+  for (const track of edl.video.slice(1))
+    for (const c of track.clips) {
+      changes.add(c.at);
+      changes.add(clipEnd(c, fps));
+    }
   const end = clipEnd(clips.at(-1) as VideoClip, fps);
   const points = [...changes].filter((f) => f < end).sort((a, b) => a - b);
   points.push(end);

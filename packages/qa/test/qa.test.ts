@@ -54,8 +54,8 @@ function twoClipEdl(fx: Fixtures, cutFadeMs: number): Edl {
 }
 
 describe("score", () => {
-  it("weights 25 rules to 100 points, 20 per category", () => {
-    expect(RULES).toHaveLength(25);
+  it("weights 26 rules to 100 points, 20 per category", () => {
+    expect(RULES).toHaveLength(26);
     expect(RULES.reduce((s, r) => s + r.weight, 0)).toBe(100);
     for (const cat of ["montage", "motion", "captions", "audio", "image"])
       expect(RULES.filter((r) => r.category === cat).reduce((s, r) => s + r.weight, 0)).toBe(20);
@@ -63,15 +63,15 @@ describe("score", () => {
 
   it("scores only evaluated rules and reports coverage", () => {
     const results: CheckResult[] = [
-      pass("image.export-format"), // weight 3
+      pass("image.export-format"), // weight 2
       graded("image.bitrate", 1, [{ message: "trop bas" }]), // weight 2, score 0
       graded("audio.cut-clicks", 4, [{ message: "clic" }]), // weight 4, score 0.75
       notEvaluated("motion.no-linear", "aucune animation"),
     ];
     const report = buildReport({ video: "v.mp4", profile: "short@1.0.0" }, results);
-    expect(report.coverage).toBe(9);
-    expect(report.score).toBe(66.6); // 100 × (3 + 0 + 4 × 0.75) / 9 = 66.67, floored
-    expect(report.categories.image.score).toBe(60);
+    expect(report.coverage).toBe(8);
+    expect(report.score).toBe(62.5); // 100 × (2 + 0 + 4 × 0.75) / 8
+    expect(report.categories.image.score).toBe(50);
     expect(report.categories.motion.score).toBeNull();
     expect(report.results.find((r) => r.ruleId === "captions.sync")?.status).toBe("not-evaluated");
   });

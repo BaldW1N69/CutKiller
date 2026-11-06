@@ -77,7 +77,6 @@ function checkPresetDefinition(preset: Preset, profile: StyleProfile, fps: numbe
   const id = `${preset.name}@${preset.version}`;
   const problems: string[] = [];
   const [mLo, mHi] = profile.motion.microDurationMs;
-  const [tLo, tHi] = profile.motion.transitionDurationMs;
   const tol = frameTolerance(fps);
   if (preset.kind === "motion") {
     const p = MotionParamsSchema.safeParse(preset.params);
@@ -97,6 +96,7 @@ function checkPresetDefinition(preset: Preset, profile: StyleProfile, fps: numbe
     const p = TransitionParamsSchema.safeParse(preset.params);
     if (!p.success) return [`${id} : paramètres invalides`];
     const params: TransitionParams = p.data;
+    const [tLo, tHi] = transitionRange(params, profile);
     if (params.durationMs < tLo - tol || params.durationMs > tHi + tol)
       problems.push(`${id} : ${params.durationMs} ms (attendu ${tLo}–${tHi} ms)`);
     if (params.type !== "glitch") {
@@ -170,12 +170,16 @@ export function checkPresets(edl: Edl, registry: PresetRegistry, profile: StyleP
   return graded("motion.presets", items, violations, { presets: library.length });
 }
 
-/** Micro-animations, entries and exits 150–300 ms; transitions 200–500 ms. */
-export function checkDurations(edl: Edl, profile: StyleProfile): CheckResult {
+/** Duration range of a transition: moves (push, slide, glitch) or dissolves. */
+function transitionRange(params: TransitionParams, profile: StyleProfile): [number, number] {
+  return params.type === "dissolve" ? profile.motion.dissolveDurationMs : profile.motion.transitionDurationMs;
+}
+
+/** Micro-animations, entries and exits 150–300 ms; transitions 200–500 ms; dissolves 400–1 500 ms. */
+export function checkDurations(edl: Edl, profile: StyleProfile, registry?: PresetRegistry): CheckResult {
   const fps = edl.output.fps;
   const tol = frameTolerance(fps);
   const [mLo, mHi] = profile.motion.microDurationMs;
-  const [tLo, tHi] = profile.motion.transitionDurationMs;
   const violations: Violation[] = [];
   let items = 0;
   for (const track of edl.keyframes) {
@@ -190,6 +194,13 @@ export function checkDurations(edl: Edl, profile: StyleProfile): CheckResult {
   for (const t of edl.transitions) {
     items++;
     const ms = framesToSeconds(t.durationFrames, fps) * 1000;
+    let params: TransitionParams | undefined;
+    try {
+      params = registry ? TransitionParamsSchema.parse(registry.resolve(t.preset).params) : undefined;
+    } catch {
+      params = undefined; // an unknown preset is motion.presets' finding
+    }
+    const [tLo, tHi] = params ? transitionRange(params, profile) : profile.motion.transitionDurationMs;
     if (ms < tLo - tol || ms > tHi + tol)
       violations.push({ message: `${t.id} : ${Math.round(ms)} ms`, frame: t.atFrame });
   }

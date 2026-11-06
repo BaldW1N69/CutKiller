@@ -145,6 +145,16 @@ def subjects(request: dict[str, Any]) -> dict[str, Any]:
                     "rgb": [round(float(c), 4) for c in rgb],
                 }
             )
-        mean = frame.reshape(-1, 3)[:, ::-1].mean(axis=0) / 255
-        samples.append({"t": round(i / fps, 3), "faces": faces, "rgb": [round(float(c), 4) for c in mean]})
+        pixels = frame.reshape(-1, 3)[:, ::-1] / 255
+        mean = pixels.mean(axis=0)
+        # Tonal range of the picture (BT.709 luma, gamma-encoded): p5 / p50 / p95.
+        luma = np.percentile(pixels @ np.array([0.2126, 0.7152, 0.0722]), [5, 50, 95])
+        samples.append(
+            {
+                "t": round(i / fps, 3),
+                "faces": faces,
+                "rgb": [round(float(c), 4) for c in mean],
+                "luma": [round(float(v), 4) for v in luma],
+            }
+        )
     return {"width": sw, "height": sh, "sampleFps": fps, "samples": samples}

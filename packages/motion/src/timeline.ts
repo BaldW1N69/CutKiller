@@ -8,6 +8,7 @@ import {
   displacement,
   type Edl,
   easeProgress,
+  effectiveOut,
   type Framing,
   framesToSeconds,
   sortedClips,
@@ -48,6 +49,48 @@ export class MotionTimeline {
     this.fps = edl.output.fps;
     this.main = sortedClips(edl.video[0]?.clips ?? []);
     this.overlays = edl.video.slice(1).map((t, i) => ({ track: i + 1, clips: sortedClips(t.clips) }));
+    // Dissolve handles: the outgoing shot keeps playing after the cut, the incoming one
+    // starts before it, when their rushes have the material (else their picture holds).
+    for (const tr of transitions) {
+      if (tr.params.type !== "dissolve" || tr.params.via !== "direct") continue;
+      const k = this.main.findIndex((c) => c.at === tr.atFrame);
+      const outgoing = this.main[k - 1];
+      const incoming = this.main[k];
+      if (!outgoing || !incoming) continue;
+      const tail = tr.window[1] - tr.atFrame;
+      const head = tr.atFrame - tr.window[0];
+      if (this.room(outgoing, "after") >= tail) this.pad(outgoing.id).tail = tail;
+      if (this.room(incoming, "before") >= head) this.pad(incoming.id).head = head;
+    }
+  }
+
+  private readonly pads = new Map<string, { head: number; tail: number }>();
+
+  private pad(id: string): { head: number; tail: number } {
+    let p = this.pads.get(id);
+    if (!p) {
+      p = { head: 0, tail: 0 };
+      this.pads.set(id, p);
+    }
+    return p;
+  }
+
+  /** Frames of rush available before a clip's in point or after its out point. */
+  private room(clip: VideoClip, side: "before" | "after"): number {
+    const source = this.edl.sources[clip.source];
+    if (!source) return 0;
+    if (source.still) return Number.POSITIVE_INFINITY;
+    if (side === "before") return Math.floor(clip.in * this.fps + 1e-6);
+    if (source.durationS === undefined) return 0;
+    return Math.floor((source.durationS - effectiveOut(clip, this.fps)) * this.fps + 1e-6);
+  }
+
+  /**
+   * Frames a clip plays beyond its own span: `head` before its start, `tail` after
+   * its end (dissolve handles, taken from its rush). The renderer decodes them.
+   */
+  handles(clip: VideoClip): { head: number; tail: number } {
+    return this.pads.get(clip.id) ?? { head: 0, tail: 0 };
   }
 
   private readonly framings = new Map<string, Framing | undefined>();
@@ -128,9 +171,12 @@ export class MotionTimeline {
               : this.layer(incoming, 0, "live", undefined, fade),
           );
         } else {
+          // Handles: both shots keep moving through the dissolve when their rushes allow.
+          const out = before || this.handles(outgoing).tail > 0 ? "live" : "last";
+          const inc = !before || this.handles(incoming).head > 0 ? "live" : "first";
           layers.push(
-            this.layer(outgoing, 0, before ? "live" : "last"),
-            this.layer(incoming, 0, before ? "first" : "live", undefined, (t) => this.progress(tr, t)),
+            this.layer(outgoing, 0, out),
+            this.layer(incoming, 0, inc, undefined, (t) => this.progress(tr, t)),
           );
         }
         for (const o of this.overlays) {

@@ -23,6 +23,8 @@ export interface SourceProbe {
   /** Variable frame rate (typical of phone footage). */
   vfr?: boolean;
   still?: boolean;
+  /** B-roll (cutaways, montage material): not transcribed, never on the speech track. */
+  role?: "broll";
 }
 
 /** Structural view of the preset registry (implemented by @cutkiller/style). */
@@ -48,8 +50,8 @@ export interface Pass {
   run(edl: Edl, ctx: PassContext): PassResult;
 }
 
-/** Fixed order: reframe before motion/captions (they depend on the final frame), audio last (SFX follow transitions). */
-export const PASS_ORDER = ["cut", "reframe", "color", "motion", "captions", "audio"] as const;
+/** Fixed order: B-roll once the speech is cut; reframe before motion/captions (they depend on the final frame), audio last (SFX follow transitions). */
+export const PASS_ORDER = ["cut", "broll", "reframe", "color", "motion", "captions", "audio"] as const;
 export type PassId = (typeof PASS_ORDER)[number];
 
 export function runPasses(edl: Edl, passes: readonly Pass[], ctx: PassContext): PassResult {

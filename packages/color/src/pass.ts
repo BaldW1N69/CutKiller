@@ -105,6 +105,25 @@ export const colorPass: Pass = {
         lift = Math.log2(lightnessToY(cfg.minSkinLightness) / lumaLinear(reference));
     }
 
+    // Scene contrast: per source, from its tonal range over the kept samples.
+    const sceneContrast = new Map<string, number>();
+    const sc = cfg.sceneContrast;
+    if (sc.enabled) {
+      const all = edl.video.flatMap((t) => t.clips);
+      for (const source of new Set(all.map((c) => c.source))) {
+        const clips = all.filter((c) => c.source === source);
+        const spans = (ctx.analysis.subjects?.[source]?.samples ?? []).flatMap((x) =>
+          x.luma && clips.some((c) => x.t >= c.in - 1e-6 && x.t <= c.out + 1e-6)
+            ? [x.luma[2] - x.luma[0]]
+            : [],
+        );
+        if (spans.length < 3) continue;
+        const span = Math.max(0.05, median(spans));
+        const adj = Math.max(-sc.max, Math.min(sc.max, sc.strength * (sc.targetRange / span - 1)));
+        if (Math.abs(adj) >= 0.02) sceneContrast.set(source, Math.round(adj * 1000) / 1000);
+      }
+    }
+
     let corrected = 0;
     const video = edl.video.map((track) => ({
       ...track,
@@ -137,6 +156,7 @@ export const colorPass: Pass = {
             exposureEv,
             balance,
             ...(look ? { look } : {}),
+            ...(look && sceneContrast.has(clip.source) ? { contrast: sceneContrast.get(clip.source) } : {}),
             why: { kind: tone ? "skin-match" : "look-only" },
           },
         };
@@ -145,7 +165,7 @@ export const colorPass: Pass = {
     diagnostics.push({
       level: "info",
       code: "color.summary",
-      message: `${corrected} plan(s) corrigé(s) sur la peau de référence (${bySource.size} source(s), ${matched} plan(s) raccordé(s) isolément${lift > 0 ? `, relevée de ${lift.toFixed(2)} EV` : ""}), look ${look ?? "aucun"}`,
+      message: `${corrected} plan(s) corrigé(s) sur la peau de référence (${bySource.size} source(s), ${matched} plan(s) raccordé(s) isolément${lift > 0 ? `, relevée de ${lift.toFixed(2)} EV` : ""}), look ${look ?? "aucun"}${sceneContrast.size > 0 ? `, contraste adapté sur ${sceneContrast.size} scène(s)` : ""}`,
     });
     return { edl: EdlSchema.parse({ ...edl, video }), diagnostics };
   },

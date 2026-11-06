@@ -182,7 +182,7 @@ export const RULES: readonly Rule[] = [
     id: "image.reframe",
     category: "image",
     title: "Recadrage 9:16 qui suit le sujet sans saccade",
-    weight: 6,
+    weight: 5,
     phase: 6,
     measuredOn: "rendu + EDL",
   },
@@ -195,10 +195,18 @@ export const RULES: readonly Rule[] = [
     measuredOn: "rendu",
   },
   {
+    id: "image.sharpness",
+    category: "image",
+    title: "Netteté : aucune image agrandie au-delà de la limite",
+    weight: 2,
+    phase: 8,
+    measuredOn: "EDL",
+  },
+  {
     id: "image.export-format",
     category: "image",
     title: "H.264/H.265, 30 ou 60 fps constants, bonne résolution",
-    weight: 3,
+    weight: 2,
     phase: 1,
     measuredOn: "rendu",
   },
@@ -252,7 +260,7 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
     case "motion.no-linear":
       return "aucun segment linéaire (position, échelle, opacité)";
     case "motion.durations":
-      return `micro ${range(p.motion.microDurationMs, " ms")} ; transitions ${range(p.motion.transitionDurationMs, " ms")}`;
+      return `micro ${range(p.motion.microDurationMs, " ms")} ; transitions ${range(p.motion.transitionDurationMs, " ms")} ; fondus ${range(p.motion.dissolveDurationMs, " ms")}`;
     case "motion.blur":
       return `flou au-delà de ${p.motion.motionBlurThresholdPxPerFrame} px/frame`;
     case "motion.overshoot":
@@ -281,6 +289,8 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
       return `visage ≥ ${pct(p.reframe.minFaceInFrame)} dans l'image, centre ≤ ${pct(p.reframe.maxFaceOffset)} ; accélération ≤ ${p.reframe.maxAccelPx} px/frame²`;
     case "image.color":
       return `peau ΔL* ≤ ${p.color.maxSkinDeltaL}, Δa*b* ≤ ${p.color.maxSkinDeltaAb} ; un seul look`;
+    case "image.sharpness":
+      return `agrandissement ≤ ×${p.export.maxUpscale}`;
     case "image.export-format":
       return `H.264/H.265, ${p.export.allowedFps.join(" ou ")} fps CFR`;
     case "image.bitrate":

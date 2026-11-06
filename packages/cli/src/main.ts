@@ -17,13 +17,15 @@ const USAGE = `cutkiller <commande> [options]
   render <edl.json> -o out.mp4 [--draft]    rend une EDL
   check <vidéo> [--edl edl.json] -p <profil> [--json r.json] [--md r.md] [--min-score 90] [--truth labels.txt]
   annotate <edl.json> -o labels.txt        mots surlignés à corriger à l'oreille (pistes d'étiquettes Audacity)
-  auto <entrées…> -p <profil> -o <dossier> [--draft] [--min-score 90]
+  auto <entrées…> -p <profil> -o <dossier> [--broll b.mp4]… [--draft] [--min-score 90]
   calibrate -o <dossier> [--only a,b]       calibre la QA : un défaut injecté par règle sur un montage propre
   schema --out <dossier>                    exporte les JSON Schemas (EDL, profil, rapport QA)
 
-Profils : short (9:16), long (16:9), ou chemin vers un .yaml.
+Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), ou chemin vers un .yaml.
 --draft : encodage rapide (preset veryfast) pour itérer.
---fast  : sans analyse de la parole ni des beats (assemblage brut).`;
+--fast  : sans analyse de la parole ni des beats (assemblage brut).
+--broll : plan d'illustration (répétable) : plans de coupe sur la parole, ou montage sur la musique s'il n'y a pas de parole
+          (profils cinematic). Une vidéo sans parole est aussi traitée comme B-roll.`;
 
 function gate(report: Report, minScore: string | undefined): void {
   if (minScore === undefined) return;
@@ -50,6 +52,7 @@ async function main(argv: string[]): Promise<void> {
       "keep-stems": { type: "boolean", default: false },
       only: { type: "string" },
       truth: { type: "string" },
+      broll: { type: "string", multiple: true },
     },
   });
   const need = (v: string | undefined, name: string): string => {
@@ -72,6 +75,7 @@ async function main(argv: string[]): Promise<void> {
         await loadProfile(need(values.profile, "profile")),
         out,
         !values.fast,
+        values.broll ?? [],
       );
       console.log(`✔ ${out} : ${edl.video[0]?.clips.length ?? 0} clip(s)`);
       return;
@@ -103,7 +107,7 @@ async function main(argv: string[]): Promise<void> {
       const profile = await loadProfile(need(values.profile, "profile"));
       const edlPath = join(dir, "edit.edl.json");
       const video = join(dir, "final.mp4");
-      const edl = await plan(positionals, profile, edlPath, !values.fast);
+      const edl = await plan(positionals, profile, edlPath, !values.fast, values.broll ?? []);
       await doRender(edl, edlPath, video, values.draft, true);
       const report = await check(video, profile, edlPath, {
         json: join(dir, "quality.json"),

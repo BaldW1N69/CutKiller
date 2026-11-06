@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { setOut, VARIANTS } from "../src/calibrate";
 
 describe("banc de calibration", () => {
-  it("vise chacune des 25 règles par au moins un défaut, avec un témoin propre", () => {
+  it("vise chacune des 26 règles par au moins un défaut, avec un témoin propre", () => {
     const targeted = new Set(VARIANTS.filter((v) => v.expect !== "pass").map((v) => v.rule));
     for (const rule of RULES) expect(targeted.has(rule.id), rule.id).toBe(true);
     expect(VARIANTS.filter((v) => v.rule === "control")).toHaveLength(1);
