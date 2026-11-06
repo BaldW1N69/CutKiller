@@ -23,8 +23,12 @@ Au premier lancement, les modèles sont téléchargés dans `~/.cache/cutkiller`
 # Tout en une commande : EDL + rendu + rapport qualité dans out/
 pnpm cutkiller auto rushes/*.mp4 musique.wav -p short -o out --min-score 90
 
-# Cinéma : entretien + plans d'illustration (B-roll) + musique
-pnpm cutkiller auto interview.mp4 musique.wav --broll rue.mp4 --broll mains.mp4 -p cinematic -o out
+# Cinéma : entretien + plans d'illustration (B-roll) + musique, style néon
+pnpm cutkiller auto interview.mp4 musique.wav --broll rue.mp4 --broll mains.mp4 -p cinematic --look neon-80s -o out
+pnpm cutkiller looks   # styles : film-print, bleach-grit, neon-80s, teal-orange, noir, clean
+
+# Comparer un rendu à une vidéo de référence (rythme, image, son)
+pnpm cutkiller reference reference.mp4 --against out/final.mp4
 
 # Pas à pas, en retouchant l'EDL entre deux étapes
 pnpm cutkiller plan rushes/*.mp4 -p long -o out/edit.edl.json

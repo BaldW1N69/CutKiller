@@ -78,6 +78,29 @@
    - alerte au planning quand une source est trop petite pour le format ;
    - nouveaux rushes de test **HD** : le master ProRes 1080p de l'entretien et trois B-roll 1080p de la journée filmée (CC BY 3.0).
 
+### Styles d'image et vidéos de référence (troisième passe)
+
+- **Styles** (`--look <style>`, `--look list`) : chaque look de `presets/look/` apporte sa texture, et le reste du profil ne change pas.
+  - `bleach-grit` (inspiré de l'image de *Fight Club*) : saturation −45 %, ombres vert-cyan, hautes lumières jaune sale, contraste dur, gros grain, vignette lourde.
+  - `neon-80s` (inspiré de *Vice City* / Miami) : saturation +30 %, rouges vers le magenta, bleus vers le cyan, ombres violettes, hautes lumières roses, **bloom** néon, peau protégée.
+  - `teal-orange` (blockbuster) et `noir` (noir et blanc contrasté).
+  - Les noms restent génériques : *Fight Club* et *Vice City* sont des marques. Les descriptions disent de quoi chaque style s'inspire.
+- **Bloom** : halo des hautes lumières dans leurs propres couleurs, calculé au quart de la résolution pour que les lumières fines (un tube néon) passent le seuil.
+- **Vignette sans anneaux** : calque à opacité tramée. Le grain tramé atteint aussi les hautes lumières, pour qu'un ciel 8 bits étiré par un look ne montre pas ses paliers.
+- **`cutkiller reference <réf.mp4> --against rendu.mp4`** : empreinte de style comparée, avec le réglage du profil à modifier pour chaque écart. Elle mesure :
+  - le rythme : coupes par changement de plan, durée médiane d'un plan, coupes par minute, part de plans de moins d'1 s ;
+  - l'image : luma, contraste p10–p90, saturation, chaleur, letterbox ;
+  - le son : LUFS et LRA.
+- **Vidéos de référence fournies** : je n'ai pas pu les analyser. YouTube et TikTok refusent les robots, et ce blocage n'a pas été contourné.
+  - On en connaît le titre et l'auteur (oEmbed officiel) et deux résumés : *10 Editing Cuts* (Jonny Duncan) et *How to edit SO good…* (Learn By Leo).
+  - La comparaison chiffrée demande les fichiers : `reference` les mesure dès qu'ils sont fournis.
+- **Sortie à la cadence des rushes** (`format.matchSourceFps`, profils cinematic) : les masters 23,976 fps sortent en 24 fps, sans la saccade de pulldown d'une conversion en 30.
+- **Corrigé grâce aux rushes réels** :
+  - l'encodeur AAC dépassait de 2,6 dB le true peak du mix (+0,8 dBTP livré) : bande coupée à 18 kHz, contrôle après encodage, réencodage de l'audio seul si nécessaire ;
+  - un rush de 20,02 s lisait une frame au-delà de sa fin ;
+  - les plans du montage B-roll reprenaient l'identifiant de la musique ;
+  - en 9:16, le montage B-roll prenait les rushes dans l'ordre et cadrait mal les scènes à plusieurs personnes. Il choisit maintenant les moments où le sujet tient dans le cadre.
+
 ## Tests
 
 - **143 tests TS** au vert (132 en phase 7), **22 tests Python** inchangés ; typecheck et Biome propres.

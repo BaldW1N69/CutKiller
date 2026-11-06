@@ -26,6 +26,7 @@ const USAGE = `cutkiller <commande> [options]
   check <vidéo> [--edl edl.json] -p <profil> [--json r.json] [--md r.md] [--min-score 90] [--truth labels.txt]
   annotate <edl.json> -o labels.txt        mots surlignés à corriger à l'oreille (pistes d'étiquettes Audacity)
   auto <entrées…> -p <profil> -o <dossier> [--broll b.mp4]… [--draft] [--min-score 90]
+  looks                                     liste les styles d'image (--look)
   reference <réf.mp4> [--against rendu.mp4] [--md r.md] [--json r.json]
                                             empreinte de style d'une vidéo (rythme, image, son), comparée à un rendu
   calibrate -o <dossier> [--only a,b]       calibre la QA : un défaut injecté par règle sur un montage propre
@@ -35,7 +36,7 @@ Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), o
 --draft : encodage rapide (preset veryfast) pour itérer.
 --fast  : sans analyse de la parole ni des beats (assemblage brut).
 --look  : style d'image (presets/look/) : film-print, bleach-grit (façon Fight Club), neon-80s (façon Vice City),
-          teal-orange, noir, clean ; « --look list » les décrit. Le style apporte sa texture (grain, halo…).
+          teal-orange, noir, clean ; « cutkiller looks » les décrit. Le style apporte sa texture (grain, halo…).
 --broll : plan d'illustration (répétable) : plans de coupe sur la parole, ou montage sur la musique s'il n'y a pas de parole
           (profils cinematic). Une vidéo sans parole est aussi traitée comme B-roll.`;
 
@@ -74,7 +75,7 @@ async function main(argv: string[]): Promise<void> {
     const profile = await loadProfile(need(values.profile, "profile"));
     return values.look ? withLook(profile, await PresetRegistry.load(), values.look) : profile;
   };
-  if (values.look === "list") {
+  if (values.look === "list" || command === "looks") {
     for (const l of listLooks(await PresetRegistry.load()))
       console.log(`${l.ref.padEnd(16)} ${l.description}`);
     return;
