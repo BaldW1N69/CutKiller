@@ -75,25 +75,38 @@ class Material {
     return this.ranges.reduce((s, r) => s + this.free(r), 0);
   }
 
-  /** A piece of `wantS` seconds (at least `minS`), from the next rush that has one. */
-  take(wantS: number, minS: number): Piece | undefined {
-    for (let k = 0; k < this.ranges.length; k++) {
-      const r = this.ranges[(this.next + k) % this.ranges.length] as (typeof this.ranges)[number];
-      let best: { from: number; len: number; score: number } | undefined;
-      for (let len = wantS; len >= minS - 1e-6 && !best; len = Math.max(minS, len - 0.5)) {
-        for (let t = r.from; t + len <= r.out + 1e-6; t += 0.25) {
-          if (r.used.some(([a, b]) => t < b && t + len > a)) continue;
-          const score = this.score(r.source, t, t + len);
-          if (!best || score > best.score + 1e-9) best = { from: t, len, score };
-        }
-        if (len <= minS + 1e-6) break;
+  /** Best free window of a rush, `wantS` long (down to `minS` if needed). */
+  private bestIn(r: (typeof this.ranges)[number], wantS: number, minS: number) {
+    let best: { from: number; len: number; score: number } | undefined;
+    for (let len = wantS; len >= minS - 1e-6; len = Math.max(minS, len - 0.5)) {
+      for (let t = r.from; t + len <= r.out + 1e-6; t += 0.25) {
+        if (r.used.some(([a, b]) => t < b && t + len > a)) continue;
+        const score = this.score(r.source, t, t + len);
+        if (!best || score > best.score + 1e-9) best = { from: t, len, score };
       }
-      if (!best) continue;
-      r.used.push([best.from, best.from + best.len]);
-      this.next = (this.next + k + 1) % this.ranges.length;
-      return { source: r.source, in: best.from, out: best.from + best.len };
+      if (best || len <= minS + 1e-6) break;
     }
-    return undefined;
+    return best;
+  }
+
+  /**
+   * A piece of `wantS` seconds (at least `minS`): the rushes are used in turn, but
+   * a rush whose best window is clearly worse than another's (a group the vertical
+   * frame cannot hold) gives way to it.
+   */
+  take(wantS: number, minS: number): Piece | undefined {
+    const options = this.ranges.flatMap((r, i) => {
+      const best = this.bestIn(r, wantS, minS);
+      const turn = (i - this.next + this.ranges.length) % this.ranges.length;
+      return best ? [{ r, i, best, turn }] : [];
+    });
+    if (options.length === 0) return undefined;
+    const top = Math.max(...options.map((o) => o.best.score));
+    const pick = options.filter((o) => o.best.score >= top - 0.3).sort((a, b) => a.turn - b.turn)[0];
+    if (!pick) return undefined;
+    pick.r.used.push([pick.best.from, pick.best.from + pick.best.len]);
+    this.next = (pick.i + 1) % this.ranges.length;
+    return { source: pick.r.source, in: pick.best.from, out: pick.best.from + pick.best.len };
   }
 }
 
