@@ -115,29 +115,38 @@
 
 ## Score qualité
 
-Rushes réels sous licence libre (Global Lives Project, CC BY 3.0, entretien 640×360 à 23,976 fps ; musique CC0), commande `cutkiller auto`.
+Rushes réels sous licence libre, commande `cutkiller auto` :
+- entretien Global Lives Project (CC BY 3.0), d'abord en 640×360, puis en master ProRes 1080p à 23,976 fps ;
+- trois B-roll 1080p de la journée filmée (terrasse, cuisine, repas) ;
+- musique CC0.
 
 | Rendu | Score | Couverture | Écarts restants |
 |---|---|---|---|
-| `cinematic-short`, 60 s de rush | **99,7/100** (98,8 avant les deux correctifs) | 90 % | 1 répétition « ça, » non retirée ; « là » en retard de 6,8 frames (p95 1,4) ; 1 écran d'un mot isolé par plus de 1 s |
-| `cinematic`, 180 s de rush | **99,9/100** | 80 % | 1 « euh » non transcrit par Whisper à la source ; 3 mots mal alignés (« a », « je », « 207 », 7–11 frames) |
+| `cinematic-short`, entretien 640×360, 60 s (première passe) | 99,7/100 | 90 % | répétition non retirée, « là » mal aligné, un écran d'un mot |
+| `cinematic`, entretien 640×360, 180 s (première passe) | 99,9/100 | 80 % | un « euh » non transcrit, 3 mots mal alignés |
+| **`cinematic-short`, entretien HD + 3 B-roll, 24 fps** | **99,7/100** | 82 % | répétition « j'ai atteint » non retirée ; « là » en retard de 3,2 frames ; un écran d'un mot isolé par plus de 1 s |
+| **idem en `--look bleach-grit`** / **`--look neon-80s`** | **99,7 / 99,7** | 82 % | mêmes écarts (le style ne change que l'image) |
+| **`cinematic`, entretien HD + 3 B-roll, 24 fps, 180 s** | **99,8/100** | 81 % | 9 mots mal alignés à la source (3–15 frames) : aligneur, phase 4 |
+| **montage B-roll seul sur la musique (9:16)** | **97,5/100** | 51 % | un plan de terrasse encore à ΔL* 8,2 de sa scène (contre-jour, en partie raccordé) |
 
-- Le rendu `cinematic` a été produit avant le correctif audio. `audio.cut-clicks` n'y relevait aucun clic.
-- Couverture plus faible qu'en phase 7 (92–98 %), sans que ce soit une régression : avec une seule caméra et peu de chutes longues, ni dissolve ni dip n'a été posé sur ces rushes, et le 16:9 n'est pas recadré.
-  - Les fondus ne sont donc vérifiés que sur les tests, pas sur un rush réel.
-- Les écarts restants sont ceux des phases 2 et 4 (aligneur, Whisper), et non des profils cinématiques.
+Le B-roll en chiffres :
+- court : 5 plans de coupe, 19 % du montage, 4 jump cuts masqués, recadrés sur leur sujet ;
+- long : 12 plans de coupe, 25 % du montage, 10 jump cuts masqués ;
+- netteté : ×1,96 au plus (limite ×2) contre ×5,3 avec l'ancien rush.
+
+Le montage B-roll seul dure 25,5 s et non toute la musique : sur 60 s de B-roll, les scènes de repas (2 à 4 personnes) ne tiennent pas dans un cadre vertical et sont écartées. Avant ce tri, la QA relevait des visages hors cadre (92,6/100).
 
 ### Ce qu'un monteur pro critiquerait encore
 
-1. **Un « cinématique » surtout cosmétique sur un talking head** : sans B-roll ni plans de coupe, grain, look et letterbox habillent un entretien sans changer sa narration. Le montage B-roll calé sur la musique reste à faire.
-2. **Des fondus sans poignées** : le plan sortant fige sa dernière image pendant la seconde moitié du fondu, au lieu de continuer sur la matière du rush.
-3. **Des fondus et dips courts (500 ms)** : la règle `motion.presets` contrôle chaque preset de la bibliothèque contre la plage du profil actif (200–500 ms). Un fondu de cinéma de 0,8–1,5 s demandera que cette vérification ne porte que sur les presets utilisés.
-4. **Un seul look pour toutes les scènes** : pas de teintes sélectives (verts → jaune, bleus → cyan), pas de halation ni d'instabilité de cadre. C'est propre, mais générique.
-5. **Une source basse définition** : un 640×360 recadré en 9:16 est mou. Le grain n'y change rien, et aucune règle ne mesure la netteté.
+1. **Pas de J/L cuts ni de match cuts générés** : la règle J/L existe, mais le montage n'en pose pas de lui-même. Les plans de coupe font office de L-cut (la voix continue dessous), mais il n'y a pas de son qui précède l'image.
+2. **Pas de riser → impact ni de coupe musicale aux changements de sujet** : la musique est un tapis continu, alors qu'un monteur la couperait ou la ferait tomber à une rupture.
+3. **Un B-roll choisi sur les visages seulement** : le choix des moments ne regarde ni le mouvement de caméra, ni la netteté, ni l'intérêt du plan (une main qui travaille, un geste), seulement la tenue du sujet dans le cadre.
+4. **Des styles forts mais fixes** : `neon-80s` est doux en plein jour ; il faudrait doser l'intensité d'un style selon la scène (nuit / jour), comme le contraste par scène le fait déjà.
+5. **Une comparaison aux références encore à faire** : `cutkiller reference` est prêt, mais les vidéos de référence n'ont pas pu être mesurées (YouTube et TikTok refusent les robots).
 
 ## Limites connues
 
-- **Pas de sortie 24 fps** : sur des rushes en 30 fps, la conversion saccade. Le profil reste en 30 fps tant que les rushes ne sont pas en 24/25 fps.
+- **24 fps seulement si les rushes y sont** : la sortie suit la cadence des rushes (`matchSourceFps`). Des rushes de téléphone en 30 fps restent en 30.
 - **Pas de rampe de vitesse ni de ralenti** : le moteur ne remappe pas le temps.
 - **Pas de riser → impact ni de room tone** : seuls les whooshes, le glitch et le tick existent en SFX synthétisés.
 - **Grain** : une texture d'overlay de 389 px, répétée. Son échelle ne suit pas la résolution de sortie, et l'encodeur H.264 en lisse une partie au débit cible.
