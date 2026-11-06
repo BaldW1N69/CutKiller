@@ -109,6 +109,7 @@ export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: Ass
       ...(profile.texture.grain > 0 ||
       profile.texture.vignette > 0 ||
       profile.texture.halation > 0 ||
+      profile.texture.bloom > 0 ||
       profile.texture.letterbox
         ? { texture: profile.texture }
         : {}),

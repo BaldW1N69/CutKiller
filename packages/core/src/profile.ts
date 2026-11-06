@@ -130,9 +130,11 @@ export const StyleProfileSchema = z.object({
       vignette: z.number().min(0).max(1).default(0),
       /** Halation: warm glow bleeding around the brightest areas (0–1). */
       halation: z.number().min(0).max(1).default(0),
+      /** Bloom: wide glow of the highlights in their own colours, the neon look (0–1). */
+      bloom: z.number().min(0).max(1).default(0),
       letterbox: z.number().min(1).max(4).optional(),
     })
-    .default({ grain: 0, vignette: 0, halation: 0 }),
+    .default({ grain: 0, vignette: 0, halation: 0, bloom: 0 }),
   /**
    * B-roll (sources with role broll, or video without speech): cutaways over the
    * speech, on an overlay track (the voice goes on underneath), first over the

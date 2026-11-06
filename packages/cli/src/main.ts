@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 import { edlJsonSchema, profileJsonSchema } from "@cutkiller/core";
 import { ffmpegVersion, probeSource } from "@cutkiller/media";
 import { captionLabels, formatLabels, type Report, reportJsonSchema } from "@cutkiller/qa";
-import { loadProfile } from "@cutkiller/style";
+import { listLooks, loadProfile, PresetRegistry, withLook } from "@cutkiller/style";
 import { calibrate, calibrationMarkdown } from "./calibrate";
 import { check, doRender, plan, readEdl } from "./pipeline";
 
@@ -24,6 +24,8 @@ const USAGE = `cutkiller <commande> [options]
 Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), ou chemin vers un .yaml.
 --draft : encodage rapide (preset veryfast) pour itérer.
 --fast  : sans analyse de la parole ni des beats (assemblage brut).
+--look  : style d'image (presets/look/) : film-print, bleach-grit (façon Fight Club), neon-80s (façon Vice City),
+          teal-orange, noir, clean ; « --look list » les décrit. Le style apporte sa texture (grain, halo…).
 --broll : plan d'illustration (répétable) : plans de coupe sur la parole, ou montage sur la musique s'il n'y a pas de parole
           (profils cinematic). Une vidéo sans parole est aussi traitée comme B-roll.`;
 
@@ -53,8 +55,19 @@ async function main(argv: string[]): Promise<void> {
       only: { type: "string" },
       truth: { type: "string" },
       broll: { type: "string", multiple: true },
+      look: { type: "string" },
     },
   });
+  /** The profile named by -p, with the image style of --look if any. */
+  const profileOf = async () => {
+    const profile = await loadProfile(need(values.profile, "profile"));
+    return values.look ? withLook(profile, await PresetRegistry.load(), values.look) : profile;
+  };
+  if (values.look === "list") {
+    for (const l of listLooks(await PresetRegistry.load()))
+      console.log(`${l.ref.padEnd(16)} ${l.description}`);
+    return;
+  }
   const need = (v: string | undefined, name: string): string => {
     if (!v) throw new Error(`option --${name} requise\n\n${USAGE}`);
     return v;
@@ -70,13 +83,7 @@ async function main(argv: string[]): Promise<void> {
       return;
     case "plan": {
       const out = need(values.out, "out");
-      const edl = await plan(
-        positionals,
-        await loadProfile(need(values.profile, "profile")),
-        out,
-        !values.fast,
-        values.broll ?? [],
-      );
+      const edl = await plan(positionals, await profileOf(), out, !values.fast, values.broll ?? []);
       console.log(`✔ ${out} : ${edl.video[0]?.clips.length ?? 0} clip(s)`);
       return;
     }
@@ -93,18 +100,13 @@ async function main(argv: string[]): Promise<void> {
     }
     case "check": {
       const video = need(positionals[0], "vidéo");
-      const report = await check(
-        video,
-        await loadProfile(need(values.profile, "profile")),
-        values.edl,
-        values,
-      );
+      const report = await check(video, await profileOf(), values.edl, values);
       gate(report, values["min-score"]);
       return;
     }
     case "auto": {
       const dir = need(values.out, "out");
-      const profile = await loadProfile(need(values.profile, "profile"));
+      const profile = await profileOf();
       const edlPath = join(dir, "edit.edl.json");
       const video = join(dir, "final.mp4");
       const edl = await plan(positionals, profile, edlPath, !values.fast, values.broll ?? []);

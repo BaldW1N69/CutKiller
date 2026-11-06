@@ -139,6 +139,12 @@
               "minimum": 0,
               "maximum": 1
             },
+            "bloom": {
+              "default": 0,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
             "letterbox": {
               "type": "number",
               "minimum": 1,

@@ -229,6 +229,8 @@ export const OutputSchema = z.object({
       vignette: z.number().min(0).max(1).default(0),
       /** Halation: warm glow bleeding around the brightest areas (0–1). */
       halation: z.number().min(0).max(1).default(0),
+      /** Bloom: wide glow of the highlights in their own colours, the neon look (0–1). */
+      bloom: z.number().min(0).max(1).default(0),
       letterbox: z.number().min(1).max(4).optional(),
     })
     .optional(),

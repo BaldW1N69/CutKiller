@@ -103,3 +103,37 @@ export class PresetRegistry {
     return [...this.byName.values()].flat();
   }
 }
+
+const LookTextureSchema = z
+  .object({
+    grain: z.number().min(0).max(0.3),
+    vignette: z.number().min(0).max(1),
+    halation: z.number().min(0).max(1),
+    bloom: z.number().min(0).max(1),
+    letterbox: z.number().min(1).max(4),
+  })
+  .partial();
+
+/**
+ * The profile with an image style: its look (`presets/look/`) and the film texture
+ * the look comes with (grain, vignette, halation, bloom), the profile's letterbox
+ * kept unless the look sets one. Every other threshold is the profile's.
+ */
+export function withLook(profile: StyleProfile, registry: PresetRegistry, ref: string): StyleProfile {
+  const preset = registry.resolve(ref.includes("@") ? ref : `${ref}@1`);
+  if (preset.kind !== "look") throw new Error(`${ref} n'est pas un style d'image (presets/look/)`);
+  const texture = LookTextureSchema.parse(preset.params.texture ?? {});
+  return {
+    ...profile,
+    color: { ...profile.color, look: `${preset.name}@${preset.version.split(".")[0]}` },
+    texture: { ...profile.texture, ...texture },
+  };
+}
+
+/** Image styles shipped (look presets), with their description. */
+export function listLooks(registry: PresetRegistry): { ref: string; description: string }[] {
+  return registry
+    .all()
+    .filter((p) => p.kind === "look")
+    .map((p) => ({ ref: `${p.name}@${p.version.split(".")[0]}`, description: p.description ?? "" }));
+}

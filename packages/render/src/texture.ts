@@ -74,46 +74,59 @@ export class TexturePainter {
   }
 
   get active(): boolean {
-    return this.texture.grain > 0 || this.texture.vignette > 0 || this.texture.halation > 0 || this.bar > 0;
+    const t = this.texture;
+    return t.grain > 0 || t.vignette > 0 || t.halation > 0 || t.bloom > 0 || this.bar > 0;
   }
 
-  private glow?: { canvas: Canvas; ctx: CanvasRenderingContext2D; w: number; h: number };
+  private readonly glows = new Map<
+    number,
+    { canvas: Canvas; ctx: CanvasRenderingContext2D; w: number; h: number }
+  >();
 
   /**
-   * Halation: the highlights (luma above 0,75), taken at 1/8 resolution, blurred
-   * and tinted red-orange, then added back in `screen` mode: the warm bleed of
-   * film around bright edges (a window, a lamp), absent from shadows and midtones.
+   * Glow of the highlights, taken at 1/8 resolution, blurred and added back in
+   * `screen` mode:
+   * - halation: luma above 0,75, tinted red-orange: the warm bleed of film around
+   *   bright edges (a window, a lamp), absent from shadows and midtones;
+   * - bloom: luma above 0,62, in the highlights' own colours, wider: the neon glow.
    */
-  private halation(ctx: CanvasRenderingContext2D): void {
+  private glowPass(
+    ctx: CanvasRenderingContext2D,
+    strength: number,
+    threshold: number,
+    /** Working resolution divisor and blur radius at that resolution. */
+    scale: number,
+    radius: number,
+    tint?: [number, number, number],
+  ): void {
     const { width: W, height: H } = this;
-    if (!this.glow) {
-      const w = Math.max(8, Math.round(W / 8));
-      const h = Math.max(8, Math.round(H / 8));
+    let buffer = this.glows.get(scale);
+    if (!buffer) {
+      const w = Math.max(8, Math.round(W / scale));
+      const h = Math.max(8, Math.round(H / scale));
       const canvas = createCanvas(w, h);
-      this.glow = { canvas, ctx: canvas.getContext("2d"), w, h };
+      buffer = { canvas, ctx: canvas.getContext("2d"), w, h };
+      this.glows.set(scale, buffer);
     }
-    const { canvas, ctx: g, w, h } = this.glow;
+    const { canvas, ctx: g, w, h } = buffer;
     g.globalCompositeOperation = "copy";
     g.drawImage(ctx.canvas, 0, 0, w, h);
     const img = g.getImageData(0, 0, w, h);
     const d = img.data;
-    let mask: Float32Array = new Float32Array(w * h);
+    let planes: Float32Array[] = [0, 1, 2].map(() => new Float32Array(w * h));
     for (let i = 0; i < w * h; i++) {
-      const y =
-        (0.2126 * (d[4 * i] as number) +
-          0.7152 * (d[4 * i + 1] as number) +
-          0.0722 * (d[4 * i + 2] as number)) /
-        255;
-      mask[i] = Math.max(0, (y - 0.75) / 0.25);
+      const r = (d[4 * i] as number) / 255;
+      const gr = (d[4 * i + 1] as number) / 255;
+      const b = (d[4 * i + 2] as number) / 255;
+      const m = Math.max(0, (0.2126 * r + 0.7152 * gr + 0.0722 * b - threshold) / (1 - threshold));
+      const c = tint ?? [r, gr, b];
+      for (let k = 0; k < 3; k++) (planes[k] as Float32Array)[i] = m * (c[k] as number);
     }
-    // Two box blurs (radius 2 at 1/8 resolution ≈ 16 px in the output).
-    for (let pass = 0; pass < 2; pass++) mask = boxBlur(mask, w, h, 2);
-    const k = this.texture.halation;
+    // Two box blurs (halation: radius 2 at 1/8 ≈ 16 px; bloom: radius 6 at 1/4 ≈ 24 px).
+    for (let pass = 0; pass < 2; pass++) planes = planes.map((p) => boxBlur(p, w, h, radius));
     for (let i = 0; i < w * h; i++) {
-      const m = Math.min(1, (mask[i] as number) * k);
-      d[4 * i] = Math.round(255 * m);
-      d[4 * i + 1] = Math.round(90 * m);
-      d[4 * i + 2] = Math.round(40 * m);
+      for (let k = 0; k < 3; k++)
+        d[4 * i + k] = Math.round(255 * Math.min(1, ((planes[k] as Float32Array)[i] as number) * strength));
       d[4 * i + 3] = 255;
     }
     g.putImageData(img, 0, 0);
@@ -125,10 +138,41 @@ export class TexturePainter {
     ctx.restore();
   }
 
+  private vignette?: Canvas;
+
+  /**
+   * Black layer whose opacity rises from 45 % of the half-diagonal to the corners
+   * (smoothstep, up to 65 % × vignette). Its 8-bit alpha is dithered: a plain canvas
+   * gradient steps by whole levels and draws visible rings on bright skies.
+   */
+  private vignetteLayer(): Canvas {
+    if (this.vignette) return this.vignette;
+    const { width: W, height: H } = this;
+    const layer = createCanvas(W, H);
+    const lctx = layer.getContext("2d");
+    const img = lctx.createImageData(W, H);
+    const rand = rng(0x5eed);
+    const r = Math.hypot(W, H) / 2;
+    const top = 0.65 * this.texture.vignette * 255;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const u = Math.min(1, Math.max(0, (Math.hypot(x + 0.5 - W / 2, y + 0.5 - H / 2) / r - 0.45) / 0.55));
+        const a = top * u * u * (3 - 2 * u);
+        const i = 4 * (y * W + x);
+        img.data[i + 3] = Math.max(0, Math.min(255, Math.floor(a + rand())));
+      }
+    lctx.putImageData(img, 0, 0);
+    this.vignette = layer;
+    return layer;
+  }
+
   paint(ctx: CanvasRenderingContext2D, seed: number): void {
     const { width: W, height: H } = this;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (this.texture.halation > 0) this.halation(ctx);
+    // Bloom works at 1/4 resolution so that thin lights (a neon tube) still pass the threshold.
+    if (this.texture.bloom > 0) this.glowPass(ctx, this.texture.bloom * 3, 0.62, 4, 6);
+    if (this.texture.halation > 0)
+      this.glowPass(ctx, this.texture.halation, 0.75, 8, 2, [1, 90 / 255, 40 / 255]);
     if (this.texture.grain > 0) {
       const s = Math.abs(Math.imul(seed | 0, 2654435761)) >>> 0;
       const tile = this.tiles[s % TILES] as Canvas;
@@ -141,18 +185,20 @@ export class TexturePainter {
         ctx.translate(-((s >>> 3) % TILE), -((s >>> 13) % TILE));
         ctx.fillStyle = pattern;
         ctx.fillRect(0, 0, W + TILE, H + TILE);
+        // Overlay leaves pure white untouched: a faint normal blend of the same
+        // grain (σ ≈ 1–2 levels) dithers the highlights too, so that a bright sky
+        // stretched by the look does not show its 8-bit steps as rings.
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = Math.min(0.05, 0.4 * this.texture.grain);
+        ctx.fillRect(0, 0, W + TILE, H + TILE);
         ctx.restore();
       }
     }
     if (this.texture.vignette > 0) {
-      const r = Math.hypot(W, H) / 2;
-      const g = ctx.createRadialGradient(W / 2, H / 2, r * 0.45, W / 2, H / 2, r);
-      g.addColorStop(0, "rgba(0,0,0,0)");
-      g.addColorStop(1, `rgba(0,0,0,${(0.65 * this.texture.vignette).toFixed(3)})`);
       ctx.save();
       ctx.globalAlpha = 1;
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(this.vignetteLayer(), 0, 0);
       ctx.restore();
     }
     if (this.bar > 0) {

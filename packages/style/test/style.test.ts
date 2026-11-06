@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { listProfiles, loadProfile, PresetRegistry } from "../src";
+import { listLooks, listProfiles, loadProfile, PresetRegistry, withLook } from "../src";
 
 describe("style profiles", () => {
   it("ships short and long profiles carrying the quality standards", async () => {
@@ -41,9 +41,9 @@ describe("style profiles", () => {
     expect(cineShort.montage.maxStaticShotS).toBeGreaterThan(short.montage.maxStaticShotS);
     expect(cine.motion.punchMinSpacingS).toBeGreaterThan(long.motion.punchMinSpacingS);
     expect(cine.motion.emphasisMinScore).toBeGreaterThan(long.motion.emphasisMinScore);
-    expect(cine.texture).toEqual({ grain: 0.07, vignette: 0.35, halation: 0.35, letterbox: 2.39 });
+    expect(cine.texture).toEqual({ grain: 0.07, vignette: 0.35, halation: 0.35, bloom: 0, letterbox: 2.39 });
     expect(cineShort.texture.letterbox).toBeUndefined();
-    expect(long.texture).toEqual({ grain: 0, vignette: 0, halation: 0 });
+    expect(long.texture).toEqual({ grain: 0, vignette: 0, halation: 0, bloom: 0 });
     // Delivery standards do not change.
     for (const p of [cine, cineShort]) {
       expect(p.audio).toMatchObject({ integratedLufs: -14, truePeakDbtp: -1, cutFadeMs: [5, 10] });
@@ -67,6 +67,30 @@ describe("style profiles", () => {
       ];
       for (const ref of refs) expect(() => registry.resolve(ref), `${id} → ${ref}`).not.toThrow();
     }
+  });
+
+  it("styles d'image : le look et sa texture remplacent ceux du profil, le reste ne bouge pas", async () => {
+    const registry = await PresetRegistry.load();
+    const cine = await loadProfile("cinematic");
+    const grit = withLook(cine, registry, "bleach-grit");
+    expect(grit.color.look).toBe("bleach-grit@1");
+    expect(grit.texture).toMatchObject({ grain: 0.11, vignette: 0.5, letterbox: 2.39 });
+    expect(grit.montage).toEqual(cine.montage);
+    const neon = withLook(await loadProfile("short"), registry, "neon-80s@1");
+    expect(neon.texture.bloom).toBeGreaterThan(0);
+    expect(neon.texture.letterbox).toBeUndefined();
+    expect(() => withLook(cine, registry, "whoosh")).toThrow(/n'est pas un style/);
+    const refs = listLooks(registry).map((l) => l.ref);
+    expect(refs).toEqual(
+      expect.arrayContaining([
+        "film-print@1",
+        "bleach-grit@1",
+        "neon-80s@1",
+        "teal-orange@1",
+        "noir@1",
+        "clean@1",
+      ]),
+    );
   });
 
   it("reports invalid profiles with the offending field", async () => {
