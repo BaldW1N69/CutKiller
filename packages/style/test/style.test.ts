@@ -74,7 +74,7 @@ describe("style profiles", () => {
     const path = join(dir, "bad.yaml");
     await writeFile(
       path,
-      "id: bad\nversion: 1.0.0\nformat: { kind: short, width: 1080, height: 1920, fps: 25 }\n",
+      "id: bad\nversion: 1.0.0\nformat: { kind: short, width: 1080, height: 1920, fps: 12 }\n",
     );
     await expect(loadProfile(path)).rejects.toThrow(/format\.fps/);
     await expect(loadProfile("nope")).rejects.toThrow(/introuvable/);

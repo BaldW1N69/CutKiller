@@ -13,7 +13,7 @@ import {
   runPasses,
   type StyleProfile,
 } from "@cutkiller/core";
-import { assembleEdl, brollPass, cutPass } from "@cutkiller/cut";
+import { assembleEdl, brollPass, cutPass, outputFps } from "@cutkiller/cut";
 import { motionPass } from "@cutkiller/motion";
 import { parseLabels, qualityCheck, reportMarkdown } from "@cutkiller/qa";
 import { reframePass } from "@cutkiller/reframe";
@@ -61,13 +61,15 @@ export async function plan(
         `⚠ [source.resolution] ${id} (${probe.width}×${probe.height}) sera agrandi ×${up.toFixed(1)} en ${W}×${H} : image molle (limite ×${profile.export.maxUpscale}, règle image.sharpness). Une source ≥ ${Math.ceil(W / profile.export.maxUpscale)}×${Math.ceil(H / profile.export.maxUpscale)} est nécessaire.`,
       );
   }
+  const fps = outputFps(analysis, profile);
+  if (fps !== profile.format.fps) console.error(`ℹ [output.fps] sortie à ${fps} fps, la cadence des rushes`);
   for (const [id, probe] of Object.entries(analysis.sources)) {
-    const ratio = probe.fps ? profile.format.fps / probe.fps : 1;
+    const ratio = probe.fps ? fps / probe.fps : 1;
     if (probe.fps && Math.abs(ratio - Math.round(ratio)) > 0.01)
       console.error(
-        probe.fps < profile.format.fps
-          ? `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${profile.format.fps} fps répète des images (saccade de pulldown)`
-          : `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${profile.format.fps} fps saute des images à intervalles irréguliers (mouvement moins fluide)`,
+        probe.fps < fps
+          ? `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${fps} fps répète des images (saccade de pulldown)`
+          : `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${fps} fps saute des images à intervalles irréguliers (mouvement moins fluide)`,
       );
   }
   const assembled = assembleEdl(analysis, profile, { edlDir: dirname(resolve(edlPath)) });

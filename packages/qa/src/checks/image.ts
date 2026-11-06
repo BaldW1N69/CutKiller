@@ -69,7 +69,7 @@ export async function checkBitrate(ctx: VideoContext): Promise<CheckResult> {
   const info = await ffprobe(ctx.video);
   const v = info.streams.find((s) => s.codec_type === "video");
   const fps = Math.round(parseRate(v?.avg_frame_rate) ?? 30);
-  const min = fps >= 50 ? ctx.profile.export.minBitrateMbps["60"] : ctx.profile.export.minBitrateMbps["30"];
+  const min = fps > 31 ? ctx.profile.export.minBitrateMbps["60"] : ctx.profile.export.minBitrateMbps["30"];
   const mbps = Number(v?.bit_rate ?? info.format.bit_rate ?? 0) / 1e6;
   const measured = { mbps: Math.round(mbps * 100) / 100, minMbps: min };
   if (mbps >= min) return pass("image.bitrate", measured);

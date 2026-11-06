@@ -14,11 +14,17 @@ export const StyleProfileSchema = z.object({
     kind: z.enum(["short", "long"]),
     width: z.number().int().positive(),
     height: z.number().int().positive(),
-    fps: z.union([z.literal(30), z.literal(60)]),
+    fps: z.union([z.literal(24), z.literal(25), z.literal(30), z.literal(60)]),
+    /**
+     * Output at the rushes' own rate when it is one of `export.allowedFps` (within
+     * 1 %: 23.976 → 24): 24p rushes converted to 30 fps repeat one picture in four
+     * (pulldown judder). Otherwise `fps`.
+     */
+    matchSourceFps: z.boolean().default(false),
   }),
   export: z.object({
     codec: z.enum(["h264", "h265"]).default("h264"),
-    /** Minimum average video bitrate per output frame rate. */
+    /** Minimum average video bitrate: "30" up to 30 fps (24, 25, 30), "60" above. */
     minBitrateMbps: z.object({ "30": z.number().positive(), "60": z.number().positive() }),
     /** Encoder target as a multiple of the minimum, so VBR undershoot stays above it. */
     targetBitrateFactor: z.number().min(1).default(1.25),

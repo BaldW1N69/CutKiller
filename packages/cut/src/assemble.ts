@@ -23,8 +23,25 @@ export interface AssembleOptions {
  * given, and audio-only inputs (music) under the whole timeline. The cut pass
  * refines this rough assembly from phase 2 on.
  */
+/**
+ * Output frame rate: the profile's, or (matchSourceFps) the rate of the rushes
+ * that carry the edit — the longest video that is not B-roll, else the longest
+ * video — when it is an allowed rate within 1 %.
+ */
+export function outputFps(analysis: Analysis, profile: StyleProfile): number {
+  if (!profile.format.matchSourceFps) return profile.format.fps;
+  const videos = Object.values(analysis.sources).filter((s) => s.hasVideo && !s.still && s.fps);
+  const main = videos.filter((s) => s.role !== "broll");
+  const pick = (main.length > 0 ? main : videos).sort((a, b) => b.durationS - a.durationS)[0];
+  const src = pick?.fps;
+  if (!src) return profile.format.fps;
+  const match = profile.export.allowedFps.find((f) => Math.abs(src - f) / f < 0.01);
+  return match ?? profile.format.fps;
+}
+
 export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: AssembleOptions): Edl {
-  const { width, height, fps, kind } = profile.format;
+  const { width, height, kind } = profile.format;
+  const fps = outputFps(analysis, profile);
   const sources: Edl["sources"] = {};
   const clips: EdlInput["video"][number]["clips"] = [];
   const music: [string, number][] = [];
@@ -74,7 +91,7 @@ export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: Ass
     ],
   }));
 
-  const minMbps = fps === 60 ? profile.export.minBitrateMbps["60"] : profile.export.minBitrateMbps["30"];
+  const minMbps = fps > 30 ? profile.export.minBitrateMbps["60"] : profile.export.minBitrateMbps["30"];
   return EdlSchema.parse({
     version: EDL_VERSION,
     meta: { generator: "cutkiller@0.1.0", profile: `${profile.id}@${profile.version}` },

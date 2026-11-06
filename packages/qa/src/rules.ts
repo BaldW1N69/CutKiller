@@ -294,7 +294,7 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
     case "image.export-format":
       return `H.264/H.265, ${p.export.allowedFps.join(" ou ")} fps CFR`;
     case "image.bitrate":
-      return `≥ ${p.export.minBitrateMbps["30"]} Mbps (30 fps), ${p.export.minBitrateMbps["60"]} (60 fps)`;
+      return `≥ ${p.export.minBitrateMbps["30"]} Mbps (≤ 30 fps), ${p.export.minBitrateMbps["60"]} (60 fps)`;
     case "image.black-frames":
       return "aucune frame noire non prévue";
     case "image.duplicate-frames":

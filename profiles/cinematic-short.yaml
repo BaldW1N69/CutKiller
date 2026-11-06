@@ -5,10 +5,12 @@
 id: cinematic-short
 version: 1.0.0
 description: Vertical 9:16 au rendu cinéma pour Reels, Shorts et TikTok.
-format: { kind: short, width: 1080, height: 1920, fps: 30 }
+# Cadence des rushes quand elle est autorisée (24p reste en 24p : pas de saccade de pulldown).
+format: { kind: short, width: 1080, height: 1920, fps: 30, matchSourceFps: true }
 export:
   codec: h264
   minBitrateMbps: { "30": 16, "60": 24 }
+  allowedFps: [24, 25, 30, 60]
   targetBitrateFactor: 1.5
   # Netteté : pas d'agrandissement au-delà de ×2 (un 1080p recadré en 9:16 : ×1,78).
   maxUpscale: 2

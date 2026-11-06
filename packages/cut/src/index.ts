@@ -12,7 +12,7 @@ import { timelineBeats } from "./beats";
 import { planClips, zoomSplits } from "./plan";
 import { speechTokens } from "./words";
 
-export { type AssembleOptions, assembleEdl } from "./assemble";
+export { type AssembleOptions, assembleEdl, outputFps } from "./assemble";
 export { timelineBeats } from "./beats";
 export { brollPass, isBroll } from "./broll";
 export { buildRuns, type PlannedClip, planClips, type Run, snapJumpCuts, zoomSplits } from "./plan";

@@ -29,3 +29,30 @@ describe("assembleEdl", () => {
     expect(edl.output.audio.cutFadeMs).toBe(7.5);
   });
 });
+
+describe("cadence de sortie", () => {
+  it("suit les rushes en cinematic (23,976 → 24), reste au profil sinon", async () => {
+    const { loadProfile } = await import("@cutkiller/style");
+    const { outputFps } = await import("../src");
+    const analysis = (fps: number) => ({
+      sources: {
+        a: { path: "a.mp4", durationS: 60, hasVideo: true, hasAudio: true, fps },
+        b: {
+          path: "b.mp4",
+          durationS: 90,
+          hasVideo: true,
+          hasAudio: true,
+          fps: 29.97,
+          role: "broll" as const,
+        },
+      },
+    });
+    const cine = await loadProfile("cinematic");
+    const short = await loadProfile("short");
+    expect(outputFps(analysis(23.976), cine)).toBe(24);
+    expect(outputFps(analysis(25), cine)).toBe(25);
+    expect(outputFps(analysis(23.976), short)).toBe(30);
+    // 12 fps is not an allowed rate: the profile's own.
+    expect(outputFps(analysis(12), cine)).toBe(30);
+  });
+});
