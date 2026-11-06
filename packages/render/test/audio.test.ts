@@ -6,7 +6,7 @@ import { generateFixtures } from "@cutkiller/fixtures";
 import { measureLoudness, readWavF32 } from "@cutkiller/media";
 import { PresetRegistry } from "@cutkiller/style";
 import { describe, expect, it } from "vitest";
-import { duckEnvelope } from "../src";
+import { audioMixArgs, duckEnvelope } from "../src";
 import { renderAudio } from "../src/audio";
 
 const rms = (s: Float32Array, a: number, b: number) => {
@@ -16,6 +16,31 @@ const rms = (s: Float32Array, a: number, b: number) => {
 };
 
 describe("mix audio", () => {
+  it("fondu de fin posé avant la fin réelle de l'audio quand le flux audio est plus court que la vidéo", () => {
+    const parsed = parseEdl({
+      version: "1.5.0",
+      output: { format: "long", width: 640, height: 360, fps: 30, video: { bitrateMbps: 8 }, audio: {} },
+      sources: { a: { path: "/r/a.mp4", durationS: 60.008 } },
+      video: [{ id: "main", clips: [{ id: "c1", source: "a", in: 58, out: 60.008, at: 0 }] }],
+    });
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.diagnostics));
+    const conformed = new Map([["/r/a.mp4", "/w/a.wav"]]);
+    const fade = (durations?: Map<string, number>) =>
+      audioMixArgs(parsed.edl, "/", "/w/out.wav", "voice", conformed, new Map(), durations)
+        .join(" ")
+        .match(/atrim=start=0:duration=([\d.]+).*afade=t=out:st=([\d.]+)/)
+        ?.slice(1)
+        .map(Number);
+    // Unknown duration: trimmed to the clip, fade before its out point (the end
+    // of the timeline too: the speech stops mid-word there).
+    // The clip lasts 60 frames (2 s); default cut fade 8 ms.
+    expect(fade()).toEqual([2, 1.992]);
+    // Audio stream ending 10 ms before the clip's out point: piece and fade end with it.
+    const [len, st] = fade(new Map([["/w/a.wav", 59.99]])) ?? [];
+    expect(len).toBeCloseTo(1.99, 6);
+    expect(st).toBeCloseTo(1.982, 6);
+  });
+
   it("enveloppe de ducking : rampes en cosinus, palier à la profondeur, rien hors des zones", () => {
     const edl = parseEdl({
       version: "1.3.0",

@@ -8,7 +8,7 @@ import {
   mainAudioSpans,
   type PresetResolver,
 } from "@cutkiller/core";
-import { ffmpeg, measureLoudness, readWavF32, writeWavF32 } from "@cutkiller/media";
+import { ffmpeg, ffprobe, measureLoudness, readWavF32, writeWavF32 } from "@cutkiller/media";
 
 interface Segment {
   path: string;
@@ -90,7 +90,6 @@ export function audioSegments(
       if (span.continuesPrev && last) {
         // Seamless continuation (zoom cut): extend the previous segment, no fade.
         last.sourceOut = span.sourceOut;
-        last.fadeOutS = span.cutAtEnd ? cutFade : 0;
         continue;
       }
       last = {
@@ -99,8 +98,11 @@ export function audioSegments(
         sourceOut: span.sourceOut,
         startSeconds: framesToSeconds(span.startFrame, fps),
         gainDb: span.clip.gainDb,
-        fadeInS: span.cutAtStart ? cutFade : 0,
-        fadeOutS: span.cutAtEnd ? cutFade : 0,
+        // Every piece fades in and out, not only at edits between two clips: the
+        // timeline's first and last clips, or one next to a gap, start or stop the
+        // speech mid-waveform too.
+        fadeInS: cutFade,
+        fadeOutS: cutFade,
       };
       segments.push(last);
     }
@@ -142,6 +144,8 @@ export function audioMixArgs(
   kind: StemKind | boolean = false,
   conformed: ReadonlyMap<string, string> = new Map(),
   assets: ReadonlyMap<string, string> = new Map(),
+  /** Duration (s) of each input file, when known: a cut fade never lands after the audio has ended. */
+  durations: ReadonlyMap<string, number> = new Map(),
 ): string[] {
   const rate = edl.output.audio.sampleRate;
   const totalSamples = totalSamplesOf(edl);
@@ -151,8 +155,12 @@ export function audioMixArgs(
   const labels: string[] = [];
 
   segments.forEach((seg, i) => {
-    args.push("-ss", seg.sourceIn.toFixed(6), "-i", conformed.get(seg.path) ?? seg.path);
-    const len = seg.sourceOut - seg.sourceIn;
+    const input = conformed.get(seg.path) ?? seg.path;
+    args.push("-ss", seg.sourceIn.toFixed(6), "-i", input);
+    // A source whose audio stream stops before its video (by a few ms) would end
+    // the piece abruptly before the fade: the fade ends where the audio does.
+    const available = (durations.get(input) ?? Number.POSITIVE_INFINITY) - seg.sourceIn;
+    const len = Math.max(0, Math.min(seg.sourceOut - seg.sourceIn, available));
     const chain = [
       `atrim=start=0:duration=${len.toFixed(6)}`,
       "asetpts=PTS-STARTPTS",
@@ -290,8 +298,13 @@ export async function renderAudio(
             join(workDir, kind),
             rate,
           );
+    const durations = new Map<string, number>();
+    for (const wav of conformed.values()) {
+      const d = Number((await ffprobe(wav)).format.duration);
+      if (Number.isFinite(d) && d > 0) durations.set(wav, d);
+    }
     const path = join(workDir, `${kind}.wav`);
-    await ffmpeg(audioMixArgs(edl, baseDir, path, kind, conformed, assets));
+    await ffmpeg(audioMixArgs(edl, baseDir, path, kind, conformed, assets, durations));
     const { samples } = await readWavF32(path);
     return samples;
   };
