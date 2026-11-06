@@ -205,6 +205,16 @@ describe("découpage", () => {
     expect(out.output.captions.safeArea).toEqual(profileSafeArea(long));
   });
 
+  it("letterbox 2,39:1 : les sous-titres restent sur l'image, pas sur les bandes", async () => {
+    const cine = await loadProfile("cinematic");
+    const area = profileSafeArea(cine);
+    // Bars of (1 − 1920 / 2.39 / 1080) / 2 ≈ 12,8 % each, plus a 2 % margin.
+    expect(area.bottom).toBeCloseTo(0.148, 3);
+    expect(area.top).toBeCloseTo(0.148, 3);
+    expect(area.left).toBe(0.05);
+    expect(profileSafeArea(await loadProfile("cinematic-short")).bottom).toBe(profileSafeArea(short).bottom);
+  });
+
   it("styles : capitales et ponctuation selon le preset", () => {
     const pop = captionStyle(registry, "karaoke-pop@1");
     const clean = captionStyle(registry, "subtitle-clean@1");

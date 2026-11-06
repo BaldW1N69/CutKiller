@@ -24,6 +24,12 @@ Une EDL référence un preset par `nom@x` (dernière version x.*.*), `nom@x.y` o
 | `whoosh-soft@1` | sfx | transitions (long) : souffle plus grave et plus doux | 500 ms | impact à 250 ms |
 | `glitch-burst@1` | sfx | glitch-cut : rafales numériques 4 bits | 300 ms | impact à 120 ms |
 | `punch-tick@1` | sfx | punch-in : impact sourd 180 → 60 Hz avec clic | 160 ms | impact à 4 ms |
+| `push-in@1` | motion | move (poussée lente sur l'emphase, profils cinematic) | 900 ms | ease-in-out, sans rebond |
+| `cross-dissolve@1` | transition | dissolve direct (changement de source, cinematic) | 500 ms | ease-in-out |
+| `dip-to-black@1` | transition | dissolve par le noir (rupture dans une caméra, cinematic), 15 % tenus au noir | 500 ms | ease-in-out |
+| `cinema-subtitle@1` | captions | cinematic 16:9 : 2 lignes × 38 caractères, Poppins SemiBold blanc cassé, casse normale, sans karaoké | — | entrée `caption-fade@1` |
+| `cinema-caption@1` | captions | cinematic 9:16 : 2–4 mots en casse normale, mot actif à peine plus chaud | — | entrée `caption-fade@1` |
+| `film-print@1` | look | cinematic : S +14 % autour de 0,42, noirs à 2 %, ombres froides et hautes lumières chaudes à luminance constante | — | — |
 | `clean@1` | look | étalonnage par défaut : courbe en S douce (+8 % autour de 0,45), noirs relevés de 1 %, saturation +6 %, sans virage de teinte ; LUT 33³ générée | — | — |
 
 La QA (`motion.presets`, `motion.durations`, `motion.no-linear`, `motion.overshoot`) vérifie que chaque animation de l'EDL vient d'un preset existant et respecte les plages du cahier des charges.

@@ -1,0 +1,7 @@
+{
+  "name": "push-in",
+  "version": "1.0.0",
+  "kind": "motion",
+  "description": "Poussée lente de la caméra sur une phrase forte (ease-in-out, 900 ms, sans rebond) : l'équivalent cinéma du punch-in.",
+  "params": { "property": "scale", "role": "move", "durationMs": 900, "ease": "ease-in-out" }
+}

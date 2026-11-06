@@ -44,7 +44,7 @@ Un J/L cut exige un clip précédent contigu. Les sources doivent aussi contenir
 `color: { exposureEv, balance: [r, g, b], look?, why? }` sur un clip.
 
 - `exposureEv` (-3 à 3) et `balance` (gains par canal, de luminance neutre sur la peau) s'appliquent **en lumière linéaire** ; au-delà du blanc, les hautes lumières sont compressées par un épaulement (pas d'écrêtage).
-- `look` désigne un preset `look/` (`clean@1`) : courbe en S autour d'un pivot, léger relevé des noirs, saturation, chaleur. La LUT est **générée** au rendu, aucun fichier LUT n'est livré.
+- `look` désigne un preset `look/` (`clean@1`, `film-print@1`) : courbe en S autour d'un pivot, léger relevé des noirs, saturation, chaleur, et *split toning* facultatif (`shadowTint`, `highlightTint` : couleur ajoutée aux ombres et aux hautes lumières, à luminance constante, nulle au noir et au blanc). La LUT est **générée** au rendu, aucun fichier LUT n'est livré.
 - Le rendu cuit l'étalonnage complet d'un plan (exposition, balance, épaulement, look) dans **une seule LUT 3D** (`lut3d`, interpolation tétraédrique) par combinaison distincte, appliquée avant la mise à l'échelle quand c'est moins coûteux.
 - La passe `color` mesure la peau de chaque source (joues et nez du plus grand visage, médiane) sur les passages conservés et la ramène sur la **référence** du montage : la médiane des sources, pondérée par la durée. Tous les plans d'une même source reçoivent la même correction (pas de scintillement entre deux jump-cuts), sauf un plan dont la peau s'écarte de celle de sa source de plus de `shotMatchDeltaE` (ΔE 4 : lumière qui change, tête tournée vers la fenêtre), raccordé isolément. Une référence plus sombre que `minSkinLightness` (L\* 25 : visage à contre-jour, quelle que soit la carnation) est relevée, dans la limite de `maxExposureEv`.
 
@@ -96,8 +96,18 @@ Le moteur de rendu décode un clip qui zoome avec la marge nécessaire (jusqu'à
 | `push` (whip-pan) | à cheval sur la coupe | Les deux images se déplacent ensemble. Avant la coupe, le plan entrant montre sa première image figée ; après, le plan sortant garde sa dernière image figée. Le flou de mouvement masque ces images figées |
 | `slide` (smooth-slide) | à partir de la coupe | Le plan entrant glisse par-dessus la dernière image du plan sortant |
 | `glitch` (glitch-cut) | à cheval sur la coupe | Séparation RVB et bandes décalées, déterministes (graine fixe), au maximum sur la coupe |
+| `dissolve`, `via: direct` (cross-dissolve) | à cheval sur la coupe | Le plan entrant apparaît en fondu par-dessus le plan sortant, sans mouvement. Comme pour `push`, chaque plan montre une image figée de l'autre côté de la coupe |
+| `dissolve`, `via: black` (dip-to-black) | à cheval sur la coupe | Le plan sortant s'éteint sur la première moitié, le plan entrant s'allume sur la seconde, avec 15 % de la durée tenus au noir autour de la coupe. `image.black-frames` ne compte pas ce noir voulu |
 
 L'audio n'est pas modifié par une transition : la coupe son reste à `atFrame`.
+
+## Texture film
+
+`output.texture: { grain, vignette, letterbox? }` (EDL 1.5, facultatif, copié du profil). Elle est peinte par le compositeur sur les images, **sous les sous-titres** :
+
+- **grain** (0–0,3) : bruit de luminance gaussien un peu plus gros qu'un pixel, mélangé en *overlay* (σ ≈ 55 × grain niveaux sur un gris moyen, nul sur le noir et le blanc). Le motif change à chaque nouvelle image source, et seulement alors : une image répétée par le décodeur garde son grain, donc `image.duplicate-frames` la voit toujours ;
+- **vignette** (0–1) : assombrissement radial des coins (jusqu'à 65 % × vignette) ;
+- **letterbox** : bandes noires jusqu'à ce ratio (2,39 pour du 2,39:1). La zone sûre des sous-titres s'étend aux bandes, plus 2 % : les sous-titres restent sur l'image.
 
 ## Flou de mouvement
 

@@ -16,12 +16,19 @@ export interface Margins {
   right: number;
 }
 
-/** Intersection of every platform's safe area listed in the profile (fractions hidden on each side). */
+/**
+ * Intersection of every platform's safe area listed in the profile (fractions
+ * hidden on each side), and the picture left between letterbox bars, with a 2 %
+ * margin: captions stay on the picture, not on the bars.
+ */
 export function profileSafeArea(profile: StyleProfile): Margins {
   const zones = Object.values(profile.captions.safeZones);
+  const { width, height } = profile.format;
+  const ratio = profile.texture.letterbox;
+  const bar = ratio && width / ratio < height ? (1 - width / ratio / height) / 2 + 0.02 : 0;
   return {
-    top: Math.max(0, ...zones.map((z) => z.top)),
-    bottom: Math.max(0, ...zones.map((z) => z.bottom)),
+    top: Math.max(bar, ...zones.map((z) => z.top)),
+    bottom: Math.max(bar, ...zones.map((z) => z.bottom)),
     left: Math.max(0, ...zones.map((z) => z.left)),
     right: Math.max(0, ...zones.map((z) => z.right)),
   };

@@ -246,6 +246,32 @@
         }
       }
     },
+    "texture": {
+      "default": {
+        "grain": 0,
+        "vignette": 0
+      },
+      "type": "object",
+      "properties": {
+        "grain": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.3
+        },
+        "vignette": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "letterbox": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 4
+        }
+      }
+    },
     "montage": {
       "type": "object",
       "properties": {

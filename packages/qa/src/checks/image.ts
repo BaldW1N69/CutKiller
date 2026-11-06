@@ -90,14 +90,28 @@ export async function checkBlackFrames(ctx: VideoContext): Promise<CheckResult> 
     const end = Math.round(Number(m[2]) * fps);
     for (let f = start; f < Math.max(end, start + 1); f++) blackFrames.push(f);
   }
-  const unexpected = ctx.edl ? await filterUnexplained(ctx, blackFrames, (d) => d.black) : blackFrames;
+  // A dip to black is black by construction around its cut.
+  const dips = ctx.edl && ctx.registry ? dipWindows(ctx.edl, ctx.registry) : [];
+  const unplanned = blackFrames.filter((f) => !dips.some(([a, b]) => f >= a && f < b));
+  const unexpected = ctx.edl ? await filterUnexplained(ctx, unplanned, (d) => d.black) : unplanned;
   const total =
     Number(info.streams.find((s) => s.codec_type === "video")?.nb_frames) || blackFrames.length || 1;
   return graded(
     "image.black-frames",
     total,
     runs(unexpected).map(([a, b]) => ({ message: `${b - a + 1} frame(s) noire(s)`, frame: a })),
-    { blackFrames: blackFrames.length, unexpected: unexpected.length },
+    {
+      blackFrames: blackFrames.length,
+      dipFrames: blackFrames.length - unplanned.length,
+      unexpected: unexpected.length,
+    },
+  );
+}
+
+/** Timeline windows [start, end) of the dip-to-black transitions. */
+function dipWindows(edl: Edl, registry: PresetRegistry): [number, number][] {
+  return resolveTransitions(edl, registry).flatMap((t) =>
+    t.params.type === "dissolve" && t.params.via === "black" ? [t.window] : [],
   );
 }
 

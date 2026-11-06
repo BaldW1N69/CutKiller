@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { EaseSchema } from "./ease";
 
-export const EDL_VERSION = "1.4.0";
+export const EDL_VERSION = "1.5.0";
 
 const Id = z.string().regex(/^[A-Za-z0-9_.-]+$/, "identifiant alphanumérique");
 const Seconds = z.number().nonnegative();
@@ -208,6 +208,20 @@ export const OutputSchema = z.object({
       maxSamples: z.number().int().min(2).max(64).default(32),
     })
     .default({ thresholdPxPerFrame: 12, shutterAngle: 180, stepPx: 3, maxSamples: 32 }),
+  /**
+   * Film texture, drawn over the pictures and under the captions: grain (fine
+   * luma noise blended in overlay, σ ≈ 55 × grain levels on mid-grey, renewed with
+   * every new picture),
+   * vignette (darkening of the corners, 0–1) and letterbox (black bars down to
+   * this aspect ratio, e.g. 2.39). Unset or zero: none.
+   */
+  texture: z
+    .object({
+      grain: z.number().min(0).max(0.3).default(0),
+      vignette: z.number().min(0).max(1).default(0),
+      letterbox: z.number().min(1).max(4).optional(),
+    })
+    .optional(),
   /**
    * Where captions go: the area they must stay inside (fractions of the frame
    * hidden by the platforms' interface) and their vertical placement. Filled

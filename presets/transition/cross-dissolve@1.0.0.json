@@ -1,0 +1,7 @@
+{
+  "name": "cross-dissolve",
+  "version": "1.0.0",
+  "kind": "transition",
+  "description": "Fondu enchaîné : le plan entrant apparaît par-dessus le plan sortant, sans mouvement (ease-in-out, 500 ms). Pour un changement de lieu ou un temps qui passe.",
+  "params": { "type": "dissolve", "durationMs": 500, "via": "direct", "ease": "ease-in-out" }
+}

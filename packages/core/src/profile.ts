@@ -94,6 +94,17 @@ export const StyleProfileSchema = z.object({
       maxSkinDeltaL: 6,
       maxSkinDeltaAb: 6,
     }),
+  /**
+   * Film texture of the render (copied into the EDL's output): grain strength,
+   * vignette, letterbox aspect ratio. Off by default.
+   */
+  texture: z
+    .object({
+      grain: z.number().min(0).max(0.3).default(0),
+      vignette: z.number().min(0).max(1).default(0),
+      letterbox: z.number().min(1).max(4).optional(),
+    })
+    .default({ grain: 0, vignette: 0 }),
   montage: z.object({
     maxSilenceMs: z.number().positive().default(350),
     wordMarginMs: Range.default([80, 120]),

@@ -87,6 +87,9 @@ export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: Ass
       },
       audio: { cutFadeMs: (profile.audio.cutFadeMs[0] + profile.audio.cutFadeMs[1]) / 2 },
       motionBlur: { thresholdPxPerFrame: profile.motion.motionBlurThresholdPxPerFrame },
+      ...(profile.texture.grain > 0 || profile.texture.vignette > 0 || profile.texture.letterbox
+        ? { texture: profile.texture }
+        : {}),
     },
     sources,
     video: [{ id: "main", clips }],

@@ -86,6 +86,46 @@ describe("MotionTimeline", () => {
   });
 });
 
+describe("fondus (profils cinematic)", () => {
+  it("cross-dissolve : l'entrant apparaît en fondu par-dessus le sortant, sans mouvement", () => {
+    const edl = edlOf(base([{ id: "t", atFrame: 60, preset: "cross-dissolve@1", durationFrames: 15 }]));
+    const tl = new MotionTimeline(edl, resolveTransitions(edl, registry));
+    expect(tl.transitions[0]?.window).toEqual([53, 68]);
+    const opacity = (f: number) => tl.layersAt(f).map((l) => [l.clip.id, l.image, l.state(f).opacity]);
+    expect(opacity(53)).toEqual([
+      ["A", "live", 1],
+      ["B", "first", 0],
+    ]);
+    const mid = tl.layersAt(60);
+    expect(mid.map((l) => [l.clip.id, l.image])).toEqual([
+      ["A", "last"],
+      ["B", "live"],
+    ]);
+    expect(mid[1]?.state(60.5).opacity).toBeCloseTo(0.5, 1);
+    // Rising monotonically, never moving.
+    let prev = -1;
+    for (let f = 53; f < 68; f++) {
+      const o = tl.layersAt(f)[1]?.state(f).opacity ?? 0;
+      expect(o).toBeGreaterThanOrEqual(prev);
+      prev = o;
+      expect(tl.velocityAt(f)).toBe(0);
+    }
+    expect(tl.layersAt(68).map((l) => l.clip.id)).toEqual(["B"]);
+  });
+
+  it("dip-to-black : le sortant s'éteint, noir sur la coupe, l'entrant s'allume", () => {
+    const edl = edlOf(base([{ id: "t", atFrame: 60, preset: "dip-to-black@1", durationFrames: 15 }]));
+    const tl = new MotionTimeline(edl, resolveTransitions(edl, registry));
+    const at = (f: number) =>
+      tl.layersAt(f).map((l) => [l.clip.id, Math.round(l.state(f).opacity * 100) / 100]);
+    expect(at(53)).toEqual([["A", 1]]);
+    expect(at(59)[0]?.[0]).toBe("A");
+    expect(at(60)[0]?.[0]).toBe("B");
+    expect(at(60)[0]?.[1]).toBeLessThan(0.15);
+    expect(at(67)[0]?.[1]).toBeGreaterThan(0.95);
+  });
+});
+
 describe("motionPass", () => {
   const w = (text: string, start: number): Word => ({ text, start, end: start + 0.3, timing: "forced" });
 

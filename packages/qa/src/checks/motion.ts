@@ -268,7 +268,8 @@ export function checkPunchIns(edl: Edl, profile: StyleProfile): CheckResult {
   for (const c of clips)
     if (c.transform.scale > 1.0001) events.push({ frame: c.at, level: c.transform.scale, label: c.id });
   for (const track of edl.keyframes) {
-    if (trackProperty(track) !== "scale" || track.role !== "micro") continue;
+    // Punches (micro) and the slow push-ins of the cinematic profiles (move) alike.
+    if (trackProperty(track) !== "scale" || (track.role !== "micro" && track.role !== "move")) continue;
     const clip = byId.get(trackClip(track)) as VideoClip | undefined;
     if (!clip) continue;
     const end = track.keys.at(-1)?.value ?? 1;

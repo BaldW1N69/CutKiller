@@ -2,7 +2,7 @@
 
 Montage automatique de rushes pour YouTube (16:9) et Shorts / TikTok / Reels (9:16), piloté par une **EDL JSON éditable à la main** et vérifié par des **règles de qualité mesurables**.
 
-> Statut : **phases 0 à 7 livrées**. Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké dans les safe zones avec export SRT, mix audio à -14 LUFS (true peak ≤ -1 dBTP) avec ducking et effets sonores synchronisés, recadrage 9:16 qui suit le visage comme une caméra posée, étalonnage qui égalise la peau d'un plan à l'autre sous un look commun, rendu et quality-check sur les 25 règles. La QA est calibrée : un défaut injecté par règle sur un montage propre, détection et fausses alertes mesurées ([rapport](docs/phases/phase-7.md)) ; la synchro peut être vérifiée contre une annotation humaine. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
+> Statut : **phases 0 à 8 livrées** (phase 8 : profils cinématiques). Le pipeline tourne de bout en bout : transcription au mot (français), suppression des silences, hésitations et faux départs, zoom-cuts, calage sur les beats, punch-ins animés et transitions avec flou de mouvement, sous-titres karaoké dans les safe zones avec export SRT, mix audio à -14 LUFS (true peak ≤ -1 dBTP) avec ducking et effets sonores synchronisés, recadrage 9:16 qui suit le visage comme une caméra posée, étalonnage qui égalise la peau d'un plan à l'autre sous un look commun, rendu et quality-check sur les 25 règles. La QA est calibrée : un défaut injecté par règle sur un montage propre, détection et fausses alertes mesurées ([rapport](docs/phases/phase-7.md)) ; la synchro peut être vérifiée contre une annotation humaine. Voir [`docs/AUDIT.md`](docs/AUDIT.md) pour l'architecture et le plan, et [`docs/phases/`](docs/phases) pour les rapports de phase.
 
 ## Prérequis
 
@@ -37,7 +37,7 @@ pnpm cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --truth out/l
 pnpm cutkiller calibrate -o out/calibration
 ```
 
-- `-p short|long` ou chemin vers un profil `.yaml` : tous les réglages de style vivent dans [`profiles/`](profiles).
+- `-p short|long|cinematic|cinematic-short` ou chemin vers un profil `.yaml` : tous les réglages de style vivent dans [`profiles/`](profiles). Les profils `cinematic` (16:9) et `cinematic-short` (9:16) suivent l'[étude de 24 tutoriels et 9 articles](docs/research/cinematic.md) : plans plus longs, poussées lentes au lieu des punch-ins, fondus, look « tirage film », grain, vignette et letterbox 2,39:1, sous-titres sobres. Les 25 règles QA restent les mêmes, seuls les seuils changent.
 - `--draft` : encodage rapide (x264 `veryfast`) pour itérer ; le rendu final utilise le preset de l'EDL (`medium` par défaut).
 - `--fast` : sans analyse de la parole ni des beats (assemblage + zoom-cuts uniquement).
 - `plan` écrit aussi `<edl>.analysis.json` (transcript au mot, VAD, beats, visages), que `check` réutilise.

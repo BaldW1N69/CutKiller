@@ -28,6 +28,16 @@ export const TransitionParamsSchema = z.discriminatedUnion("type", [
     direction: Direction,
     ease: EaseSchema,
   }),
+  /**
+   * The pictures blend: straight into each other (`direct`, cross-dissolve), or
+   * through black (`black`, dip to black: out over the first half, in over the second).
+   */
+  z.object({
+    type: z.literal("dissolve"),
+    durationMs: z.number().positive(),
+    via: z.enum(["direct", "black"]).default("direct"),
+    ease: EaseSchema,
+  }),
   /** RGB split and displaced bands around the cut. */
   z.object({
     type: z.literal("glitch"),
@@ -59,8 +69,8 @@ export interface ResolvedTransition extends Transition {
 }
 
 /**
- * Push and glitch straddle the cut (half before, half after); a slide starts on
- * the cut, since the incoming picture covers the outgoing one.
+ * Push, dissolve and glitch straddle the cut (half before, half after); a slide
+ * starts on the cut, since the incoming picture covers the outgoing one.
  */
 export function transitionWindow(t: Transition, params: TransitionParams): [number, number] {
   if (params.type === "slide") return [t.atFrame, t.atFrame + t.durationFrames];

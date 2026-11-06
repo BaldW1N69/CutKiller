@@ -17,7 +17,7 @@ import { reframePass } from "@cutkiller/reframe";
 import { render } from "@cutkiller/render";
 import { loadProfile, PresetRegistry } from "@cutkiller/style";
 import { beforeAll, describe, expect, it } from "vitest";
-import { checkDuplicateFrames } from "../src/checks/image";
+import { checkBlackFrames, checkDuplicateFrames } from "../src/checks/image";
 import { checkColor, checkReframe, renderSubjects } from "../src/checks/subject";
 import { clipFrameStats, frameDiffs } from "../src/decode";
 
@@ -265,5 +265,106 @@ describe("frames figées (QA image.duplicate-frames)", () => {
     // Frozen while the zoom moves by 2 px/frame or more (the last, sub-2-px frame of
     // the spring at this small output size is not required to change).
     expect(bad.violations).toEqual([{ message: "3 frame(s) dupliquée(s)", frame: 41 }]);
+  });
+});
+
+describe("texture film et fondus (profils cinematic)", () => {
+  const W = 320;
+  const H = 180;
+  /** Gray (luma) pixels of one frame of a render. */
+  async function gray(video: string, frame: number): Promise<Buffer> {
+    const { stdout } = await ffmpeg([
+      "-v",
+      "error",
+      "-i",
+      video,
+      "-vf",
+      `select='eq(n,${frame})',format=gray`,
+      "-frames:v",
+      "1",
+      "-f",
+      "rawvideo",
+      "-",
+    ]);
+    return stdout;
+  }
+  const mean = (px: Buffer, x0: number, y0: number, x1: number, y1: number) => {
+    let s = 0;
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) s += px[y * W + x] as number;
+    return s / ((x1 - x0) * (y1 - y0));
+  };
+
+  const input = (texture?: { grain: number; vignette: number; letterbox?: number }): EdlInput => ({
+    version: "1.5.0",
+    output: {
+      format: "long",
+      width: W,
+      height: H,
+      fps: 30,
+      video: { bitrateMbps: 8, preset: "veryfast" },
+      audio: {},
+      ...(texture ? { texture } : {}),
+    },
+    sources: { a: { path: fx.cam16x9, durationS: 6 }, b: { path: fx.cam9x16, durationS: 4 } },
+    video: [
+      {
+        id: "main",
+        clips: [
+          { id: "c1", source: "a", in: 0, out: 2, at: 0 },
+          { id: "c2", source: "b", in: 0, out: 2, at: 60 },
+          { id: "c3", source: "a", in: 3, out: 5, at: 120 },
+        ],
+      },
+    ],
+    transitions: [
+      { id: "t1", atFrame: 60, preset: "cross-dissolve@1", durationFrames: 15 },
+      { id: "t2", atFrame: 120, preset: "dip-to-black@1", durationFrames: 15 },
+    ],
+  });
+
+  let plain: string;
+  let film: string;
+  let filmEdl: Edl;
+  beforeAll(async () => {
+    plain = join(dir, "plain.mp4");
+    film = join(dir, "film.mp4");
+    filmEdl = edlOf(input({ grain: 0.1, vignette: 0.6, letterbox: 2.39 }));
+    await render(edlOf(input()), { baseDir: fx.dir, outPath: plain });
+    await render(filmEdl, { baseDir: fx.dir, outPath: film });
+  });
+
+  it("letterbox noir, coins assombris, grain dans l'image, centre inchangé en moyenne", async () => {
+    const [p, f] = await Promise.all([gray(plain, 30), gray(film, 30)]);
+    // Bars: (180 − 320 / 2.39) / 2 ≈ 23 px, video black (16) after encoding.
+    expect(mean(f, 0, 0, W, 20)).toBeLessThan(20);
+    expect(mean(f, 0, H - 20, W, H)).toBeLessThan(20);
+    expect(mean(p, 0, 0, W, 20)).toBeGreaterThan(mean(f, 0, 0, W, 20) + 10);
+    // Vignette: corners of the picture darker, centre about the same.
+    const corner = (px: Buffer) => mean(px, 0, 26, 30, 50);
+    expect(corner(f)).toBeLessThan(corner(p) - 3);
+    expect(Math.abs(mean(f, 140, 70, 180, 110) - mean(p, 140, 70, 180, 110))).toBeLessThan(4);
+    // Grain: pixel-level differences on a flat mid-grey bar (overlay leaves pure
+    // black and white untouched).
+    let sq = 0;
+    let sum = 0;
+    for (let y = 40; y < 80; y++)
+      for (let x = 62; x < 98; x++) {
+        const d = (f[y * W + x] as number) - (p[y * W + x] as number);
+        sq += d * d;
+        sum += d;
+      }
+    // Standard deviation of the difference: the grain, not the vignette's offset.
+    expect(Math.sqrt(sq / 1440 - (sum / 1440) ** 2)).toBeGreaterThan(2);
+  });
+
+  it("le fondu au noir est noir sur la coupe, sans être compté comme frames noires", async () => {
+    const cut = await gray(film, 120);
+    expect(mean(cut, 0, 0, W, H)).toBeLessThan(24);
+    const ctx = { video: film, edl: filmEdl, baseDir: fx.dir, profile, registry };
+    const black = await checkBlackFrames(ctx);
+    expect(black.measured?.dipFrames).toBeGreaterThan(0);
+    expect(black.violations).toEqual([]);
+    const dups = await checkDuplicateFrames(ctx);
+    expect(dups.violations).toEqual([]);
   });
 });

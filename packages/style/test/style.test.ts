@@ -28,6 +28,47 @@ describe("style profiles", () => {
     }
   });
 
+  it("ships cinematic profiles: same rules, calmer thresholds, film texture", async () => {
+    expect(await listProfiles()).toEqual(expect.arrayContaining(["cinematic", "cinematic-short"]));
+    const long = await loadProfile("long");
+    const short = await loadProfile("short");
+    const cine = await loadProfile("cinematic");
+    const cineShort = await loadProfile("cinematic-short");
+    expect(cine.format).toMatchObject({ kind: "long", width: 1920, height: 1080 });
+    expect(cineShort.format).toMatchObject({ kind: "short", width: 1080, height: 1920 });
+    // Longer shots, rarer and slower push-ins, no whoosh on fades.
+    expect(cine.montage.maxStaticShotS).toBeGreaterThan(long.montage.maxStaticShotS);
+    expect(cineShort.montage.maxStaticShotS).toBeGreaterThan(short.montage.maxStaticShotS);
+    expect(cine.motion.punchMinSpacingS).toBeGreaterThan(long.motion.punchMinSpacingS);
+    expect(cine.motion.emphasisMinScore).toBeGreaterThan(long.motion.emphasisMinScore);
+    expect(cine.texture).toEqual({ grain: 0.07, vignette: 0.35, letterbox: 2.39 });
+    expect(cineShort.texture.letterbox).toBeUndefined();
+    expect(long.texture).toEqual({ grain: 0, vignette: 0 });
+    // Delivery standards do not change.
+    for (const p of [cine, cineShort]) {
+      expect(p.audio).toMatchObject({ integratedLufs: -14, truePeakDbtp: -1, cutFadeMs: [5, 10] });
+      expect(p.motion.transitionDurationMs).toEqual([200, 500]);
+      expect(p.captions.maxSyncErrorFrames).toEqual({ p95: 1, max: 3 });
+    }
+  });
+
+  it("every preset a profile refers to exists", async () => {
+    const registry = await PresetRegistry.load();
+    for (const id of await listProfiles()) {
+      const p = await loadProfile(id);
+      const refs = [
+        p.motion.punchPreset,
+        ...p.motion.transitions.sameSource,
+        ...p.motion.transitions.crossSource,
+        p.captions.style,
+        p.color.look,
+        ...Object.values(p.audio.sfx.transitions),
+        ...(p.audio.sfx.punchIn ? [p.audio.sfx.punchIn] : []),
+      ];
+      for (const ref of refs) expect(() => registry.resolve(ref), `${id} → ${ref}`).not.toThrow();
+    }
+  });
+
   it("reports invalid profiles with the offending field", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ck-"));
     const path = join(dir, "bad.yaml");

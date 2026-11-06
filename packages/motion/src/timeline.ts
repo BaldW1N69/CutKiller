@@ -15,6 +15,9 @@ import {
 } from "@cutkiller/core";
 import { directionVector, type ResolvedTransition } from "./presets";
 
+/** Share of a dip to black spent fully black, around the cut. */
+const DIP_HOLD = 0.15;
+
 /** Which picture of a clip a layer shows: its live frame, or its first/last frame held. */
 export type LayerImage = "live" | "first" | "last";
 
@@ -77,6 +80,7 @@ export class MotionTimeline {
     track: number,
     image: LayerImage,
     offset?: (t: number) => [number, number],
+    alpha?: (t: number) => number,
   ): LayerPlan {
     return {
       clip,
@@ -96,6 +100,7 @@ export class MotionTimeline {
           s.x += dx;
           s.y += dy;
         }
+        if (alpha) s.opacity *= alpha(t);
         return s;
       },
     };
@@ -110,8 +115,31 @@ export class MotionTimeline {
       const inIdx = this.main.findIndex((c) => c.at === tr.atFrame);
       const outgoing = this.main[inIdx - 1] as VideoClip;
       const incoming = this.main[inIdx] as VideoClip;
-      const [vx, vy] = directionVector(tr.params.direction);
       const before = f < tr.atFrame;
+      if (tr.params.type === "dissolve") {
+        if (tr.params.via === "black") {
+          // Out to black over the first half, in from black over the second, with a
+          // short hold on black (15 % of the duration) so the dip reads as one.
+          const fade = (t: number) =>
+            Math.max(0, Math.abs(1 - 2 * this.progress(tr, t)) - DIP_HOLD) / (1 - DIP_HOLD);
+          layers.push(
+            before
+              ? this.layer(outgoing, 0, "live", undefined, fade)
+              : this.layer(incoming, 0, "live", undefined, fade),
+          );
+        } else {
+          layers.push(
+            this.layer(outgoing, 0, before ? "live" : "last"),
+            this.layer(incoming, 0, before ? "first" : "live", undefined, (t) => this.progress(tr, t)),
+          );
+        }
+        for (const o of this.overlays) {
+          const clip = o.clips.find((c) => c.at <= f && f < clipEnd(c, this.fps));
+          if (clip) layers.push(this.layer(clip, o.track, "live"));
+        }
+        return layers;
+      }
+      const [vx, vy] = directionVector(tr.params.direction);
       if (tr.params.type === "push") {
         layers.push(
           this.layer(outgoing, 0, before ? "live" : "last", (t) => {

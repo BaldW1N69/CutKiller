@@ -17,6 +17,7 @@ import { applyGlitch, type LayerPlan, MotionTimeline, resolveTransitions } from 
 import type { PresetRegistry } from "@cutkiller/style";
 import { type Canvas, type CanvasRenderingContext2D, createCanvas, type ImageData } from "canvas";
 import { FrameReader } from "./frames";
+import { hashString, TexturePainter } from "./texture";
 
 export interface ClipLog {
   id: string;
@@ -218,6 +219,8 @@ interface Decoded {
   done: Promise<void>;
   /** Frames of the clip already decoded into `canvas`. */
   read: number;
+  /** Count of the source pictures put into `canvas` (a held frame does not count): seeds the grain. */
+  shown: number;
   log: ClipLog;
   stopped: boolean;
 }
@@ -282,6 +285,7 @@ export async function renderVideo(
   const sum = new Uint32Array(W * H * 4);
   const glitched = ctx.createImageData(W, H);
 
+  const texture = edl.output.texture ? new TexturePainter(edl.output.texture, W, H) : undefined;
   const decoders = new Map<string, Decoded>();
   const logs: ClipLog[] = [];
   const motion: MotionLog = { frames: [], blurredFrames: 0, glitchFrames: 0, captionFrames: 0 };
@@ -310,6 +314,7 @@ export async function renderVideo(
       reader: new FrameReader(child.stdout as NonNullable<typeof child.stdout>, width * height * 4),
       done: waitFor(child, `décodeur ${clip.id}`),
       read: 0,
+      shown: 0,
       log,
       stopped: false,
     };
@@ -329,6 +334,7 @@ export async function renderVideo(
       if (d.read <= index) continue; // skipped picture: only the latest one is drawn
       d.pixels.data.set(frame);
       d.ctx.putImageData(d.pixels, 0, 0);
+      d.shown++;
     }
   };
 
@@ -369,6 +375,15 @@ export async function renderVideo(
     }
     target.setTransform(1, 0, 0, 1, 0, 0);
     target.globalAlpha = 1;
+    if (texture?.active) {
+      // Same pictures, same grain: a frame held by the decoder still reads as a repeat.
+      let seed = 0;
+      for (const layer of layers) {
+        const d = decoders.get(layer.clip.id);
+        if (d) seed = Math.imul(seed ^ hashString(layer.clip.id), 31) + d.shown;
+      }
+      texture.paint(target, seed);
+    }
     if (withCaptions) captions.draw(target, f, t);
   };
 

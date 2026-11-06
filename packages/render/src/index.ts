@@ -15,6 +15,7 @@ export {
   duckEnvelope,
   type StemKind,
 } from "./audio";
+export { letterboxBar, TexturePainter } from "./texture";
 export {
   type ClipLog,
   decoderArgs,

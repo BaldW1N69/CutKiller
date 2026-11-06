@@ -136,6 +136,36 @@ function graded(skins: Record<string, Rgb>, durations: Record<string, number>) {
 
 const lab = (rgb: Rgb) => srgbToLab(rgb);
 
+describe("look film-print (split toning)", () => {
+  const luma = ([r, g, b]: Rgb) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+  it("refroidit les ombres, réchauffe les hautes lumières, sans toucher la luminance", async () => {
+    const look = LookParamsSchema.parse(registry.resolve("film-print@1").params);
+    const flat = { ...look, contrast: 0, lift: 0 };
+    const dark = applyLook(flat, [0.15, 0.15, 0.15]);
+    const bright = applyLook(flat, [0.8, 0.8, 0.8]);
+    expect(dark[2]).toBeGreaterThan(dark[0]);
+    expect(bright[0]).toBeGreaterThan(bright[2]);
+    expect(luma(dark)).toBeCloseTo(0.15, 3);
+    expect(luma(bright)).toBeCloseTo(0.8, 3);
+    // Black and white stay neutral: no coloured clipping at the ends (the lift
+    // leaves black at 2 %, barely toned).
+    for (const v of [0, 1]) {
+      const flatEnd = applyLook(flat, [v, v, v]);
+      expect(Math.max(...flatEnd) - Math.min(...flatEnd)).toBeLessThan(1e-9);
+      const end = applyLook(look, [v, v, v]);
+      expect(Math.max(...end) - Math.min(...end)).toBeLessThan(0.01);
+    }
+  });
+
+  it("laisse le look clean@1 identique (teintes par défaut nulles)", () => {
+    const clean = LookParamsSchema.parse(registry.resolve("clean@1").params);
+    expect(clean.shadowTint).toEqual([0, 0, 0]);
+    const grey = applyLook(clean, [0.5, 0.5, 0.5]);
+    expect(grey[0]).toBeCloseTo(grey[2], 9);
+  });
+});
+
 describe("passe color", () => {
   const warm: Rgb = [0.78, 0.58, 0.48];
 

@@ -1,0 +1,16 @@
+{
+  "name": "film-print",
+  "version": "1.0.0",
+  "kind": "look",
+  "description": "Look « tirage film » : courbe en S plus marquée (+14 %), noirs légèrement relevés, ombres froides et hautes lumières chaudes à luminance constante, saturation inchangée. Peau égalisée avant le look, donc identique d'un plan à l'autre.",
+  "params": {
+    "contrast": 0.14,
+    "pivot": 0.42,
+    "lift": 0.02,
+    "saturation": 0,
+    "warmth": 0,
+    "shadowTint": [-0.02, 0.0, 0.025],
+    "highlightTint": [0.025, 0.01, -0.025],
+    "size": 33
+  }
+}

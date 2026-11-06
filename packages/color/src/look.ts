@@ -17,6 +17,13 @@ export const LookParamsSchema = z.object({
   saturation: z.number().min(-1).max(1).default(0),
   /** Red up / blue down (−0.2…0.2). */
   warmth: z.number().min(-0.2).max(0.2).default(0),
+  /**
+   * Split toning: colour added to the shadows and to the highlights (bell
+   * weights peaking at Y = 1/3 and 2/3, zero at black and white), each without
+   * changing luma: cool shadows / warm highlights, the film-print colour contrast.
+   */
+  shadowTint: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+  highlightTint: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   size: z.number().int().min(9).max(65).default(33),
 });
 
@@ -35,8 +42,20 @@ export function applyLook(p: LookParams, rgb: [number, number, number]): [number
   r = y + (r - y) * (1 + p.saturation);
   g = y + (g - y) * (1 + p.saturation);
   b = y + (b - y) * (1 + p.saturation);
-  return [clamp01(r * (1 + p.warmth)), clamp01(g), clamp01(b * (1 - p.warmth))];
+  r *= 1 + p.warmth;
+  b *= 1 - p.warmth;
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // Bell-shaped weights (peaks at 1/3 and 2/3): pure black and pure white stay neutral.
+  const t = clamp01(l);
+  const ws = 6.75 * t * (1 - t) ** 2;
+  const wh = 6.75 * t ** 2 * (1 - t);
+  const tone = (c: number) =>
+    ws * ((p.shadowTint[c] as number) - luma(p.shadowTint)) +
+    wh * ((p.highlightTint[c] as number) - luma(p.highlightTint));
+  return [clamp01(r + tone(0)), clamp01(g + tone(1)), clamp01(b + tone(2))];
 }
+
+const luma = (v: readonly number[]) => 0.2126 * (v[0] ?? 0) + 0.7152 * (v[1] ?? 0) + 0.0722 * (v[2] ?? 0);
 
 /** Adobe/Resolve `.cube` text of the look (red varies fastest). */
 export function lookCube(p: LookParams, title = "CutKiller look"): string {
