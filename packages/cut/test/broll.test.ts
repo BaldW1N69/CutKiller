@@ -9,7 +9,7 @@ import {
 } from "@cutkiller/core";
 import { loadProfile } from "@cutkiller/style";
 import { beforeAll, describe, expect, it } from "vitest";
-import { brollPass, isBroll } from "../src";
+import { brollPass, isBroll, verticalFit } from "../src";
 
 let cine: StyleProfile;
 let long: StyleProfile;
@@ -167,5 +167,44 @@ describe("rush sans parole de durée non alignée sur les frames", () => {
     expect(validateEdl(edl).filter((d) => d.level === "error")).toEqual([]);
     const clips = sortedClips(edl.video[0]?.clips ?? []);
     expect(clipEnd(clips.at(-1) as never, 30)).toBe(600);
+  });
+});
+
+describe("choix des moments de B-roll en vertical", () => {
+  it("préfère un sujet seul et immobile à des gens qui traversent le cadre", async () => {
+    const r = parseEdl({
+      version: "1.5.0",
+      output: { format: "short", width: 1080, height: 1920, fps: 30, video: { bitrateMbps: 20 }, audio: {} },
+      sources: { b: { path: "b.mp4", durationS: 20, width: 1920, height: 1080, role: "broll" } },
+      video: [{ id: "main", clips: [{ id: "b", source: "b", in: 0, out: 20, at: 0 }] }],
+    });
+    if (!r.ok) throw new Error(JSON.stringify(r.diagnostics));
+    const face = (x: number) => ({
+      x,
+      y: 0.3,
+      w: 0.08,
+      h: 0.15,
+      score: 0.9,
+      rgb: [0.7, 0.5, 0.4] as [number, number, number],
+    });
+    // 0–10 s: a person walking across, plus a second one; 10–20 s: one person, still.
+    const samples = Array.from({ length: 100 }, (_, i) => {
+      const t = i / 5;
+      return {
+        t,
+        rgb: [0.5, 0.5, 0.5] as [number, number, number],
+        faces: t < 10 ? [face(0.05 + 0.08 * t), face(0.8)] : [face(0.45)],
+      };
+    });
+    const analysis: Analysis = {
+      sources: { b: { path: "b.mp4", durationS: 20, hasVideo: true, hasAudio: false, role: "broll" } },
+      subjects: { b: { width: 1920, height: 1080, sampleFps: 5, samples } },
+    };
+    const fit = verticalFit(r.edl, analysis);
+    expect(fit("b", 12, 15)).toBeGreaterThan(fit("b", 2, 5));
+    expect(fit("b", 12, 15)).toBeCloseTo(0, 6);
+    // Horizontal output: no preference.
+    const wide = { ...r.edl, output: { ...r.edl.output, width: 1920, height: 1080 } };
+    expect(verticalFit(wide, analysis)("b", 2, 5)).toBe(0);
   });
 });

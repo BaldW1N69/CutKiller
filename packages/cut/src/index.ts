@@ -14,7 +14,7 @@ import { speechTokens } from "./words";
 
 export { type AssembleOptions, assembleEdl, outputFps } from "./assemble";
 export { timelineBeats } from "./beats";
-export { brollPass, isBroll } from "./broll";
+export { brollPass, isBroll, type PieceScore, verticalFit } from "./broll";
 export { buildRuns, type PlannedClip, planClips, type Run, snapJumpCuts, zoomSplits } from "./plan";
 export {
   classifyWords,

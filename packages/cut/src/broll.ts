@@ -33,15 +33,24 @@ interface Piece {
   out: number;
 }
 
+/** How well a piece of B-roll fits the frame: higher is better, 0 is neutral. */
+export type PieceScore = (source: string, from: number, to: number) => number;
+
 /**
- * B-roll material, consumed in order: each rush from its head (after the camera
- * settles), the rushes in turn, never the same second twice.
+ * B-roll material: the rushes in turn, never the same second twice. Within a
+ * rush, the free window with the best score (a subject the frame can follow),
+ * the earliest one on a tie, so without a score the rush is used in order.
  */
 class Material {
-  private readonly ranges: { source: string; cursor: number; out: number }[];
+  private readonly ranges: { source: string; from: number; out: number; used: [number, number][] }[];
   private next = 0;
 
-  constructor(clips: VideoClip[], skipHeadS: number, minS: number) {
+  constructor(
+    clips: VideoClip[],
+    skipHeadS: number,
+    minS: number,
+    private readonly score: PieceScore = () => 0,
+  ) {
     const bySource = new Map<string, { in: number; out: number }>();
     for (const c of clips) {
       const r = bySource.get(c.source);
@@ -52,29 +61,76 @@ class Material {
     }
     this.ranges = [...bySource].map(([source, r]) => ({
       source,
-      cursor: r.out - r.in - skipHeadS >= minS ? r.in + skipHeadS : r.in,
+      from: r.out - r.in - skipHeadS >= minS ? r.in + skipHeadS : r.in,
       out: r.out,
+      used: [],
     }));
   }
 
-  get seconds(): number {
-    return this.ranges.reduce((s, r) => s + Math.max(0, r.out - r.cursor), 0);
+  private free(r: (typeof this.ranges)[number]): number {
+    return Math.max(0, r.out - r.from - r.used.reduce((s, [a, b]) => s + (b - a), 0));
   }
 
-  /** A piece of `wantS` seconds (at least `minS`), from the next rush that has it. */
+  get seconds(): number {
+    return this.ranges.reduce((s, r) => s + this.free(r), 0);
+  }
+
+  /** A piece of `wantS` seconds (at least `minS`), from the next rush that has one. */
   take(wantS: number, minS: number): Piece | undefined {
     for (let k = 0; k < this.ranges.length; k++) {
       const r = this.ranges[(this.next + k) % this.ranges.length] as (typeof this.ranges)[number];
-      const left = r.out - r.cursor;
-      if (left < minS - 1e-6) continue;
-      const len = Math.min(wantS, left);
-      const piece = { source: r.source, in: r.cursor, out: r.cursor + len };
-      r.cursor += len;
+      let best: { from: number; len: number; score: number } | undefined;
+      for (let len = wantS; len >= minS - 1e-6 && !best; len = Math.max(minS, len - 0.5)) {
+        for (let t = r.from; t + len <= r.out + 1e-6; t += 0.25) {
+          if (r.used.some(([a, b]) => t < b && t + len > a)) continue;
+          const score = this.score(r.source, t, t + len);
+          if (!best || score > best.score + 1e-9) best = { from: t, len, score };
+        }
+        if (len <= minS + 1e-6) break;
+      }
+      if (!best) continue;
+      r.used.push([best.from, best.from + best.len]);
       this.next = (this.next + k + 1) % this.ranges.length;
-      return piece;
+      return { source: r.source, in: best.from, out: best.from + best.len };
     }
     return undefined;
   }
+}
+
+/**
+ * Score of a B-roll window in a vertical frame: the 9:16 crop shows about a third
+ * of a 16:9 picture, so a window is good when its people fit in one crop and hold
+ * still (a face moving across the picture outruns the virtual camera). Windows
+ * without anyone score 0 (a landscape is fine). Horizontal output: always 0.
+ */
+export function verticalFit(edl: Edl, analysis: Analysis): PieceScore {
+  const { width: W, height: H } = edl.output;
+  return (sourceId, from, to) => {
+    const source = edl.sources[sourceId];
+    const subjects = analysis.subjects?.[sourceId];
+    if (W >= H || !source?.width || !source.height || !subjects) return 0;
+    const crop = Math.min(1, (source.height * W) / H / source.width);
+    const samples = subjects.samples.filter((x) => x.t >= from - 1e-6 && x.t <= to + 1e-6);
+    const withFaces = samples.filter((x) => x.faces.length > 0);
+    if (withFaces.length === 0) return 0;
+    let penalty = 0;
+    let prev: number | undefined;
+    const centres: number[] = [];
+    for (const x of withFaces) {
+      const spread = Math.max(...x.faces.map((f) => f.x + f.w)) - Math.min(...x.faces.map((f) => f.x));
+      if (spread > crop) penalty += 1 / withFaces.length; // several people the crop cannot hold
+      const main = x.faces.reduce((a, b) => (a.w * a.h >= b.w * b.h ? a : b));
+      const c = main.x + main.w / 2;
+      if (prev !== undefined) penalty += Math.max(0, Math.abs(c - prev) - 0.02) / crop; // jumps
+      prev = c;
+      centres.push(c);
+    }
+    const m = centres.reduce((a, b) => a + b, 0) / centres.length;
+    const spreadOverTime = Math.sqrt(centres.reduce((a, b) => a + (b - m) ** 2, 0) / centres.length);
+    // People seen only part of the time: faces appear and vanish (walking in and out).
+    const flicker = 1 - withFaces.length / Math.max(1, samples.length);
+    return -(penalty + (2 * spreadOverTime) / crop + 0.5 * flicker);
+  };
 }
 
 /** Nearest beat to `target` within [lo, hi] (frames), if any. */
@@ -192,7 +248,7 @@ export const brollPass: Pass = {
     const broll = clips.filter((c) => isBroll(edl, ctx.analysis, c.source));
     if (broll.length === 0) return { edl, diagnostics };
     const speech = clips.filter((c) => !broll.includes(c));
-    const material = new Material(broll, cfg.skipHeadS, cfg.shotS[0]);
+    const material = new Material(broll, cfg.skipHeadS, cfg.shotS[0], verticalFit(edl, ctx.analysis));
     const beats = timelineBeats(edl, ctx.analysis);
 
     let mainClips: EdlInput["video"][number]["clips"];

@@ -31,6 +31,13 @@ export { audioEditFrames, clickScore } from "./checks/audio";
 export { contrastRatio, luminance, parseColor } from "./checks/captions";
 export { checkSharpness, DUPLICATE_MAD } from "./checks/image";
 export { renderSubjects } from "./checks/subject";
+export {
+  type Comparison,
+  compareFingerprints,
+  type Fingerprint,
+  fingerprint,
+  fingerprintMarkdown,
+} from "./reference";
 export * from "./report";
 export * from "./rules";
 export * from "./truth";

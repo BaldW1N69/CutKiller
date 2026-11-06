@@ -4,7 +4,15 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { edlJsonSchema, profileJsonSchema } from "@cutkiller/core";
 import { ffmpegVersion, probeSource } from "@cutkiller/media";
-import { captionLabels, formatLabels, type Report, reportJsonSchema } from "@cutkiller/qa";
+import {
+  captionLabels,
+  compareFingerprints,
+  fingerprint,
+  fingerprintMarkdown,
+  formatLabels,
+  type Report,
+  reportJsonSchema,
+} from "@cutkiller/qa";
 import { listLooks, loadProfile, PresetRegistry, withLook } from "@cutkiller/style";
 import { calibrate, calibrationMarkdown } from "./calibrate";
 import { check, doRender, plan, readEdl } from "./pipeline";
@@ -18,6 +26,8 @@ const USAGE = `cutkiller <commande> [options]
   check <vidéo> [--edl edl.json] -p <profil> [--json r.json] [--md r.md] [--min-score 90] [--truth labels.txt]
   annotate <edl.json> -o labels.txt        mots surlignés à corriger à l'oreille (pistes d'étiquettes Audacity)
   auto <entrées…> -p <profil> -o <dossier> [--broll b.mp4]… [--draft] [--min-score 90]
+  reference <réf.mp4> [--against rendu.mp4] [--md r.md] [--json r.json]
+                                            empreinte de style d'une vidéo (rythme, image, son), comparée à un rendu
   calibrate -o <dossier> [--only a,b]       calibre la QA : un défaut injecté par règle sur un montage propre
   schema --out <dossier>                    exporte les JSON Schemas (EDL, profil, rapport QA)
 
@@ -53,6 +63,7 @@ async function main(argv: string[]): Promise<void> {
       fast: { type: "boolean", default: false },
       "keep-stems": { type: "boolean", default: false },
       only: { type: "string" },
+      against: { type: "string" },
       truth: { type: "string" },
       broll: { type: "string", multiple: true },
       look: { type: "string" },
@@ -125,6 +136,19 @@ async function main(argv: string[]): Promise<void> {
       console.log(
         `✔ ${out} : ${edl.captions.reduce((n, c) => n + c.words.length, 0)} mot(s). Audacity : Fichier → Importer → Étiquettes, sur l'audio du rendu ; placez chaque étiquette sur le début réel du mot, ajoutez « euh » sur chaque hésitation entendue, exportez, puis check --truth.`,
       );
+      return;
+    }
+    case "reference": {
+      const ref = await fingerprint(need(positionals[0], "vidéo de référence"));
+      const ours = values.against ? await fingerprint(values.against) : undefined;
+      const md = fingerprintMarkdown(ref, ours);
+      if (values.md) await writeFile(values.md, md);
+      if (values.json)
+        await writeFile(
+          values.json,
+          `${JSON.stringify({ reference: ref, ours, comparison: ours ? compareFingerprints(ref, ours) : undefined }, null, 2)}\n`,
+        );
+      console.log(md);
       return;
     }
     case "calibrate": {
