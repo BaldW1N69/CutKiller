@@ -205,6 +205,18 @@ describe("découpage", () => {
     expect(out.output.captions.safeArea).toEqual(profileSafeArea(long));
   });
 
+  it("cinematic-short : un mot isolé entre deux pauses rejoint l'écran le plus proche (2–4 mots)", async () => {
+    const cine = await loadProfile("cinematic-short");
+    // « Alors » alone after a 0.6 s pause, then a pause again before « on ».
+    const words = speech("Je pense que oui. Alors, on avance vite maintenant.".split(" "), [4, 5]);
+    const { edl, analysis } = edlWith(words, "short");
+    const out = captionsPass.run(edl, { analysis, profile: cine, presets: registry }).edl;
+    for (const c of out.captions) expect(c.words.length).toBeGreaterThanOrEqual(2);
+    expect(out.captions.flatMap((c) => c.words.map((w) => w.text)).join(" ")).toBe(
+      "Je pense que oui Alors on avance vite maintenant",
+    );
+  });
+
   it("letterbox 2,39:1 : les sous-titres restent sur l'image, pas sur les bandes", async () => {
     const cine = await loadProfile("cinematic");
     const area = profileSafeArea(cine);

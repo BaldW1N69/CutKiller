@@ -138,6 +138,7 @@ export function buildCaptions(
     }
   }
   if (current.length > 0) groups.push(current);
+  mergeShortScreens(groups, c.wordsPerScreen?.[0] ?? 1, maxWords, maxFrames, fps, fits);
 
   const hold = Math.round((c.holdMs / 1000) * fps);
   const minFrames = Math.round((c.minDurationMs / 1000) * fps);
@@ -166,4 +167,66 @@ export function buildCaptions(
       })),
     };
   });
+}
+
+/**
+ * Screens with fewer words than the profile's minimum (a lone word between two
+ * pauses) join the neighbour they are closest to in time, when the pause between
+ * them stays under 1 s. If the joined screen is too full (words, lines,
+ * duration), it is split again in two screens of at least the minimum, at the
+ * widest pause between words. Otherwise the screen stays as it is.
+ */
+function mergeShortScreens(
+  groups: ShownWord[][],
+  minWords: number,
+  maxWords: number,
+  maxFrames: number,
+  fps: number,
+  fits: (ws: ShownWord[]) => boolean,
+): void {
+  if (minWords <= 1) return;
+  const ok = (ws: ShownWord[]) =>
+    ws.length >= minWords &&
+    ws.length <= maxWords &&
+    fits(ws) &&
+    (ws.at(-1) as ShownWord).toFrame - (ws[0] as ShownWord).fromFrame <= maxFrames;
+  /** The joined words as one screen, or two, or undefined when neither fits. */
+  const regroup = (ws: ShownWord[]): ShownWord[][] | undefined => {
+    if (ok(ws)) return [ws];
+    let best: { at: number; score: number } | undefined;
+    for (let at = minWords; at <= ws.length - minWords; at++) {
+      const a = ws.slice(0, at);
+      const b = ws.slice(at);
+      if (!ok(a) || !ok(b) || (b[0] as ShownWord).fromFrame <= (a.at(-1) as ShownWord).fromFrame) continue;
+      const gap = (b[0] as ShownWord).fromFrame - (a.at(-1) as ShownWord).toFrame;
+      const score = gap - Math.abs(a.length - b.length) * 0.01;
+      if (!best || score > best.score) best = { at, score };
+    }
+    return best ? [ws.slice(0, best.at), ws.slice(best.at)] : undefined;
+  };
+  for (let k = 0; k < groups.length; k++) {
+    const g = groups[k] as ShownWord[];
+    if (g.length >= minWords) continue;
+    const prev = groups[k - 1];
+    const next = groups[k + 1];
+    const options = [
+      prev && {
+        gap: (g[0] as ShownWord).fromFrame - (prev.at(-1) as ShownWord).toFrame,
+        at: k - 1,
+        ws: [...prev, ...g],
+      },
+      next && {
+        gap: (next[0] as ShownWord).fromFrame - (g.at(-1) as ShownWord).toFrame,
+        at: k,
+        ws: [...g, ...next],
+      },
+    ]
+      .filter((o): o is { gap: number; at: number; ws: ShownWord[] } => !!o && o.gap <= fps)
+      .sort((a, b) => a.gap - b.gap)
+      .map((o) => ({ ...o, screens: regroup(o.ws) }));
+    const best = options.find((o) => o.screens);
+    if (!best?.screens) continue;
+    groups.splice(best.at, 2, ...best.screens);
+    k = best.at + best.screens.length - 1;
+  }
 }
