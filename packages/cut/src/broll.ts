@@ -36,6 +36,9 @@ interface Piece {
 /** How well a piece of B-roll fits the frame: higher is better, 0 is neutral. */
 export type PieceScore = (source: string, from: number, to: number) => number;
 
+/** Below this fit, a B-roll window is left out (its people cannot all be framed, or they cross it). */
+const MIN_FIT = -1;
+
 /**
  * B-roll material: the rushes in turn, never the same second twice. Within a
  * rush, the free window with the best score (a subject the frame can follow),
@@ -44,6 +47,7 @@ export type PieceScore = (source: string, from: number, to: number) => number;
 class Material {
   private readonly ranges: { source: string; from: number; out: number; used: [number, number][] }[];
   private next = 0;
+  private last: string | undefined;
 
   constructor(
     clips: VideoClip[],
@@ -75,6 +79,15 @@ class Material {
     return this.ranges.reduce((s, r) => s + this.free(r), 0);
   }
 
+  /** Seconds of material the frame can hold: the free seconds less those that only start a rejected window of `lenS`. */
+  usableSeconds(lenS: number): number {
+    let rejected = 0;
+    for (const r of this.ranges)
+      for (let t = r.from; t + lenS <= r.out + 1e-6; t += 0.25)
+        if (this.score(r.source, t, t + lenS) < MIN_FIT) rejected += 0.25;
+    return Math.max(0, this.seconds - rejected);
+  }
+
   /** Best free window of a rush, `wantS` long (down to `minS` if needed). */
   private bestIn(r: (typeof this.ranges)[number], wantS: number, minS: number) {
     let best: { from: number; len: number; score: number } | undefined;
@@ -95,17 +108,23 @@ class Material {
    * frame cannot hold) gives way to it.
    */
   take(wantS: number, minS: number): Piece | undefined {
-    const options = this.ranges.flatMap((r, i) => {
+    const all = this.ranges.flatMap((r, i) => {
       const best = this.bestIn(r, wantS, minS);
       const turn = (i - this.next + this.ranges.length) % this.ranges.length;
-      return best ? [{ r, i, best, turn }] : [];
+      // A window the frame cannot hold (a crowd, someone crossing) is not used at all.
+      return best && best.score >= MIN_FIT ? [{ r, i, best, turn }] : [];
     });
+    // Never the same rush twice in a row while another one has material: two
+    // moments of one rush back to back read as a jump cut, not as a new shot.
+    const others = all.filter((o) => o.r.source !== this.last);
+    const options = others.length > 0 ? others : all;
     if (options.length === 0) return undefined;
     const top = Math.max(...options.map((o) => o.best.score));
     const pick = options.filter((o) => o.best.score >= top - 0.3).sort((a, b) => a.turn - b.turn)[0];
     if (!pick) return undefined;
     pick.r.used.push([pick.best.from, pick.best.from + pick.best.len]);
     this.next = (pick.i + 1) % this.ranges.length;
+    this.last = pick.r.source;
     return { source: pick.r.source, in: pick.best.from, out: pick.best.from + pick.best.len };
   }
 }
@@ -223,7 +242,10 @@ function planMontage(
   const minLen = Math.ceil(minS * fps);
   const maxLen = Math.floor(maxS * fps);
   const bars = beats.filter((_, i) => i % b.beatsPerShot === 0).map((f) => Math.round(f));
-  const total = Math.min(musicFrames ?? Number.POSITIVE_INFINITY, Math.floor(material.seconds * fps));
+  const total = Math.min(
+    musicFrames ?? Number.POSITIVE_INFINITY,
+    Math.floor(material.usableSeconds((minS + maxS) / 2) * fps),
+  );
   const pieces: Piece[] = [];
   const frames: number[] = [];
   let pos = 0;
@@ -316,7 +338,14 @@ export const brollPass: Pass = {
           : undefined;
       const { pieces, frames } = planMontage(material, beats, musicFrames, ctx.profile, fps);
       let at = 0;
+      // Two shots of one rush back to back (when only it is left): a change of
+      // framing makes the second one a new shot, as a zoom cut does.
+      let level = 0;
       mainClips = pieces.map((p, k) => {
+        const same = k > 0 && pieces[k - 1]?.source === p.source;
+        const levels = ctx.profile.montage.zoomCutLevels;
+        const scale = same && level % 2 === 0 ? (levels[(level / 2) % levels.length] as number) : 1;
+        level = same ? level + 1 : 0;
         const clip = {
           id: `s${String(k + 1).padStart(3, "0")}`,
           source: p.source,
@@ -325,6 +354,7 @@ export const brollPass: Pass = {
           at,
           // Natural sound of the B-roll stays far under the music.
           gainDb: -20,
+          ...(scale > 1 ? { transform: { scale, x: 0, y: 0 } } : {}),
           why: { kind: "broll", note: beats.length > 0 ? `${cfg.beatsPerShot} temps` : "sans musique" },
         };
         at += frames[k] as number;

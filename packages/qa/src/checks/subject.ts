@@ -258,14 +258,24 @@ export async function checkColor(video: string, edl: Edl, profile: StyleProfile)
       note: "moins de deux plans avec un visage : seul le look est vérifié",
     };
   }
-  const weighted = shots.flatMap((s) => Array.from({ length: s.weight }, () => s.lab));
-  const ref = [0, 1, 2].map((c) => median(weighted.map((l) => l[c] as number))) as Rgb;
+  // Reference skin: the speech shots together; B-roll shots (other people, other
+  // places) against the other shots of their own scene (rush).
+  const groupOf = (clip: VideoClip) => (clip.why?.kind === "broll" ? `broll:${clip.source}` : "speech");
+  const refs = new Map<string, Rgb>();
+  for (const g of new Set(shots.map((s) => groupOf(s.clip)))) {
+    const weighted = shots
+      .filter((s) => groupOf(s.clip) === g)
+      .flatMap((s) => Array.from({ length: s.weight }, () => s.lab));
+    refs.set(g, [0, 1, 2].map((c) => median(weighted.map((l) => l[c] as number))) as Rgb);
+  }
+  const ref = refs.get("speech") ?? (refs.values().next().value as Rgb);
   let maxL = 0;
   let maxAb = 0;
   let bad = 0;
   for (const s of shots) {
-    const dL = Math.abs((s.lab[0] as number) - ref[0]);
-    const dAb = Math.hypot((s.lab[1] as number) - ref[1], (s.lab[2] as number) - ref[2]);
+    const r = refs.get(groupOf(s.clip)) as Rgb;
+    const dL = Math.abs((s.lab[0] as number) - r[0]);
+    const dAb = Math.hypot((s.lab[1] as number) - r[1], (s.lab[2] as number) - r[2]);
     maxL = Math.max(maxL, dL);
     maxAb = Math.max(maxAb, dAb);
     if (dL > cfg.maxSkinDeltaL || dAb > cfg.maxSkinDeltaAb) {

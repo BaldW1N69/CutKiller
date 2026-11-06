@@ -51,8 +51,10 @@ export const colorPass: Pass = {
     // parts of the source the edit keeps.
     const tones = new Map<string, Rgb>();
     const bySource = new Map<string, VideoClip[]>();
+    // B-roll shows other people in other places: it keeps its own skin (look and
+    // scene contrast only); the speech shots are matched together.
     for (const clip of edl.video[0]?.clips ?? [])
-      bySource.set(clip.source, [...(bySource.get(clip.source) ?? []), clip]);
+      if (clip.why?.kind !== "broll") bySource.set(clip.source, [...(bySource.get(clip.source) ?? []), clip]);
     for (const [source, clips] of bySource) {
       const subjects = ctx.analysis.subjects?.[source];
       if (!subjects) continue;
@@ -67,7 +69,7 @@ export const colorPass: Pass = {
     let reference: Rgb | undefined;
     if (tones.size > 0) {
       const weighted: Rgb[] = [];
-      for (const clip of edl.video[0]?.clips ?? []) {
+      for (const clip of (edl.video[0]?.clips ?? []).filter((c) => c.why?.kind !== "broll")) {
         const t = tones.get(clip.id);
         if (t) for (let i = 0; i < Math.max(1, Math.round((clip.out - clip.in) * 10)); i++) weighted.push(t);
       }
@@ -97,6 +99,41 @@ export const colorPass: Pass = {
         }
       }
     }
+    // B-roll scenes: shots of one rush matched to the scene's own skin (median over
+    // its shots) when one is visibly off (the person stepped into the shade); never
+    // to the speaker's skin, which belongs to someone else.
+    const targets = new Map<string, Rgb>();
+    const brollBySource = new Map<string, VideoClip[]>();
+    for (const clip of edl.video[0]?.clips ?? [])
+      if (clip.why?.kind === "broll")
+        brollBySource.set(clip.source, [...(brollBySource.get(clip.source) ?? []), clip]);
+    for (const [source, clips] of brollBySource) {
+      const subjects = ctx.analysis.subjects?.[source];
+      if (!subjects) continue;
+      const own = clips.flatMap((clip) => {
+        const skins = subjects.samples.flatMap((x) =>
+          x.t >= clip.in - 1e-6 && x.t <= clip.out + 1e-6 && x.faces.length > 0
+            ? [x.faces.reduce((a, b) => (a.w * a.h >= b.w * b.h ? a : b)).rgb]
+            : [],
+        );
+        if (skins.length < 3) return [];
+        return [{ clip, skin: [0, 1, 2].map((c) => median(skins.map((rgb) => rgb[c] as number))) as Rgb }];
+      });
+      if (own.length < 2) continue;
+      const scene = [0, 1, 2].map((c) => median(own.map((o) => o.skin[c] as number))) as Rgb;
+      const sceneLab = srgbToLab(scene);
+      for (const o of own) {
+        const lab = srgbToLab(o.skin);
+        if (
+          Math.hypot(lab[0] - sceneLab[0], lab[1] - sceneLab[1], lab[2] - sceneLab[2]) > cfg.shotMatchDeltaE
+        ) {
+          tones.set(o.clip.id, toLinear(o.skin));
+          targets.set(o.clip.id, toLinear(scene));
+          matched++;
+        }
+      }
+    }
+
     // Floor: a reference skin darker than L* minSkinLightness is lifted (all shots alike).
     let lift = 0;
     if (reference) {
@@ -129,15 +166,16 @@ export const colorPass: Pass = {
       ...track,
       clips: track.clips.map((clip): VideoClip => {
         const tone = tones.get(clip.id);
+        const target = targets.get(clip.id) ?? reference;
         let exposureEv = 0;
         let balance: Rgb = [1, 1, 1];
-        if (tone && reference) {
-          const ev = Math.log2(lumaLinear(reference) / lumaLinear(tone)) + lift;
+        if (tone && target && (reference || targets.has(clip.id))) {
+          const ev = Math.log2(lumaLinear(target) / lumaLinear(tone)) + (targets.has(clip.id) ? 0 : lift);
           exposureEv =
             Math.abs(ev) < cfg.minCorrection
               ? 0
               : Math.max(-cfg.maxExposureEv, Math.min(cfg.maxExposureEv, ev));
-          const ref = reference;
+          const ref = target;
           const gains = [0, 1, 2].map((c) => (ref[c] as number) / (tone[c] as number)) as Rgb;
           // Balance keeps the skin's luminance (exposure carries it): balance × 2^EV = gains.
           const norm = lumaLinear(gains.map((g, c) => g * (tone[c] as number)) as Rgb) / lumaLinear(tone);

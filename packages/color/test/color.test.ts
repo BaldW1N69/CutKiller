@@ -314,3 +314,39 @@ describe("passe color", () => {
     }
   });
 });
+
+describe("B-roll : raccord de peau par scène", () => {
+  it("raccorde un plan de B-roll à sa scène, jamais à la peau du locuteur", async () => {
+    const warm: Rgb = [0.78, 0.58, 0.48];
+    const shade = warm.map((v) => linearToSrgb(srgbToLinear(v) * 0.4)) as Rgb;
+    // Rush b: 0–6 s in the sun, 6–8 s in the shade; three shots.
+    const b = skinOf(warm, 8);
+    for (const x of b.samples) if (x.t >= 6) x.faces[0] = { ...(x.faces[0] as Face), rgb: shade };
+    const edl = parseEdl({
+      version: "1.5.0",
+      output: { format: "short", width: 1080, height: 1920, fps: 30, video: { bitrateMbps: 16 }, audio: {} },
+      sources: { b: { path: "b.mp4", durationS: 8, role: "broll" } },
+      video: [
+        {
+          id: "main",
+          clips: [
+            { id: "s1", source: "b", in: 0, out: 2.5, at: 0, why: { kind: "broll" } },
+            { id: "s2", source: "b", in: 3, out: 5.5, at: 75, why: { kind: "broll" } },
+            { id: "s3", source: "b", in: 6, out: 8, at: 150, why: { kind: "broll" } },
+          ],
+        },
+      ],
+    } satisfies EdlInput);
+    if (!edl.ok) throw new Error(JSON.stringify(edl.diagnostics));
+    const analysis: Analysis = {
+      sources: { b: { path: "b.mp4", durationS: 8, hasVideo: true, hasAudio: false, role: "broll" } },
+      subjects: { b },
+    };
+    const out = colorPass.run(edl.edl, { analysis, profile: short, presets: registry }).edl;
+    const ev = (id: string) => out.video[0]?.clips.find((c) => c.id === id)?.color?.exposureEv;
+    expect(ev("s1")).toBe(0);
+    expect(ev("s2")).toBe(0);
+    // 0.4× linear = −1.32 EV: brought back to the scene.
+    expect(ev("s3")).toBeCloseTo(1.32, 1);
+  });
+});
