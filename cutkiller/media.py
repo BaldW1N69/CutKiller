@@ -77,11 +77,11 @@ def load_audio(path: str | Path, sr: int = ANALYSIS_SR) -> np.ndarray:
     return np.frombuffer(out.stdout, dtype=np.int16).astype(np.float32) / 32768.0
 
 
-def run_ffmpeg(args: list[str], *, quiet: bool = True) -> subprocess.CompletedProcess:
+def run_ffmpeg(args: list[str], *, quiet: bool = True, cwd: str | Path | None = None) -> subprocess.CompletedProcess:
     cmd = [_require("ffmpeg"), "-nostdin", "-y", "-hide_banner"]
     if quiet:
         cmd += ["-v", "error"]
-    out = subprocess.run(cmd + args, capture_output=True, text=True)
+    out = subprocess.run(cmd + args, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=cwd)
     if out.returncode != 0:
         raise MediaError(f"ffmpeg a échoué :\n{' '.join(cmd + args)[:2000]}\n{out.stderr[-3000:]}")
     return out

@@ -1,0 +1,11 @@
+{
+  "name": "cutkiller",
+  "displayName": "CutKiller",
+  "version": "0.2.0",
+  "description": "Montage vidéo piloté par l'écoute : coupe des silences, 280+ transitions, musique et SFX libres de droits, montage de rushs sur le rythme, texte incrusté. Skill + serveur MCP local.",
+  "author": { "name": "BaldW1N69" },
+  "homepage": "https://github.com/BaldW1N69/CutKiller",
+  "repository": "https://github.com/BaldW1N69/CutKiller",
+  "license": "CC0-1.0",
+  "keywords": ["video", "montage", "ffmpeg", "transitions", "ads", "tiktok", "shorts"]
+}

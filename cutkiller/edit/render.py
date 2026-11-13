@@ -46,7 +46,7 @@ def render_cuts(src: str | Path, dst: str | Path, segments: list[Interval], *, c
         render_timeline(clips, joins or [Join() for _ in clips[1:]], dst, crf=crf, preset=preset, log=log)
         return dst
     graph = build_cut_filter(segments, has_video=False)
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fh:
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as fh:
         fh.write(graph)
         script = fh.name
     try:

@@ -117,7 +117,7 @@ def render_mix(src: str | Path, dst: str | Path, plan: MixPlan) -> Path:
     info = probe(src)
     graph, extra_inputs = build_mix_filter(plan, info.duration, info.has_audio)
     dst = Path(dst)
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fh:
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as fh:
         fh.write(graph)
         script = fh.name
     try:

@@ -28,7 +28,14 @@ Options :
 ```bash
 pip install -e ".[transcribe]"   # transcription : sous-titres, suppression des « euh »
 pip install -e ".[gl]"           # 214 transitions GL (3D, glitch, light leaks…)
+pip install -e ".[mcp]"          # serveur MCP (pour piloter CutKiller depuis Claude)
 pip install -e ".[all]"          # tout
+```
+
+Vérifier l'installation (ffmpeg, OpenGL, options, banques de sons) :
+
+```bash
+cutkiller doctor
 ```
 
 Les transitions GL utilisent OpenGL 3.3 : la carte graphique sur Windows/macOS/Linux, ou le rendu logiciel Mesa sur un serveur sans écran (`apt install libegl1 libgl1-mesa-dri`).
@@ -75,6 +82,47 @@ cutkiller mix video.mp4 --music ma_musique.mp3 --music-volume -18 --music-start 
 - **SFX positionnés** : `source@cuts` (chaque coupe), `source@transitions` (seulement les coupes avec transition), `source@1.5,8` (instants précis), `source@beats:4` (un beat sur 4 de la musique). `--sfx-offset` décale le SFX avant la coupe, `--sfx-spacing` évite d'en mettre trop.
 - **Normalisation finale** à `--target-lufs` (−14 par défaut)
 - `source` peut être un fichier local ou une requête texte cherchée dans les banques
+
+## Utiliser CutKiller depuis Claude (skill + serveur MCP)
+
+Le dépôt est aussi un **plugin Claude Code** : un skill `montage` (Claude le déclenche quand tu demandes un montage, une pub, une vidéo) et un serveur MCP local de 12 outils (`cutkiller_auto`, `cutkiller_montage`, `cutkiller_text`, `cutkiller_listen`, `cutkiller_transitions`…). Le serveur tourne **sur ta machine** : Claude lit et écrit tes vraies vidéos, sans upload.
+
+**Claude Code**
+
+```bash
+pip install -e ".[all]"
+```
+
+```bash
+claude plugin marketplace add BaldW1N69/CutKiller
+```
+
+```bash
+claude plugin install cutkiller@cutkiller
+```
+
+Pour tester avant d'installer : `claude --plugin-dir .` depuis le dossier du dépôt. Le serveur MCP est lancé par `python -m cutkiller.mcp_server` : sur macOS/Linux où seul `python3` existe, ajoute-le à la place avec `claude mcp add cutkiller -- python3 -m cutkiller.mcp_server`.
+
+**Claude Desktop** (serveur MCP seul) : ajoute dans `claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "cutkiller": { "command": "python", "args": ["-m", "cutkiller.mcp_server"] }
+  }
+}
+```
+
+Les rendus longs renvoient un `job_id` après ~40 s, à suivre avec `cutkiller_job` (évite les timeouts du client MCP).
+
+## Texte incrusté : `cutkiller text`
+
+```bash
+cutkiller text video.mp4 --text "SOLDES −50 %@0-3:center:yellow:9%" --text "Code PUB10\nlivraison offerte@5-" --box
+cutkiller text video.mp4 --srt sous-titres.srt --srt-position center
+```
+
+Format : `texte@début-fin[:position[:couleur[:taille%]]]` (fin vide = jusqu'à la fin ; position `top|center|bottom`). Marges de sécurité réseaux sociaux, fondu d'entrée/sortie, fond semi-transparent avec `--box`. Rendu par libass : fonctionne identiquement sous Windows, macOS et Linux.
 
 ## Transitions
 
@@ -161,10 +209,14 @@ pytest -m network      # + appel réel à Openverse
 cutkiller/
   media.py            ffprobe / ffmpeg, décodage audio → numpy
   listen/             silences, loudness, beats, transcription, rapport
-  edit/               coupes, timeline (transitions, raccords audio), montage, mixage
+  edit/               coupes, timeline (transitions, raccords audio), montage, mixage, texte
   transitions/        registre + moteurs xfade / gl / fx, aperçus et galerie
   sounds/             banques de sons, cache, crédits
-  cli.py              commandes listen / cut / mix / auto / sounds
+  mcp_server.py       serveur MCP (12 outils, rendus en jobs)
+  cli.py              commandes listen / cut / mix / auto / montage / text / transitions / sounds / doctor
+skills/montage/       skill Claude : quand et comment monter (recettes, playbook pub, vérifications)
+.claude-plugin/       manifeste du plugin + marketplace
+.mcp.json             déclaration du serveur MCP du plugin
 ```
 
 ## Crédits

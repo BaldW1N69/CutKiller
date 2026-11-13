@@ -261,7 +261,7 @@ def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fm
                                                Path(tmp) / f"t{i:05d}.mkv")
         graph, inputs = build_graph(plan, trans_files, fit, has_audio)
         script = Path(tmp) / "graph.txt"
-        script.write_text(graph)
+        script.write_text(graph, encoding="utf-8")
         args = []
         for p in inputs:
             args += ["-i", str(p)]

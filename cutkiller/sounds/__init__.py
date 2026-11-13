@@ -71,7 +71,7 @@ def download(sound: Sound, dest_dir: Path | None = None) -> Path:
     with urllib.request.urlopen(req, timeout=60) as resp, open(tmp, "wb") as fh:  # noqa: S310
         shutil.copyfileobj(resp, fh)
     tmp.replace(dest)
-    meta.write_text(json.dumps(sound.to_dict(), ensure_ascii=False, indent=2))
+    meta.write_text(json.dumps(sound.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
     return dest
 
 

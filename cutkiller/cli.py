@@ -38,7 +38,7 @@ def cmd_listen(a: argparse.Namespace) -> int:
     print(rep.summary())
     src = Path(a.input)
     out = Path(a.output) if a.output else src.with_suffix(".listen.json")
-    out.write_text(json.dumps(rep.to_dict(), ensure_ascii=False, indent=2))
+    out.write_text(json.dumps(rep.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\nRapport JSON : {out}")
     if rep.words:
         srt = src.with_suffix(".srt")
@@ -81,6 +81,101 @@ def cmd_cut(a: argparse.Namespace) -> int:
     out = render_cuts(a.input, _out_path(Path(a.input), "_cut", a.output), segs, joins=joins, log=print)
     print(f"Export : {out}")
     return 0
+
+
+# ---------------------------------------------------------------- text
+def cmd_text(a: argparse.Namespace) -> int:
+    from cutkiller.edit.text import Cue, burn_text, parse_cue, parse_srt
+
+    cues = [parse_cue(t) for t in a.text or []]
+    if a.srt:
+        for c in parse_srt(Path(a.srt).read_text(encoding="utf-8-sig")):
+            c.position = a.srt_position
+            cues.append(c)
+    if not cues:
+        raise ValueError("Rien à incruster : utilise --text « texte@0-3 » et/ou --srt fichier.srt")
+    out = burn_text(a.input, _out_path(Path(a.input), "_text", a.output), cues, size=a.size, color=a.color,
+                    font=a.font, box=a.box, outline=a.outline, fade=a.fade)
+    print(f"{len(cues)} texte(s) incrusté(s)\nExport : {out}")
+    return 0
+
+
+# ---------------------------------------------------------------- doctor
+def run_doctor() -> list[dict]:
+    """Vérifie l'installation. Chaque ligne : {name, status: ok|warn|fail, detail, fix}."""
+    import importlib.util
+    import os
+    import platform
+    import shutil
+    import subprocess
+
+    rows: list[dict] = []
+
+    def add(name, status, detail="", fix=""):
+        rows.append({"name": name, "status": status, "detail": detail, "fix": fix})
+
+    add("python", "ok" if sys.version_info >= (3, 10) else "fail", platform.python_version(), "Python >= 3.10 requis")
+    add("cutkiller", "ok", __version__)
+    ff = shutil.which("ffmpeg")
+    if not ff:
+        add("ffmpeg", "fail", "introuvable",
+            "Windows : winget install Gyan.FFmpeg (puis rouvrir le terminal) — macOS : brew install ffmpeg — Linux : apt install ffmpeg")
+    else:
+        out = subprocess.run([ff, "-hide_banner", "-filters"], capture_output=True, text=True, errors="replace").stdout
+        ver = subprocess.run([ff, "-version"], capture_output=True, text=True, errors="replace").stdout.splitlines()[:1]
+        missing = [f for f in ("xfade", "sidechaincompress", "loudnorm", "ass") if f" {f} " not in out]
+        add("ffmpeg", "ok" if not missing else "fail", (ver[0] if ver else ff)[:70],
+            f"filtres manquants : {', '.join(missing)} — installer un build ffmpeg complet" if missing else "")
+    add("ffprobe", "ok" if shutil.which("ffprobe") else "fail", shutil.which("ffprobe") or "introuvable",
+        "ffprobe est fourni avec ffmpeg")
+    if importlib.util.find_spec("moderngl") is None:
+        add("opengl (transitions gl:)", "warn", "moderngl absent",
+            "pip install 'cutkiller[gl]' — sans lui, 71 transitions restent disponibles (xfade + fx)")
+    else:
+        try:
+            from cutkiller.transitions.gl import GLRenderer
+
+            r = GLRenderer(16, 16)
+            info = r.ctx.info.get("GL_RENDERER", "?")
+            r.release()
+            add("opengl (transitions gl:)", "ok", info + (" (rendu logiciel : lent)" if "llvmpipe" in info.lower() else ""))
+        except Exception as exc:  # noqa: BLE001
+            add("opengl (transitions gl:)", "warn", str(exc)[:120], "installer/mettre à jour le pilote graphique")
+    add("transcription (faster-whisper)", "ok" if importlib.util.find_spec("faster_whisper") else "warn",
+        "installé" if importlib.util.find_spec("faster_whisper") else "absent",
+        "" if importlib.util.find_spec("faster_whisper") else "pip install 'cutkiller[transcribe]' (sous-titres, coupe des « euh »)")
+    add("serveur MCP", "ok" if importlib.util.find_spec("mcp") else "warn",
+        "installé" if importlib.util.find_spec("mcp") else "absent",
+        "" if importlib.util.find_spec("mcp") else "pip install 'cutkiller[mcp]'")
+    from cutkiller.sounds.providers import all_providers
+
+    for name, p in all_providers().items():
+        hint = {"local": "CUTKILLER_SOUNDS_DIR", "freesound": "FREESOUND_API_KEY", "jamendo": "JAMENDO_CLIENT_ID"}.get(name, "")
+        add(f"sons : {name}", "ok" if p.available() else "warn", "prêt" if p.available() else "non configuré",
+            "" if p.available() or not hint else f"définir {hint}")
+    try:
+        from cutkiller.sounds import cache_dir
+
+        probe_file = cache_dir() / ".write_test"
+        probe_file.write_text("ok", encoding="utf-8")
+        probe_file.unlink()
+        add("cache", "ok", str(cache_dir()))
+    except OSError as exc:
+        add("cache", "fail", str(exc), "définir CUTKILLER_CACHE vers un dossier accessible en écriture")
+    return rows
+
+
+def cmd_doctor(a: argparse.Namespace) -> int:
+    rows = run_doctor()
+    if a.json:
+        print(json.dumps(rows, ensure_ascii=False, indent=1))
+    else:
+        mark = {"ok": "OK  ", "warn": "--  ", "fail": "KO  "}
+        for r in rows:
+            print(f"{mark[r['status']]}{r['name']:<34} {r['detail']}")
+            if r["fix"] and r["status"] != "ok":
+                print(f"      → {r['fix']}")
+    return 1 if any(r["status"] == "fail" for r in rows) else 0
 
 
 # ---------------------------------------------------------------- transitions
@@ -506,6 +601,25 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--fps", type=float, default=25.0)
         p.set_defaults(func=func)
 
+    p = sub.add_parser("text", help="incruste du texte (accroche, prix, appel à l'action) et/ou des sous-titres .srt")
+    p.add_argument("input")
+    p.add_argument("-o", "--output")
+    p.add_argument("--text", action="append", metavar="TEXTE@DÉBUT-FIN[:position[:couleur[:taille%]]]",
+                   help="ex. 'SOLDES -50 %%@0-3:center:yellow', 'Code PUB10@5-' (fin vide = jusqu'à la fin) ; \\n = saut de ligne")
+    p.add_argument("--srt", help="graver un fichier de sous-titres (.srt)")
+    p.add_argument("--srt-position", choices=["bottom", "center", "top"], default="bottom")
+    p.add_argument("--size", type=float, default=6.0, help="taille du texte en %% de la hauteur (défaut 6)")
+    p.add_argument("--color", default="white", help="white, yellow, red… ou code hexa RRGGBB")
+    p.add_argument("--font", default="Arial")
+    p.add_argument("--box", action="store_true", help="fond semi-transparent derrière le texte")
+    p.add_argument("--outline", type=float, default=0.6, help="épaisseur du contour (0 = aucun)")
+    p.add_argument("--fade", type=float, default=0.15, help="fondu d'entrée/sortie du texte (s)")
+    p.set_defaults(func=cmd_text)
+
+    p = sub.add_parser("doctor", help="vérifie l'installation (ffmpeg, OpenGL, options, banques de sons)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_doctor)
+
     sp = sub.add_parser("sounds", help="banques de sons : providers, search, get").add_subparsers(dest="sub", required=True)
     sp.add_parser("providers", help="état des banques configurées").set_defaults(func=cmd_sounds_providers)
     for name, func in (("search", cmd_sounds_search), ("get", cmd_sounds_get)):
@@ -526,12 +640,23 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _utf8_console() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_console()
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
     except KeyboardInterrupt:
         return 130
+    except BrokenPipeError:  # `cutkiller ... | head` : fermeture normale du tube
+        return 0
     except (RuntimeError, ValueError, OSError) as exc:
         print(f"Erreur : {exc}", file=sys.stderr)
         return 1
