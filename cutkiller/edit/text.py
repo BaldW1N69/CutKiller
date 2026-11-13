@@ -126,21 +126,26 @@ def build_ass(cues: list[Cue], width: int, height: int, duration: float, *, size
     return "\n".join(header + lines) + "\n"
 
 
-def burn_text(src: str | Path, dst: str | Path, cues: list[Cue], *, crf: int = 18, **style) -> Path:
-    if not cues:
-        raise ValueError("Aucun texte à incruster.")
+def burn_ass(src: str | Path, dst: str | Path, ass: str, *, crf: int = 18) -> Path:
+    """Grave un script ASS (texte, sous-titres, animations libass) sur la vidéo."""
     src, dst = Path(src).resolve(), Path(dst).resolve()
     info = probe(src)
     if not info.has_video:
         raise ValueError(f"{src} n'a pas de piste vidéo.")
-    ass = build_ass(cues, info.width or 1080, info.height or 1920, info.duration, **style)
     with tempfile.TemporaryDirectory(prefix="cutkiller_text_") as tmp:
         (Path(tmp) / "cues.ass").write_text(ass, encoding="utf-8")
-        vf = "ass=cues.ass"
-        args = ["-i", str(src), "-vf", vf, "-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast",
+        args = ["-i", str(src), "-vf", "ass=cues.ass", "-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast",
                 "-pix_fmt", "yuv420p"]
         args += ["-c:a", "copy"] if info.has_audio else ["-an"]
         if dst.suffix.lower() in {".mp4", ".mov", ".m4a"}:
             args += ["-movflags", "+faststart"]
         run_ffmpeg(args + [str(dst)], cwd=tmp)
     return dst
+
+
+def burn_text(src: str | Path, dst: str | Path, cues: list[Cue], *, crf: int = 18, **style) -> Path:
+    if not cues:
+        raise ValueError("Aucun texte à incruster.")
+    info = probe(src)
+    ass = build_ass(cues, info.width or 1080, info.height or 1920, info.duration, **style)
+    return burn_ass(src, dst, ass, crf=crf)

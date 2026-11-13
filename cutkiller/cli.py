@@ -87,16 +87,107 @@ def cmd_cut(a: argparse.Namespace) -> int:
 def cmd_text(a: argparse.Namespace) -> int:
     from cutkiller.edit.text import Cue, burn_text, parse_cue, parse_srt
 
+    if a.ass:
+        from cutkiller.edit.text import burn_ass
+
+        out = burn_ass(a.input, _out_path(Path(a.input), "_text", a.output), Path(a.ass).read_text(encoding="utf-8-sig"))
+        print(f"Script ASS gravé\nExport : {out}")
+        return 0
     cues = [parse_cue(t) for t in a.text or []]
     if a.srt:
         for c in parse_srt(Path(a.srt).read_text(encoding="utf-8-sig")):
             c.position = a.srt_position
             cues.append(c)
     if not cues:
-        raise ValueError("Rien à incruster : utilise --text « texte@0-3 » et/ou --srt fichier.srt")
+        raise ValueError("Rien à incruster : utilise --text « texte@0-3 », --srt fichier.srt ou --ass script.ass")
     out = burn_text(a.input, _out_path(Path(a.input), "_text", a.output), cues, size=a.size, color=a.color,
                     font=a.font, box=a.box, outline=a.outline, fade=a.fade)
     print(f"{len(cues)} texte(s) incrusté(s)\nExport : {out}")
+    return 0
+
+
+# ---------------------------------------------------------------- animate / overlay / captions
+def _kv(pairs: list[str]) -> dict:
+    from cutkiller.transitions import _value
+
+    out = {}
+    for item in pairs or []:
+        if "=" not in item:
+            raise ValueError(f"Paramètre invalide « {item} » : format clé=valeur (ex. text=\"SOLDES\" color=yellow)")
+        k, v = item.split("=", 1)
+        out[k.strip()] = _value(v) if k.strip() not in ("text", "subtitle", "label", "prefix", "suffix", "path") else v
+    return out
+
+
+def cmd_animate(a: argparse.Namespace) -> int:
+    from cutkiller.animate import Ctx, load_script, render, stills
+    from cutkiller.animate.presets import PRESETS, preset_frame
+    from cutkiller.media import probe
+
+    if a.list or not a.name:
+        for name, (_, desc, params) in PRESETS.items():
+            print(f"{name:<18} {desc:<48} [{params}]")
+        print("\n+ script sur mesure : cutkiller animate mon_anim.py (fonction frame(t, ctx))")
+        return 0
+    meta: dict = {}
+    if a.name.endswith(".py"):
+        fn, meta = load_script(a.name)
+        stem = Path(a.name).stem
+    else:
+        fn, stem = preset_frame(a.name), a.name
+    w, h, fps = 1080, 1920, 30.0
+    if a.like:
+        info = probe(a.like)
+        w, h, fps = info.width or w, info.height or h, info.fps or fps
+    if meta.get("size"):
+        w, h = meta["size"]
+    if a.size:
+        w, h = (int(v) for v in a.size.lower().split("x"))
+    fps = a.fps or meta.get("fps") or fps
+    duration = a.duration or meta.get("duration") or 3.0
+    ctx = Ctx(w - w % 2, h - h % 2, float(fps), float(duration), font_path=a.font, params=_kv(a.params))
+    out = Path(a.output or f"{stem}.mov")
+    if a.preview is not None:
+        times = [float(x) for x in a.preview.split(",")] if a.preview else [duration * f for f in (0.1, 0.35, 0.6, 0.9)]
+        for p in stills(fn, ctx, times, out.with_name(out.stem + "_preview"), stem):
+            print(f"Aperçu : {p}")
+        return 0
+    render(fn, out, ctx, log=print)
+    print(f"{ctx.w}x{ctx.h}, {duration:g} s à {fps:g} i/s (fond transparent)" + ("" if out.suffix in (".mov", ".webm", ".mkv") else ""))
+    print(f"Export : {out}")
+    return 0
+
+
+def cmd_overlay(a: argparse.Namespace) -> int:
+    from cutkiller.edit.overlay import parse_layer, render_overlays
+
+    layers = [parse_layer(x) for x in a.add or []]
+    out = render_overlays(a.input, _out_path(Path(a.input), "_overlay", a.output), layers)
+    print(f"{len(layers)} calque(s) incrusté(s)\nExport : {out}")
+    return 0
+
+
+def cmd_captions(a: argparse.Namespace) -> int:
+    from cutkiller.edit.captions import build_captions_ass, load_words
+    from cutkiller.edit.text import burn_ass
+    from cutkiller.media import probe
+
+    src = Path(a.input)
+    if a.transcribe:
+        from cutkiller.listen.transcribe import transcribe
+
+        words, _ = transcribe(src, a.whisper_model, a.language)
+    else:
+        report = Path(a.words) if a.words else src.with_suffix(".listen.json")
+        if not report.exists():
+            raise ValueError(f"Pas de mots horodatés : lance « cutkiller listen {src.name} --transcribe » "
+                             f"(ou passe --transcribe / --words rapport.listen.json).")
+        words = load_words(report)
+    info = probe(src)
+    ass = build_captions_ass(words, info.width or 1080, info.height or 1920, style=a.style, color=a.color,
+                             active=a.active, size=a.size, position=a.position, font=a.font, max_words=a.max_words)
+    out = burn_ass(src, _out_path(src, "_captions", a.output), ass)
+    print(f"{len(words)} mots, style {a.style}\nExport : {out}")
     return 0
 
 
@@ -608,6 +699,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="ex. 'SOLDES -50 %%@0-3:center:yellow', 'Code PUB10@5-' (fin vide = jusqu'à la fin) ; \\n = saut de ligne")
     p.add_argument("--srt", help="graver un fichier de sous-titres (.srt)")
     p.add_argument("--srt-position", choices=["bottom", "center", "top"], default="bottom")
+    p.add_argument("--ass", help="graver tel quel un script ASS (animations libass écrites à la main)")
     p.add_argument("--size", type=float, default=6.0, help="taille du texte en %% de la hauteur (défaut 6)")
     p.add_argument("--color", default="white", help="white, yellow, red… ou code hexa RRGGBB")
     p.add_argument("--font", default="Arial")
@@ -615,6 +707,43 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--outline", type=float, default=0.6, help="épaisseur du contour (0 = aucun)")
     p.add_argument("--fade", type=float, default=0.15, help="fondu d'entrée/sortie du texte (s)")
     p.set_defaults(func=cmd_text)
+
+    p = sub.add_parser("animate", help="crée une animation à fond transparent (préréglage ou script .py sur mesure)")
+    p.add_argument("name", nargs="?", help="préréglage (title, kinetic, cta, counter…) ou script .py")
+    p.add_argument("params", nargs="*", metavar="clé=valeur", help="ex. text=\"SOLDES -50 %%\" color=yellow")
+    p.add_argument("-o", "--output", help=".mov (ProRes 4444 alpha, défaut), .webm (VP9 alpha), .mp4 (fond noir), .png")
+    p.add_argument("--size", help="ex. 1080x1920 (défaut), 1920x1080")
+    p.add_argument("--like", help="reprendre taille et cadence de cette vidéo")
+    p.add_argument("--fps", type=float)
+    p.add_argument("--duration", type=float, help="secondes (défaut 3, ou DURATION du script)")
+    p.add_argument("--font", help="police .ttf/.otf (sinon Arial/DejaVu/défaut)")
+    p.add_argument("--preview", nargs="?", const="", metavar="T1,T2", help="seulement des images clés PNG (vérification rapide)")
+    p.add_argument("--list", action="store_true", help="lister les préréglages")
+    p.set_defaults(func=cmd_animate)
+
+    p = sub.add_parser("overlay", help="incruste animations, logos, images, light leaks à un instant donné")
+    p.add_argument("input")
+    p.add_argument("-o", "--output")
+    p.add_argument("--add", action="append", required=True, metavar="SOURCE@DÉBUT[-FIN]?pos=…&scale=…&mode=…",
+                   help="ex. 'titre.mov@0.5', 'logo.png@0-3?pos=top-right&scale=0.2', 'leak.mp4@4?mode=screen'")
+    p.set_defaults(func=cmd_overlay)
+
+    p = sub.add_parser("captions", help="sous-titres animés façon TikTok (mot prononcé en surbrillance)")
+    p.add_argument("input")
+    p.add_argument("-o", "--output")
+    p.add_argument("--words", help="rapport de 'cutkiller listen --transcribe' (défaut : <vidéo>.listen.json)")
+    p.add_argument("--transcribe", action="store_true", help="transcrire maintenant (faster-whisper)")
+    p.add_argument("--whisper-model", default="small")
+    p.add_argument("--language")
+    p.add_argument("--style", choices=["tiktok", "bold", "karaoke", "minimal"], default="tiktok")
+    p.add_argument("--color", default="white")
+    p.add_argument("--active", help="couleur du mot prononcé (défaut selon le style)")
+    p.add_argument("--size", type=float, help="taille en %% de la hauteur")
+    p.add_argument("--position", choices=["bottom", "lower", "center", "top"],
+                   help="lower = tiers bas façon TikTok (défaut des styles tiktok/bold)")
+    p.add_argument("--max-words", type=int, help="mots maximum par groupe")
+    p.add_argument("--font", default="Arial")
+    p.set_defaults(func=cmd_captions)
 
     p = sub.add_parser("doctor", help="vérifie l'installation (ffmpeg, OpenGL, options, banques de sons)")
     p.add_argument("--json", action="store_true")

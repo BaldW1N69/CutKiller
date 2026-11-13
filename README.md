@@ -1,6 +1,6 @@
 # CutKiller
 
-Montage vidéo piloté par l'**écoute** : CutKiller analyse l'audio de ta vidéo pour couper les blancs et les hésitations, caler les coupes sur le rythme, ajoute **plus de 280 transitions** (et tes propres packs), puis une musique de fond et des SFX trouvés dans des banques de sons libres de droits, avec les crédits prêts à coller en description.
+Montage vidéo piloté par l'**écoute** : CutKiller analyse l'audio de ta vidéo pour couper les blancs et les hésitations, caler les coupes sur le rythme, ajoute **plus de 280 transitions** (et tes propres packs), des **animations** (préréglages ou écrites sur mesure par Claude), des sous-titres animés, puis une musique de fond et des SFX trouvés dans des banques de sons libres de droits, avec les crédits prêts à coller en description.
 
 ```bash
 cutkiller auto video.mp4 --music "lofi chill" --sfx "whoosh@cuts"
@@ -83,25 +83,29 @@ cutkiller mix video.mp4 --music ma_musique.mp3 --music-volume -18 --music-start 
 - **Normalisation finale** à `--target-lufs` (−14 par défaut)
 - `source` peut être un fichier local ou une requête texte cherchée dans les banques
 
-## Utiliser CutKiller depuis Claude (skill + serveur MCP)
+## Utiliser CutKiller depuis Claude (skills + serveur MCP)
 
-Le dépôt est aussi un **plugin Claude Code** : un skill `montage` (Claude le déclenche quand tu demandes un montage, une pub, une vidéo) et un serveur MCP local de 12 outils (`cutkiller_auto`, `cutkiller_montage`, `cutkiller_text`, `cutkiller_listen`, `cutkiller_transitions`…). Le serveur tourne **sur ta machine** : Claude lit et écrit tes vraies vidéos, sans upload.
+Deux skills et un serveur MCP font de CutKiller la base de tout montage demandé à Claude :
 
-**Claude Code**
+| Composant | Rôle |
+|---|---|
+| Skill `montage` | Se déclenche sur « montage, pub, vidéo, reel… » : cadrage, écoute, recette, structure de pub, vérifications, livraison avec crédits |
+| Skill `animation` | Décide si un préréglage suffit ou si **Claude prend le relais** : il écrit lui-même l'animation (script Python, ASS ou GLSL), regarde les images clés, puis rend et incruste |
+| Serveur MCP (18 outils) | Tourne **sur ta machine** : Claude lit et écrit tes vraies vidéos. `cutkiller_animate_code` et `cutkiller_look` renvoient des images, donc Claude voit ce qu'il produit |
+
+**Dans ce dépôt, rien à installer côté Claude.** Les skills sont dans `.claude/skills/` et le serveur MCP dans `.mcp.json` : Claude Code les charge à l'ouverture du dossier (il demande d'approuver le serveur MCP la première fois). Il faut seulement CutKiller lui-même :
 
 ```bash
 pip install -e ".[all]"
 ```
 
-```bash
-claude plugin marketplace add BaldW1N69/CutKiller
-```
+**Dans tous tes projets** (pas seulement ce dépôt) : installe le plugin. Le dépôt déclare déjà sa marketplace dans `.claude/settings.json`, donc après avoir ouvert et approuvé le dossier une fois, il suffit de :
 
 ```bash
 claude plugin install cutkiller@cutkiller
 ```
 
-Pour tester avant d'installer : `claude --plugin-dir .` depuis le dossier du dépôt. Le serveur MCP est lancé par `python -m cutkiller.mcp_server` : sur macOS/Linux où seul `python3` existe, ajoute-le à la place avec `claude mcp add cutkiller -- python3 -m cutkiller.mcp_server`.
+Sans passer par le dossier : `claude plugin marketplace add BaldW1N69/CutKiller` d'abord. Pour tester sans installer : `claude --plugin-dir .`. Le serveur MCP est lancé par `python -m cutkiller.mcp_server` : sur macOS/Linux où seul `python3` existe, utilise `claude mcp add cutkiller -- python3 -m cutkiller.mcp_server`.
 
 **Claude Desktop** (serveur MCP seul) : ajoute dans `claude_desktop_config.json`
 
@@ -113,7 +117,7 @@ Pour tester avant d'installer : `claude --plugin-dir .` depuis le dossier du dé
 }
 ```
 
-Les rendus longs renvoient un `job_id` après ~40 s, à suivre avec `cutkiller_job` (évite les timeouts du client MCP).
+Les scripts d'animation écrits par Claude via MCP sont enregistrés dans `~/CutKiller/animations` (modifiable avec `CUTKILLER_ANIM_DIR`). Les rendus longs renvoient un `job_id` après ~40 s, à suivre avec `cutkiller_job`.
 
 ## Texte incrusté : `cutkiller text`
 
@@ -123,6 +127,55 @@ cutkiller text video.mp4 --srt sous-titres.srt --srt-position center
 ```
 
 Format : `texte@début-fin[:position[:couleur[:taille%]]]` (fin vide = jusqu'à la fin ; position `top|center|bottom`). Marges de sécurité réseaux sociaux, fondu d'entrée/sortie, fond semi-transparent avec `--box`. Rendu par libass : fonctionne identiquement sous Windows, macOS et Linux.
+
+## Animations : `cutkiller animate`
+
+```bash
+cutkiller animate --list
+cutkiller animate kinetic text="Le *secret* d'une peau parfaite" --like video.mp4 -o accroche.mov
+cutkiller animate counter to=12500 suffix=" clients" label="en 2026" -o chiffre.mov
+cutkiller animate cta text="Commander" --preview 0.5,1.5      # images clés PNG, sans rendu
+```
+
+12 préréglages : `title`, `slide`, `typewriter`, `kinetic` (mot par mot, `*mot*` en surbrillance), `lower_third`, `counter`, `cta` (bouton qui pulse), `progress`, `logo`, `confetti`, `circle_highlight`, `arrow`. Le texte trop large est réduit automatiquement.
+
+**Animation sur mesure** : un script Python avec une fonction `frame(t, ctx)` qui renvoie une image RGBA. C'est ce que Claude écrit quand il prend le relais (voir `.claude/skills/animation/SKILL.md`).
+
+```python
+DURATION = 3.0
+def frame(t, ctx):
+    img = ctx.blank()
+    p = ctx.prog(t, 0, 0.6, "out_back")
+    return ctx.text(img, "NOUVEAU", (0.5, 0.5), size=0.08, scale=p, rotate=(1 - p) * 90, color="yellow")
+```
+
+```bash
+cutkiller animate mon_anim.py --like video.mp4 --preview 0.3,1,2   # vérifier
+cutkiller animate mon_anim.py --like video.mp4 -o mon_anim.mov     # rendre
+```
+
+Sortie : `.mov` ProRes 4444 avec transparence (par défaut, accepté par Premiere, DaVinci, Final Cut, CapCut), `.webm` VP9 avec transparence (léger), `.mp4` (fond noir), `.png` (une image).
+
+## Incrustation : `cutkiller overlay`
+
+```bash
+cutkiller overlay video.mp4 --add "accroche.mov@0.3" --add "logo.png@0?pos=top-right&scale=0.18" \
+  --add "lightleak.mp4@4.5?mode=screen" --add "fondvert.mp4@6?mode=green&pos=bottom&scale=0.5"
+```
+
+Format d'un calque : `SOURCE@DÉBUT[-FIN]?pos=…&scale=…&mode=…&opacity=…`
+- `pos` : `center`, `top`, `bottom-right`… ou `x,y` (0..1).
+- `scale` : largeur relative à la vidéo.
+- `mode` : `alpha` (transparence), `green` (fond vert), `screen` (fond noir : light leaks, flares, particules).
+
+## Sous-titres animés : `cutkiller captions`
+
+```bash
+cutkiller listen video.mp4 --transcribe
+cutkiller captions video.mp4 --style tiktok          # tiktok | bold | karaoke | minimal
+```
+
+Groupes de 1 à 4 mots ; le mot prononcé change de couleur et « pop ». Les hésitations sont retirées. Placement par défaut dans le tiers bas, zone habituelle des sous-titres TikTok. Pour un effet de texte très précis, `cutkiller text video.mp4 --ass mon_effet.ass` grave un script ASS écrit à la main (balises libass `\move`, `\t`, `\fad`, `\k`…).
 
 ## Transitions
 
@@ -209,12 +262,14 @@ pytest -m network      # + appel réel à Openverse
 cutkiller/
   media.py            ffprobe / ffmpeg, décodage audio → numpy
   listen/             silences, loudness, beats, transcription, rapport
-  edit/               coupes, timeline (transitions, raccords audio), montage, mixage, texte
+  edit/               coupes, timeline (transitions, raccords audio), montage, mixage, texte, sous-titres animés, incrustation
   transitions/        registre + moteurs xfade / gl / fx, aperçus et galerie
   sounds/             banques de sons, cache, crédits
-  mcp_server.py       serveur MCP (12 outils, rendus en jobs)
-  cli.py              commandes listen / cut / mix / auto / montage / text / transitions / sounds / doctor
-skills/montage/       skill Claude : quand et comment monter (recettes, playbook pub, vérifications)
+  animate/            moteur d'animation (frame(t, ctx) → vidéo à alpha) + 12 préréglages
+  mcp_server.py       serveur MCP (18 outils, rendus en jobs, aperçus renvoyés en images)
+  cli.py              commandes listen / cut / mix / auto / montage / text / captions / animate / overlay / transitions / sounds / doctor
+.claude/skills/       skills Claude : montage (recettes, pub, vérifications) et animation (relais : Claude code l'animation)
+.claude/settings.json déclare la marketplace du plugin
 .claude-plugin/       manifeste du plugin + marketplace
 .mcp.json             déclaration du serveur MCP du plugin
 ```

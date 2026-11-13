@@ -27,11 +27,15 @@ musique + SFX libres de droits avec crédits, texte incrusté. Démarche : cutki
 fois, cutkiller_listen pour diagnostiquer, puis cutkiller_auto (une vidéo) ou cutkiller_montage
 (plusieurs clips/photos), cutkiller_text pour accroche/prix/appel à l'action. Les rendus renvoient
 un job_id si ça dépasse ~40 s : appeler cutkiller_job. Toujours donner à l'utilisateur le chemin du
-fichier produit et le contenu du fichier de crédits."""
+fichier produit et le contenu du fichier de crédits.
+Animations : préréglages via cutkiller_animate ; animation sur mesure → écrire le code (frame(t, ctx)) et
+cutkiller_animate_code (renvoie les images clés à regarder), puis cutkiller_overlay. cutkiller_look montre
+des images d'une vidéo pour vérifier le rendu avant de livrer."""
 
 WAIT_DEFAULT = 40.0
 WAIT_MAX = 55.0
 EXPORT_RX = re.compile(r"^(?:Export|Aperçu|Rapport JSON|Sous-titres|Galerie)\s*:\s*(.+?)\s*$")
+ANIM_DIR = Path(os.environ.get("CUTKILLER_ANIM_DIR", Path.home() / "CutKiller" / "animations"))
 CREDITS_RX = re.compile(r"^Crédits à mettre en description\s*:\s*(.+?)\s*$")
 
 
@@ -332,6 +336,126 @@ def build_server():
         return _dumps(launch(a))
 
     @tool
+    def cutkiller_text_ass(path: str, ass_code: str, output: str | None = None) -> str:
+        """Grave un script ASS écrit à la main (animations libass : \\move, \\t, \\fad, \\k, \\frz, \\blur, dessins \\p…)
+        pour des effets de texte précis que les préréglages ne couvrent pas. PlayResX/Y = taille de la vidéo."""
+        if err := _need_files([path]):
+            return _dumps(err)
+        ANIM_DIR.mkdir(parents=True, exist_ok=True)
+        ass_path = ANIM_DIR / f"text_{uuid.uuid4().hex[:6]}.ass"
+        ass_path.write_text(ass_code, encoding="utf-8")
+        a = ["text", str(Path(path).expanduser()), "--ass", str(ass_path)]
+        flag(a, "-o", output)
+        res = launch(a)
+        res["ass_file"] = str(ass_path)
+        return _dumps(res)
+
+    @tool
+    def cutkiller_captions(path: str, words: str | None = None, transcribe: bool = False, style: str = "tiktok",
+                           color: str = "white", active: str | None = None, size: float | None = None,
+                           position: str | None = None, max_words: int | None = None, language: str | None = None,
+                           output: str | None = None) -> str:
+        """Sous-titres animés façon TikTok/Reels : groupes de mots, mot prononcé en couleur et qui « pop ».
+        style : tiktok | bold | karaoke | minimal ; position : lower (défaut tiktok) | bottom | center | top.
+        Mots horodatés : words=<vidéo>.listen.json (cutkiller_listen transcribe=True) ou transcribe=True."""
+        if err := _need_files([path] + ([words] if words else [])):
+            return _dumps(err)
+        a = ["captions", str(Path(path).expanduser()), "--style", style]
+        flag(a, "-o", output)
+        flag(a, "--words", words)
+        flag(a, "--transcribe", transcribe)
+        flag(a, "--language", language)
+        flag(a, "--color", color if color != "white" else None)
+        flag(a, "--active", active)
+        flag(a, "--size", size)
+        flag(a, "--position", position)
+        flag(a, "--max-words", max_words)
+        return _dumps(launch(a))
+
+    @tool
+    def cutkiller_animate(name: str, params: dict[str, str] | None = None, output: str | None = None,
+                          like: str | None = None, size: str | None = None, duration: float | None = None,
+                          fps: float | None = None, font: str | None = None) -> str:
+        """Rend une animation PRÉRÉGLÉE à fond transparent (.mov ProRes 4444 par défaut, .webm, .png).
+        name : title | slide | typewriter | kinetic | lower_third | counter | cta | progress | logo | confetti |
+        circle_highlight | arrow. params ex. {"text": "SOLDES -50 %", "color": "yellow"} ; kinetic : *mot* = accent.
+        like=<vidéo> reprend taille et cadence. Puis incruster avec cutkiller_overlay. Pour une animation qui
+        n'existe pas en préréglage : écrire le code et utiliser cutkiller_animate_code."""
+        a = ["animate", name, *[f"{k}={v}" for k, v in (params or {}).items()]]
+        flag(a, "-o", output or str(ANIM_DIR / f"{name}_{uuid.uuid4().hex[:6]}.mov"))
+        flag(a, "--like", like)
+        flag(a, "--size", size)
+        flag(a, "--duration", duration)
+        flag(a, "--fps", fps)
+        flag(a, "--font", font)
+        ANIM_DIR.mkdir(parents=True, exist_ok=True)
+        return _dumps(launch(a))
+
+    @tool
+    def cutkiller_animate_code(code: str, name: str = "animation", preview_times: list[float] | None = None,
+                               render: bool = False, output: str | None = None, like: str | None = None,
+                               size: str | None = None, duration: float | None = None, fps: float | None = None):
+        """Animation SUR MESURE : `code` = script Python définissant frame(t, ctx) → image RGBA (et DURATION, facultatif).
+        Outils de ctx : blank(), text(img, txt, (x,y), size=, color=, alpha=, scale=, rotate=, stroke=), rect(), circle()
+        (arcs), line(), polygon(), paste(img, 'logo.png', (x,y), scale=), glow(), prog(t, a, b, 'out_back'), in_out(),
+        measure()/fit() ; coordonnées en fractions 0..1. Le code s'exécute sur cette machine.
+        render=False : renvoie les IMAGES CLÉS (à regarder avant de valider). render=True : rend la vidéo à alpha."""
+        ANIM_DIR.mkdir(parents=True, exist_ok=True)
+        safe = re.sub(r"[^\w-]", "_", name)[:40] or "animation"
+        script = ANIM_DIR / f"{safe}.py"
+        script.write_text(code, encoding="utf-8")
+        out = Path(output) if output else ANIM_DIR / f"{safe}.mov"
+        a = ["animate", str(script), "-o", str(out)]
+        flag(a, "--like", like)
+        flag(a, "--size", size)
+        flag(a, "--duration", duration)
+        flag(a, "--fps", fps)
+        if render:
+            res = launch(a)
+            res["script"] = str(script)
+            return _dumps(res)
+        a += ["--preview", ",".join(str(t) for t in preview_times) if preview_times else ""]
+        res = launch(a, wait=50)
+        res["script"] = str(script)
+        return _with_sheet(res, [Path(p) for p in res.get("outputs", [])], ANIM_DIR / f"{safe}_sheet.png",
+                           [f"t={Path(p).stem.split('_')[-1]}" for p in res.get("outputs", [])])
+
+    @tool
+    def cutkiller_look(path: str, times: list[float] | None = None, width: int = 360):
+        """Montre des images d'une vidéo (ou d'une animation) aux instants donnés, sous forme d'image à regarder :
+        vérifier cadrage, texte, transitions, incrustations avant de livrer. Défaut : 4 instants répartis."""
+        if err := _need_files([path]):
+            return _dumps(err)
+        from cutkiller.media import probe, run_ffmpeg
+
+        src = Path(path).expanduser()
+        dur = probe(src).duration
+        times = times or [round(dur * f, 2) for f in (0.1, 0.35, 0.6, 0.85)]
+        tmp = ANIM_DIR / "look"
+        tmp.mkdir(parents=True, exist_ok=True)
+        frames = []
+        for t in times:
+            f = tmp / f"{src.stem}_{t:07.2f}.png"
+            run_ffmpeg(["-ss", f"{max(0.0, min(t, dur - 0.05)):.3f}", "-i", str(src), "-frames:v", "1",
+                        "-vf", f"scale={width}:-2", str(f)])
+            frames.append(f)
+        return _with_sheet({"status": "done", "file": str(src), "duration": round(dur, 2)}, frames,
+                           tmp / f"{src.stem}_sheet.png", [f"{t:.2f} s" for t in times])
+
+    @tool
+    def cutkiller_overlay(path: str, layers: list[str], output: str | None = None) -> str:
+        """Incruste des calques sur une vidéo : animations à alpha (.mov/.webm de cutkiller_animate), logos/images,
+        vidéos fond vert ou fond noir. layers = specs 'SOURCE@DÉBUT[-FIN]?pos=…&scale=…&mode=…&opacity=…'
+        ex. 'titre.mov@0.5', 'logo.png@0-3?pos=top-right&scale=0.2', 'leak.mp4@4?mode=screen', 'anim.mov@2?pos=0.5,0.4'."""
+        srcs = [spec.partition("?")[0].rpartition("@")[0] or spec.partition("?")[0] for spec in layers]
+        if err := _need_files([path] + srcs):
+            return _dumps(err)
+        a = ["overlay", str(Path(path).expanduser())]
+        flag(a, "-o", output)
+        repeat(a, "--add", layers)
+        return _dumps(launch(a))
+
+    @tool
     def cutkiller_sounds_search(query: str, kind: str = "any", limit: int = 10, max_duration: float | None = None,
                                 min_duration: float | None = None, allow_nc: bool = False) -> str:
         """Cherche musiques/SFX dans les banques libres de droits (dossier local, Openverse, Freesound, Jamendo).
@@ -398,6 +522,26 @@ def build_server():
         return _dumps(job.snapshot(10))
 
     return server
+
+
+def _with_sheet(res: dict, frames: list[Path], sheet: Path, labels: list[str]):
+    """Renvoie le JSON + une planche d'images (contenu image MCP) pour que Claude voie le résultat."""
+    text = _dumps(res)
+    frames = [f for f in frames if f.suffix.lower() == ".png" and f.exists()]
+    if not frames:
+        return text
+    from cutkiller.animate import contact_sheet
+
+    contact_sheet(frames, sheet, labels)
+    res["sheet"] = str(sheet)
+    try:
+        from mcp.types import ImageContent, TextContent
+    except ImportError:
+        return _dumps(res)
+    import base64
+
+    data = base64.b64encode(sheet.read_bytes()).decode()
+    return [TextContent(type="text", text=_dumps(res)), ImageContent(type="image", data=data, mimeType="image/png")]
 
 
 def main() -> None:

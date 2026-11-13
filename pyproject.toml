@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cutkiller"
-version = "0.2.0"
+version = "0.3.0"
 description = "Montage vidéo piloté par l'écoute : coupe des silences, détection de beats, transcription, SFX et musiques libres de droits."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "CC0-1.0" }
-dependencies = ["numpy>=1.24"]
+dependencies = ["numpy>=1.24", "pillow>=10.1"]
 
 [project.optional-dependencies]
 transcribe = ["faster-whisper>=1.0"]
