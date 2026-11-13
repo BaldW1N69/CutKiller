@@ -13,6 +13,8 @@ dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
 transcribe = ["faster-whisper>=1.0"]
+gl = ["moderngl>=5.8"]
+all = ["faster-whisper>=1.0", "moderngl>=5.8"]
 dev = ["pytest>=7"]
 
 [project.scripts]
@@ -20,6 +22,9 @@ cutkiller = "cutkiller.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["cutkiller*"]
+
+[tool.setuptools.package-data]
+cutkiller = ["transitions/gl_transitions.json", "transitions/GL_TRANSITIONS_LICENSE"]
 
 [tool.pytest.ini_options]
 markers = ["network: tests qui appellent de vraies API (désactivés par défaut, lancer avec -m network)"]

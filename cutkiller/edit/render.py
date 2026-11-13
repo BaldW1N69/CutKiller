@@ -32,23 +32,26 @@ def build_cut_filter(segments: list[Interval], has_video: bool, fade: float = FA
     return ";\n".join(parts)
 
 
-def render_cuts(src: str | Path, dst: str | Path, segments: list[Interval], *, crf: int = 20, preset: str = "veryfast") -> Path:
+def render_cuts(src: str | Path, dst: str | Path, segments: list[Interval], *, crf: int = 20, preset: str = "veryfast",
+                joins=None, log=None) -> Path:
+    """Rend les segments gardés. Vidéo : via la timeline (transitions possibles) ; audio seul : concat simple."""
     if not segments:
         raise ValueError("Aucun segment à garder : vérifie le seuil de silence.")
     info = probe(src)
-    graph = build_cut_filter(segments, info.has_video)
     dst = Path(dst)
+    if info.has_video:
+        from cutkiller.edit.timeline import Clip, Join, render_timeline
+
+        clips = [Clip(Path(src), s.start, s.end) for s in segments]
+        render_timeline(clips, joins or [Join() for _ in clips[1:]], dst, crf=crf, preset=preset, log=log)
+        return dst
+    graph = build_cut_filter(segments, has_video=False)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fh:
         fh.write(graph)
         script = fh.name
     try:
-        args = ["-i", str(src), "-filter_complex_script", script]
-        if info.has_video:
-            args += ["-map", "[outv]", "-c:v", "libx264", "-crf", str(crf), "-preset", preset, "-pix_fmt", "yuv420p"]
-        args += ["-map", "[outa]", "-c:a", "aac", "-b:a", "192k"]
-        if dst.suffix.lower() in {".mp4", ".mov", ".m4a"}:
-            args += ["-movflags", "+faststart"]
-        run_ffmpeg(args + [str(dst)])
+        run_ffmpeg(["-i", str(src), "-filter_complex_script", script, "-map", "[outa]", "-c:a", "aac", "-b:a", "192k",
+                    str(dst)])
     finally:
         Path(script).unlink(missing_ok=True)
     return dst

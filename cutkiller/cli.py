@@ -75,8 +75,110 @@ def cmd_cut(a: argparse.Namespace) -> int:
     if a.dry_run:
         print(json.dumps([s.to_dict() for s in segs], indent=1))
         return 0
-    out = render_cuts(a.input, _out_path(Path(a.input), "_cut", a.output), segs)
+    from cutkiller.edit.cutlist import output_cut_points
+
+    joins = _joins(a, output_cut_points(segs))
+    out = render_cuts(a.input, _out_path(Path(a.input), "_cut", a.output), segs, joins=joins, log=print)
     print(f"Export : {out}")
+    return 0
+
+
+# ---------------------------------------------------------------- transitions
+def _add_transition_args(p: argparse.ArgumentParser) -> None:
+    g = p.add_argument_group("transitions")
+    g.add_argument("--transition", metavar="SPEC",
+                   help="ex. fade, gl:Cube, fx:zoom_punch, random, random:glitch, 'fade|gl:WhipPan' "
+                        "(liste : cutkiller transitions list)")
+    g.add_argument("--transition-duration", type=float, default=0.4, help="durée en secondes (défaut 0.4)")
+    g.add_argument("--transition-every", type=int, default=1, help="une transition toutes les N coupes")
+    g.add_argument("--transition-min-gap", type=float, default=0.0, help="écart minimum entre deux transitions (s)")
+    g.add_argument("--seed", type=int, default=None, help="graine pour les tirages aléatoires (reproductible)")
+    g.add_argument("--audio-fade", type=float, default=0.03, help="fondu croisé audio aux coupes (s)")
+    g.add_argument("--jl", type=float, default=0.0, help="décalage son/image : >0 L-cut, <0 J-cut (s)")
+
+
+def _joins(a: argparse.Namespace, cut_times: list[float]):
+    from cutkiller.edit.timeline import assign_joins
+    from cutkiller.transitions import Picker
+
+    picker = Picker(a.transition, seed=a.seed) if getattr(a, "transition", None) else None
+    joins = assign_joins(cut_times, picker, duration=a.transition_duration, every=a.transition_every,
+                         min_gap=a.transition_min_gap, audio_fade=a.audio_fade, jl=a.jl)
+    a._transition_times = [t for t, j in zip(cut_times, joins) if j.transition is not None]
+    return joins
+
+
+def cmd_transitions_list(a: argparse.Namespace) -> int:
+    from cutkiller.transitions import catalog
+    from cutkiller.transitions import gl as glmod
+
+    items = catalog()
+    if a.family:
+        items = [t for t in items if t.family == a.family]
+    if a.tag:
+        items = [t for t in items if a.tag.lower() in t.tags]
+    if a.search:
+        q = a.search.lower()
+        items = [t for t in items if q in t.name.lower() or q in t.description.lower()]
+    if a.json:
+        print(json.dumps([{"id": t.id, "description": t.description, "tags": t.tags} for t in items], ensure_ascii=False, indent=1))
+        return 0
+    for t in items:
+        print(f"{t.id:<34} {t.description[:70]:<70} [{', '.join(t.tags[:4])}]")
+    counts = {f: sum(1 for t in items if t.family == f) for f in ("xfade", "fx", "gl")}
+    print(f"\n{len(items)} transitions (xfade {counts['xfade']}, fx {counts['fx']}, gl {counts['gl']})"
+          + ("" if glmod.available() else " — GL : pip install 'cutkiller[gl]'"))
+    print("+ illimité : pack:<vidéo>, luma:<image>, glsl:<shader>, xfade:custom?expr=…")
+    return 0
+
+
+def cmd_transitions_tags(_: argparse.Namespace) -> int:
+    from cutkiller.transitions import all_tags
+
+    for tag, n in all_tags().items():
+        print(f"{tag:<16} {n}")
+    return 0
+
+
+def cmd_transitions_info(a: argparse.Namespace) -> int:
+    from cutkiller.transitions import gl as glmod
+    from cutkiller.transitions import resolve
+
+    t = resolve(a.name)
+    print(f"{t.id}\n  {t.description}\n  thèmes : {', '.join(t.tags)}")
+    if t.family == "gl":
+        spec = glmod.catalog()[t.name]
+        print(f"  auteur : {spec.get('author')} — licence {spec.get('license')}")
+        for k, v in (spec.get("defaultParams") or {}).items():
+            print(f"  ?{k}={v}  ({spec['paramsTypes'].get(k)})")
+    return 0
+
+
+def cmd_transitions_preview(a: argparse.Namespace) -> int:
+    from cutkiller.transitions import resolve
+    from cutkiller.transitions.frames import VideoFormat
+    from cutkiller.transitions.preview import render_preview
+
+    t = resolve(a.name)
+    out = Path(a.output or f"preview_{t.family}_{t.name}.mp4")
+    fmt = VideoFormat.parse_size(a.size, a.fps)
+    render_preview(t, out, a=Path(a.a) if a.a else None, b=Path(a.b) if a.b else None, duration=a.duration, fmt=fmt)
+    print(f"Aperçu : {out}")
+    return 0
+
+
+def cmd_transitions_gallery(a: argparse.Namespace) -> int:
+    from cutkiller.transitions import catalog
+    from cutkiller.transitions.frames import VideoFormat
+    from cutkiller.transitions.preview import gallery
+
+    items = catalog()
+    if a.family:
+        items = [t for t in items if t.family == a.family]
+    if a.tag:
+        items = [t for t in items if a.tag.lower() in t.tags]
+    page = gallery(Path(a.folder), items, fmt=VideoFormat.parse_size(a.size, a.fps), duration=a.duration)
+    print(f"Galerie : {page}")
     return 0
 
 
@@ -161,16 +263,19 @@ def _parse_sfx(spec: str) -> tuple[str, str]:
     return src, where
 
 
-def _sfx_times(where: str, cut_points: list[float], beats: list[float] | None) -> list[float]:
+def _sfx_times(where: str, cut_points: list[float], beats: list[float] | None,
+               transitions: list[float] | None = None) -> list[float]:
     if where == "cuts":
         return cut_points
+    if where == "transitions":
+        return transitions or []
     if where.startswith("beats"):
         every = int(where.split(":")[1]) if ":" in where else 4
         return (beats or [])[::every]
     return [float(x) for x in where.split(",") if x.strip()]
 
 
-def _prepare_mix(a: argparse.Namespace, duration: float, cut_points: list[float]):
+def _prepare_mix(a: argparse.Namespace, duration: float, cut_points: list[float], *, music_path: Path | None = None):
     """Résout musique + SFX (recherche, téléchargement) AVANT tout rendu : échec rapide."""
     from cutkiller.edit.mixer import MixPlan, MusicBed, SfxCue, spaced
     from cutkiller.media import ANALYSIS_SR, load_audio
@@ -179,8 +284,8 @@ def _prepare_mix(a: argparse.Namespace, duration: float, cut_points: list[float]
     credits = Credits()
     plan = MixPlan(target_lufs=None if a.no_normalize else a.target_lufs)
     beats = None
-    if a.music:
-        mpath = _resolve_sound(a.music, "music", credits, min_duration=20, target=duration)
+    if a.music or music_path:
+        mpath = music_path or _resolve_sound(a.music, "music", credits, min_duration=20, target=duration)
         plan.music = MusicBed(path=mpath, gain_db=a.music_volume, duck=not a.no_duck, start_offset=a.music_start)
         if any("@beats" in s for s in a.sfx or []):
             from cutkiller.listen.beats import analyze_beats
@@ -189,7 +294,8 @@ def _prepare_mix(a: argparse.Namespace, duration: float, cut_points: list[float]
                      if b >= a.music_start]
     for spec in a.sfx or []:
         src, where = _parse_sfx(spec)
-        times = spaced([max(0.0, t + a.sfx_offset) for t in _sfx_times(where, cut_points, beats)], a.sfx_spacing)
+        raw = _sfx_times(where, cut_points, beats, getattr(a, "_transition_times", None))
+        times = spaced([max(0.0, t + a.sfx_offset) for t in raw], a.sfx_spacing)
         if not times:
             print(f"  (aucune position pour {spec})")
             continue
@@ -228,10 +334,11 @@ def cmd_auto(a: argparse.Namespace) -> int:
     print("1/4 Écoute…")
     rep, segs = _plan_cut(a)
     print(f"    {rep.media.duration:.1f} s → {total_duration(segs):.1f} s, {len(segs) - 1} coupes")
+    joins = _joins(a, output_cut_points(segs))
     print("2/4 Sons…")
     plan, credits = _prepare_mix(a, total_duration(segs), output_cut_points(segs))
-    print("3/4 Coupe…")
-    cut = render_cuts(src, final.with_name(final.stem + ".tmp" + final.suffix), segs)
+    print("3/4 Coupe" + (" + transitions…" if a.transition else "…"))
+    cut = render_cuts(src, final.with_name(final.stem + ".tmp" + final.suffix), segs, joins=joins, log=print)
     print("4/4 Mixage…")
     try:
         render_mix(cut, final, plan)
@@ -240,13 +347,74 @@ def cmd_auto(a: argparse.Namespace) -> int:
     return _finish(final, credits)
 
 
+def cmd_montage(a: argparse.Namespace) -> int:
+    import tempfile
+
+    from cutkiller.edit.mixer import render_mix
+    from cutkiller.edit.montage import MontageSettings, beat_grid, build_montage
+    from cutkiller.edit.timeline import Join, plan_timeline, render_timeline
+    from cutkiller.listen.beats import analyze_beats
+    from cutkiller.media import ANALYSIS_SR, load_audio, probe
+    from cutkiller.sounds import Credits
+    from cutkiller.transitions.frames import VideoFormat
+
+    inputs = [Path(p) for p in a.inputs]
+    for p in inputs:
+        if not p.exists():
+            raise ValueError(f"Fichier introuvable : {p}")
+    first_video = next((p for p in inputs if probe(p).has_video and probe(p).duration > 0.5), None)
+    if a.size:
+        fmt = VideoFormat.parse_size(a.size, a.fps or 30.0)
+    elif first_video:
+        fmt = VideoFormat.from_media(probe(first_video), a.fps)
+    else:
+        fmt = VideoFormat(1080, 1920, a.fps or 30.0)
+    out = Path(a.output or "montage.mp4")
+    credits = Credits()
+    music_path, beats = None, None
+    print("1/4 Musique et rythme…")
+    if a.music:
+        music_path = _resolve_sound(a.music, "music", credits, min_duration=20, target=a.max_duration or 30)
+        info = analyze_beats(load_audio(music_path, ANALYSIS_SR), ANALYSIS_SR)
+        beats = beat_grid(info.beats, info.confidence, a.music_start)
+        if beats:
+            a.music_start = a.music_start + ([b for b in info.beats if b >= a.music_start] or [0])[0]
+            print(f"    {info.bpm:.0f} BPM, coupe tous les {a.beats_per_clip} temps")
+        else:
+            print("    rythme incertain : durée fixe par clip")
+    settings = MontageSettings(beats_per_clip=a.beats_per_clip, clip_duration=a.clip_duration,
+                               max_duration=a.max_duration, photo_duration=a.photo_duration)
+    with tempfile.TemporaryDirectory(prefix="cutkiller_montage_") as work:
+        clips = build_montage(inputs, fmt, settings, Path(work), beats)
+        if not clips:
+            raise ValueError("Aucun clip utilisable.")
+        plan = plan_timeline(clips, [Join() for _ in clips[1:]], fmt)
+        cut_times = plan.cut_times()
+        joins = _joins(a, cut_times)
+        print(f"2/4 Plan : {len(clips)} clips, {plan.duration:.1f} s, {len(a._transition_times)} transitions")
+        mixplan, mcredits = _prepare_mix(a, plan.duration, cut_times, music_path=music_path)
+        for s_ in mcredits.items:
+            credits.add(s_)
+        if mixplan.music:
+            mixplan.music.duck = a.keep_audio and not a.no_duck
+        print("3/4 Rendu vidéo…")
+        tmp = out.with_name(out.stem + ".tmp" + out.suffix)
+        render_timeline(clips, joins, tmp, fmt=fmt, fit=a.fit, audio=a.keep_audio, log=print)
+        print("4/4 Mixage…")
+        try:
+            render_mix(tmp, out, mixplan)
+        finally:
+            tmp.unlink(missing_ok=True)
+    return _finish(out, credits)
+
+
 def _add_mix_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--music", help="fichier audio OU requête (ex. 'lofi chill') cherchée sur les banques")
     p.add_argument("--music-volume", type=float, default=-16.0, help="gain musique en dB (défaut -16)")
     p.add_argument("--music-start", type=float, default=0.0, help="décalage dans le morceau (s)")
     p.add_argument("--no-duck", action="store_true", help="ne pas baisser la musique quand on parle")
     p.add_argument("--sfx", action="append", metavar="SOURCE@POS",
-                   help="SFX : 'whoosh@cuts', 'pop@2.5,10', 'ding.wav@3', 'hit@beats:4' (répétable)")
+                   help="SFX : 'whoosh@cuts', 'whoosh@transitions', 'pop@2.5,10', 'ding.wav@3', 'hit@beats:4' (répétable)")
     p.add_argument("--sfx-volume", type=float, default=-8.0)
     p.add_argument("--sfx-offset", type=float, default=-0.12, help="décalage des SFX (un whoosh doit précéder la coupe)")
     p.add_argument("--sfx-spacing", type=float, default=1.5, help="écart min entre deux SFX (s)")
@@ -276,6 +444,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_cut_args(p)
     p.add_argument("--snap-to-onsets", dest="snap_to", action="store_true", help="caler les coupes sur les attaques")
     p.add_argument("--dry-run", action="store_true", help="afficher les segments sans rendre")
+    _add_transition_args(p)
     p.set_defaults(func=cmd_cut)
 
     p = sub.add_parser("mix", help="ajoute musique de fond (ducking) et SFX, normalise")
@@ -290,7 +459,52 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output")
     _add_cut_args(p)
     _add_mix_args(p)
+    _add_transition_args(p)
     p.set_defaults(func=cmd_auto, snap_to=False)
+
+    p = sub.add_parser("montage", help="montage de plusieurs vidéos/photos calé sur le rythme de la musique")
+    p.add_argument("inputs", nargs="+", help="vidéos et/ou photos, dans l'ordre")
+    p.add_argument("-o", "--output", help="défaut : montage.mp4")
+    p.add_argument("--size", help="format de sortie, ex. 1080x1920 (vertical), 1920x1080")
+    p.add_argument("--fps", type=float, default=None)
+    p.add_argument("--fit", choices=["crop", "pad", "stretch"], default="crop", help="adaptation au format")
+    p.add_argument("--beats-per-clip", type=int, default=4, help="temps de musique par clip (défaut 4)")
+    p.add_argument("--clip-duration", type=float, default=2.0, help="durée par clip sans musique (s)")
+    p.add_argument("--photo-duration", type=float, default=3.0)
+    p.add_argument("--max-duration", type=float, default=None)
+    p.add_argument("--keep-audio", action="store_true", help="garder le son des clips (musique baissée dessous)")
+    _add_mix_args(p)
+    _add_transition_args(p)
+    p.set_defaults(func=cmd_montage)
+
+    tp = sub.add_parser("transitions", help="catalogue, aperçus et galerie des transitions").add_subparsers(
+        dest="sub", required=True)
+    p = tp.add_parser("list", help="lister (filtrer par famille, thème, mot-clé)")
+    p.add_argument("--family", choices=["xfade", "fx", "gl"])
+    p.add_argument("--tag")
+    p.add_argument("--search")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_transitions_list)
+    tp.add_parser("tags", help="thèmes utilisables avec random:<thème>").set_defaults(func=cmd_transitions_tags)
+    p = tp.add_parser("info", help="détails et paramètres d'une transition")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_transitions_info)
+    for name, func in (("preview", cmd_transitions_preview), ("gallery", cmd_transitions_gallery)):
+        p = tp.add_parser(name, help="aperçu vidéo d'une transition" if name == "preview"
+                          else "aperçu de toutes les transitions + page index.html")
+        if name == "preview":
+            p.add_argument("name")
+            p.add_argument("-o", "--output")
+            p.add_argument("--a", help="clip A (défaut : mire)")
+            p.add_argument("--b", help="clip B (défaut : barres)")
+        else:
+            p.add_argument("folder")
+            p.add_argument("--family", choices=["xfade", "fx", "gl"])
+            p.add_argument("--tag")
+        p.add_argument("--duration", type=float, default=1.0)
+        p.add_argument("--size", default="480x270")
+        p.add_argument("--fps", type=float, default=25.0)
+        p.set_defaults(func=func)
 
     sp = sub.add_parser("sounds", help="banques de sons : providers, search, get").add_subparsers(dest="sub", required=True)
     sp.add_parser("providers", help="état des banques configurées").set_defaults(func=cmd_sounds_providers)
