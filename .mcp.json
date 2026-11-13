@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cutkiller": {
+      "command": "python",
+      "args": ["-m", "cutkiller.mcp_server"]
+    }
+  }
+}
