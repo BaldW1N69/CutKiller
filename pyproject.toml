@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cutkiller"
+version = "0.1.0"
+description = "Montage vidéo piloté par l'écoute : coupe des silences, détection de beats, transcription, SFX et musiques libres de droits."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "CC0-1.0" }
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+transcribe = ["faster-whisper>=1.0"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+cutkiller = "cutkiller.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cutkiller*"]
+
+[tool.pytest.ini_options]
+markers = ["network: tests qui appellent de vraies API (désactivés par défaut, lancer avec -m network)"]
+addopts = "-m 'not network'"

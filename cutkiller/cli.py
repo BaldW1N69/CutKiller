@@ -1,0 +1,327 @@
+"""Interface en ligne de commande : `cutkiller <commande>`."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from cutkiller import __version__
+
+
+def _out_path(src: Path, suffix: str, given: str | None) -> Path:
+    return Path(given) if given else src.with_name(f"{src.stem}{suffix}{src.suffix or '.mp4'}")
+
+
+def _add_silence_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--threshold", type=float, default=None, help="seuil de silence en dBFS (défaut : auto)")
+    p.add_argument("--min-silence", type=float, default=0.35, help="durée min d'un silence à couper (s)")
+
+
+def _add_cut_args(p: argparse.ArgumentParser) -> None:
+    _add_silence_args(p)
+    p.add_argument("--padding", type=float, default=0.08, help="respiration gardée autour de la parole (s)")
+    p.add_argument("--remove-fillers", action="store_true", help="coupe aussi les 'euh/um' (nécessite la transcription)")
+    p.add_argument("--whisper-model", default="small", help="modèle faster-whisper (tiny, base, small, medium, large-v3)")
+    p.add_argument("--language", default=None, help="langue forcée pour la transcription (fr, en…)")
+
+
+# ---------------------------------------------------------------- listen
+def cmd_listen(a: argparse.Namespace) -> int:
+    from cutkiller.listen import listen
+    from cutkiller.listen.transcribe import to_srt
+
+    rep = listen(a.input, threshold_db=a.threshold, min_silence=a.min_silence, with_beats=a.beats,
+                 with_transcript=a.transcribe, whisper_model=a.whisper_model, language=a.language,
+                 target_lufs=a.target_lufs)
+    print(rep.summary())
+    src = Path(a.input)
+    out = Path(a.output) if a.output else src.with_suffix(".listen.json")
+    out.write_text(json.dumps(rep.to_dict(), ensure_ascii=False, indent=2))
+    print(f"\nRapport JSON : {out}")
+    if rep.words:
+        srt = src.with_suffix(".srt")
+        srt.write_text(to_srt(rep.words), encoding="utf-8")
+        print(f"Sous-titres  : {srt}")
+    return 0
+
+
+# ---------------------------------------------------------------- cut
+def _plan_cut(a: argparse.Namespace):
+    from cutkiller.edit.cutlist import CutSettings, build_keep_segments, snap_segments
+    from cutkiller.listen import Interval, listen
+
+    rep = listen(a.input, threshold_db=a.threshold, min_silence=a.min_silence, with_loudness=False,
+                 with_transcript=a.remove_fillers, whisper_model=a.whisper_model, language=a.language)
+    remove = list(rep.silences) + [Interval(s, e) for s, e in rep.fillers]
+    segs = build_keep_segments(rep.media.duration, remove, CutSettings(padding=a.padding))
+    if getattr(a, "snap_to", None):
+        from cutkiller.listen.beats import analyze_beats
+        from cutkiller.media import ANALYSIS_SR, load_audio
+
+        grid = analyze_beats(load_audio(a.input, ANALYSIS_SR), ANALYSIS_SR).onsets
+        segs = snap_segments(segs, grid, tolerance=0.06)
+    return rep, segs
+
+
+def cmd_cut(a: argparse.Namespace) -> int:
+    from cutkiller.edit.cutlist import total_duration
+    from cutkiller.edit.render import render_cuts
+
+    rep, segs = _plan_cut(a)
+    kept = total_duration(segs)
+    print(f"{len(segs)} segments gardés : {rep.media.duration:.1f} s → {kept:.1f} s (-{rep.media.duration - kept:.1f} s)")
+    if a.dry_run:
+        print(json.dumps([s.to_dict() for s in segs], indent=1))
+        return 0
+    out = render_cuts(a.input, _out_path(Path(a.input), "_cut", a.output), segs)
+    print(f"Export : {out}")
+    return 0
+
+
+# ---------------------------------------------------------------- sounds
+def _print_sounds(sounds, errors) -> None:
+    for i, s in enumerate(sounds, 1):
+        dur = f"{s.duration:6.1f}s" if s.duration else "     ?s"
+        flag = "" if s.commercial_ok else "  [licence restreinte]"
+        print(f"{i:2d}. {s.ref:<52} {dur}  {s.license:<9} {s.title[:50]}{flag}")
+    for name, err in errors.items():
+        print(f"   ! {name}: {err}", file=sys.stderr)
+    if not sounds:
+        print("Aucun résultat.")
+
+
+def cmd_sounds_search(a: argparse.Namespace) -> int:
+    from cutkiller import sounds
+
+    res, errors = sounds.search(a.query, kind=a.kind, providers=a.provider, limit=a.limit,
+                                max_duration=a.max_duration, min_duration=a.min_duration,
+                                commercial=not a.allow_nc)
+    if a.json:
+        print(json.dumps([s.to_dict() for s in res], ensure_ascii=False, indent=2))
+    else:
+        _print_sounds(res, errors)
+    return 0
+
+
+def cmd_sounds_get(a: argparse.Namespace) -> int:
+    from cutkiller import sounds
+
+    res, errors = sounds.search(a.query, kind=a.kind, providers=a.provider, limit=max(a.pick, 1),
+                                max_duration=a.max_duration, min_duration=a.min_duration,
+                                commercial=not a.allow_nc)
+    if len(res) < a.pick:
+        _print_sounds(res, errors)
+        return 1
+    s = res[a.pick - 1]
+    path = sounds.download(s, Path(a.dest) if a.dest else None)
+    print(f"{path}\n{s.attribution()}")
+    if s.needs_attribution:
+        print("→ Crédit obligatoire en description (licence CC-BY).")
+    return 0
+
+
+def cmd_sounds_providers(_: argparse.Namespace) -> int:
+    from cutkiller.sounds.providers import all_providers
+
+    hints = {"local": "CUTKILLER_SOUNDS_DIR=/chemin/vers/mes/sons", "openverse": "aucune clé requise",
+             "freesound": "FREESOUND_API_KEY (https://freesound.org/apiv2/apply)",
+             "jamendo": "JAMENDO_CLIENT_ID (https://devportal.jamendo.com)"}
+    for name, p in all_providers().items():
+        print(f"{'OK ' if p.available() else '-- '} {name:<10} {hints[name]}")
+    return 0
+
+
+# ---------------------------------------------------------------- mix
+def _resolve_sound(spec: str, kind: str, credits, *, max_duration=None, min_duration=None, target=None):
+    """Un chemin local existant, ou une requête texte résolue sur les banques."""
+    from cutkiller import sounds
+
+    p = Path(spec).expanduser()
+    if p.exists():
+        return p
+    res, errors = sounds.search(spec, kind=kind, limit=8, max_duration=max_duration, min_duration=min_duration)
+    ranked = sounds.rank_music(res, target) if kind == "music" and target else res
+    got = sounds.fetch_first(ranked, on_error=lambda s, e: print(f"  ! {s.ref} indisponible ({e}), essai suivant", file=sys.stderr))
+    if not got:
+        why = "; ".join(f"{k}: {v}" for k, v in errors.items()) or ("téléchargements refusés" if res else "aucun résultat")
+        raise RuntimeError(f"Aucun son utilisable pour « {spec} » ({why}). Donne un fichier local ou configure une autre banque.")
+    pick, path = got
+    credits.add(pick)
+    print(f"  ♪ {kind:<5} « {spec} » → {pick.title} ({pick.provider}, {pick.license})")
+    return path
+
+
+def _parse_sfx(spec: str) -> tuple[str, str]:
+    """'whoosh@cuts', 'pop@1.5,8', 'sons/ding.wav@3' → (source, positions)."""
+    if "@" not in spec:
+        raise SystemExit(f"SFX invalide « {spec} » : format attendu source@cuts ou source@1.5,8.2")
+    src, _, where = spec.rpartition("@")
+    return src, where
+
+
+def _sfx_times(where: str, cut_points: list[float], beats: list[float] | None) -> list[float]:
+    if where == "cuts":
+        return cut_points
+    if where.startswith("beats"):
+        every = int(where.split(":")[1]) if ":" in where else 4
+        return (beats or [])[::every]
+    return [float(x) for x in where.split(",") if x.strip()]
+
+
+def _prepare_mix(a: argparse.Namespace, duration: float, cut_points: list[float]):
+    """Résout musique + SFX (recherche, téléchargement) AVANT tout rendu : échec rapide."""
+    from cutkiller.edit.mixer import MixPlan, MusicBed, SfxCue, spaced
+    from cutkiller.media import ANALYSIS_SR, load_audio
+    from cutkiller.sounds import Credits
+
+    credits = Credits()
+    plan = MixPlan(target_lufs=None if a.no_normalize else a.target_lufs)
+    beats = None
+    if a.music:
+        mpath = _resolve_sound(a.music, "music", credits, min_duration=20, target=duration)
+        plan.music = MusicBed(path=mpath, gain_db=a.music_volume, duck=not a.no_duck, start_offset=a.music_start)
+        if any("@beats" in s for s in a.sfx or []):
+            from cutkiller.listen.beats import analyze_beats
+
+            beats = [b - a.music_start for b in analyze_beats(load_audio(mpath, ANALYSIS_SR), ANALYSIS_SR).beats
+                     if b >= a.music_start]
+    for spec in a.sfx or []:
+        src, where = _parse_sfx(spec)
+        times = spaced([max(0.0, t + a.sfx_offset) for t in _sfx_times(where, cut_points, beats)], a.sfx_spacing)
+        if not times:
+            print(f"  (aucune position pour {spec})")
+            continue
+        path = _resolve_sound(src, "sfx", credits, max_duration=4)
+        plan.sfx.append(SfxCue(path=path, times=times, gain_db=a.sfx_volume))
+    return plan, credits
+
+
+def _finish(out: Path, credits) -> int:
+    print(f"Export : {out}")
+    cred = credits.write(out.with_suffix(".credits.txt"))
+    if cred:
+        print(f"Crédits à mettre en description : {cred}")
+        print(credits.text())
+    return 0
+
+
+def cmd_mix(a: argparse.Namespace) -> int:
+    from cutkiller.edit.mixer import render_mix
+    from cutkiller.media import probe
+
+    src = Path(a.input)
+    cut_points = [float(x) for x in a.cut_points.split(",")] if a.cut_points else []
+    plan, credits = _prepare_mix(a, probe(src).duration, cut_points)
+    out = render_mix(src, _out_path(src, "_mix", a.output), plan)
+    return _finish(out, credits)
+
+
+def cmd_auto(a: argparse.Namespace) -> int:
+    from cutkiller.edit.cutlist import output_cut_points, total_duration
+    from cutkiller.edit.mixer import render_mix
+    from cutkiller.edit.render import render_cuts
+
+    src = Path(a.input)
+    final = _out_path(src, "_cutkiller", a.output)
+    print("1/4 Écoute…")
+    rep, segs = _plan_cut(a)
+    print(f"    {rep.media.duration:.1f} s → {total_duration(segs):.1f} s, {len(segs) - 1} coupes")
+    print("2/4 Sons…")
+    plan, credits = _prepare_mix(a, total_duration(segs), output_cut_points(segs))
+    print("3/4 Coupe…")
+    cut = render_cuts(src, final.with_name(final.stem + ".tmp" + final.suffix), segs)
+    print("4/4 Mixage…")
+    try:
+        render_mix(cut, final, plan)
+    finally:
+        cut.unlink(missing_ok=True)
+    return _finish(final, credits)
+
+
+def _add_mix_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--music", help="fichier audio OU requête (ex. 'lofi chill') cherchée sur les banques")
+    p.add_argument("--music-volume", type=float, default=-16.0, help="gain musique en dB (défaut -16)")
+    p.add_argument("--music-start", type=float, default=0.0, help="décalage dans le morceau (s)")
+    p.add_argument("--no-duck", action="store_true", help="ne pas baisser la musique quand on parle")
+    p.add_argument("--sfx", action="append", metavar="SOURCE@POS",
+                   help="SFX : 'whoosh@cuts', 'pop@2.5,10', 'ding.wav@3', 'hit@beats:4' (répétable)")
+    p.add_argument("--sfx-volume", type=float, default=-8.0)
+    p.add_argument("--sfx-offset", type=float, default=-0.12, help="décalage des SFX (un whoosh doit précéder la coupe)")
+    p.add_argument("--sfx-spacing", type=float, default=1.5, help="écart min entre deux SFX (s)")
+    p.add_argument("--target-lufs", type=float, default=-14.0, help="loudness finale (-14 YouTube/TikTok)")
+    p.add_argument("--no-normalize", action="store_true")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(prog="cutkiller", description="Montage vidéo piloté par l'écoute.")
+    ap.add_argument("--version", action="version", version=f"cutkiller {__version__}")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("listen", help="analyse audio : silences, loudness, tempo, transcription")
+    p.add_argument("input")
+    p.add_argument("-o", "--output", help="rapport JSON (défaut : <input>.listen.json)")
+    _add_silence_args(p)
+    p.add_argument("--beats", action="store_true", help="détecter tempo / beats / onsets")
+    p.add_argument("--transcribe", action="store_true", help="transcrire (faster-whisper) + SRT + hésitations")
+    p.add_argument("--whisper-model", default="small")
+    p.add_argument("--language", default=None)
+    p.add_argument("--target-lufs", type=float, default=-14.0)
+    p.set_defaults(func=cmd_listen)
+
+    p = sub.add_parser("cut", help="supprime silences (et hésitations) en jump cuts")
+    p.add_argument("input")
+    p.add_argument("-o", "--output")
+    _add_cut_args(p)
+    p.add_argument("--snap-to-onsets", dest="snap_to", action="store_true", help="caler les coupes sur les attaques")
+    p.add_argument("--dry-run", action="store_true", help="afficher les segments sans rendre")
+    p.set_defaults(func=cmd_cut)
+
+    p = sub.add_parser("mix", help="ajoute musique de fond (ducking) et SFX, normalise")
+    p.add_argument("input")
+    p.add_argument("-o", "--output")
+    p.add_argument("--cut-points", help="positions des coupes pour '@cuts' (ex. 1.2,4.8)")
+    _add_mix_args(p)
+    p.set_defaults(func=cmd_mix)
+
+    p = sub.add_parser("auto", help="pipeline complet : écoute → coupe → musique + SFX → loudness")
+    p.add_argument("input")
+    p.add_argument("-o", "--output")
+    _add_cut_args(p)
+    _add_mix_args(p)
+    p.set_defaults(func=cmd_auto, snap_to=False)
+
+    sp = sub.add_parser("sounds", help="banques de sons : providers, search, get").add_subparsers(dest="sub", required=True)
+    sp.add_parser("providers", help="état des banques configurées").set_defaults(func=cmd_sounds_providers)
+    for name, func in (("search", cmd_sounds_search), ("get", cmd_sounds_get)):
+        p = sp.add_parser(name, help="chercher" if name == "search" else "télécharger un résultat")
+        p.add_argument("query")
+        p.add_argument("--kind", choices=["sfx", "music", "any"], default="any")
+        p.add_argument("--provider", action="append", help="local, openverse, freesound, jamendo (répétable)")
+        p.add_argument("--limit", type=int, default=10)
+        p.add_argument("--max-duration", type=float)
+        p.add_argument("--min-duration", type=float)
+        p.add_argument("--allow-nc", action="store_true", help="inclure les licences NC/ND (usage perso uniquement)")
+        if name == "search":
+            p.add_argument("--json", action="store_true")
+        else:
+            p.add_argument("--pick", type=int, default=1, help="numéro du résultat à télécharger")
+            p.add_argument("--dest", help="dossier de destination (défaut : cache)")
+        p.set_defaults(func=func)
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        return 130
+    except (RuntimeError, ValueError, OSError) as exc:
+        print(f"Erreur : {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
