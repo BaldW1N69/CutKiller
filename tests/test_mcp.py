@@ -104,3 +104,35 @@ def test_mcp_animate_code_returns_keyframe_image(tmp_path):
     kinds, info = asyncio.run(run())
     assert kinds == ["text", "image"] and info["status"] == "done"
     assert (tmp_path / "ok.py").exists() and (tmp_path / "ok_sheet.png").exists()
+
+
+def test_mcp_animate_code_html(tmp_path):
+    """Animation HTML via MCP (prompts de motion design) : images clés renvoyées en image."""
+    from cutkiller.animate import html
+
+    if not html.available():
+        pytest.skip("Playwright absent")
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    page = ("<!doctype html><html><body style='margin:0;background:transparent'><div id=d "
+            "style='position:absolute;width:20px;height:20px;background:#ff0'></div><script>window.DURATION=1;"
+            "window.cutkillerSeek=t=>{d.style.left=(t*100)+'px'}</script></body></html>")
+
+    async def run():
+        env = {"PATH": os.environ["PATH"], "CUTKILLER_ANIM_DIR": str(tmp_path)}
+        if os.environ.get("CUTKILLER_CHROMIUM"):
+            env["CUTKILLER_CHROMIUM"] = os.environ["CUTKILLER_CHROMIUM"]
+        params = StdioServerParameters(command=sys.executable, args=["-m", "cutkiller.mcp_server"], env=env)
+        async with stdio_client(params) as (r, w):
+            async with ClientSession(r, w) as s:
+                await s.initialize()
+                res = await s.call_tool("cutkiller_animate_code", {"code": page, "name": "web", "language": "html",
+                                                                   "size": "160x90", "preview_times": [0.2, 0.8]})
+                return [c.type for c in res.content], json.loads(res.content[0].text)
+
+    kinds, info = asyncio.run(run())
+    if info["status"] != "done" and "Chromium" in json.dumps(info):
+        pytest.skip("Chromium absent")
+    assert kinds == ["text", "image"] and info["status"] == "done"
+    assert (tmp_path / "web.html").exists() and (tmp_path / "web_sheet.png").exists()

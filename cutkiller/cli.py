@@ -25,6 +25,35 @@ def _add_cut_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--remove-fillers", action="store_true", help="coupe aussi les 'euh/um' (nécessite la transcription)")
     p.add_argument("--whisper-model", default="small", help="modèle faster-whisper (tiny, base, small, medium, large-v3)")
     p.add_argument("--language", default=None, help="langue forcée pour la transcription (fr, en…)")
+    g = p.add_argument_group("punch-in (jump cut fix)")
+    g.add_argument("--punch-in", type=float, default=0.0, metavar="ÉCHELLE",
+                   help="alterne plan normal / plan resserré à chaque coupe (ex. 1.15) : les jump cuts deviennent "
+                        "des changements de cadrage volontaires. 0 = désactivé")
+    g.add_argument("--punch-pattern", metavar="Z1,Z2,…", help="motif d'échelles explicite, ex. 1,1.15,1,1.3 (max 1.5)")
+    g.add_argument("--punch-ramp", type=int, default=3, help="images de micro-zoom à cheval sur la coupe (0 = coupe sèche)")
+    g.add_argument("--punch-focus", default="0.5,0.4", metavar="X,Y", help="point gardé en zoomant (0.5,0.4 = visage)")
+
+
+def _punch(a: argparse.Namespace, n_clips: int, joins) -> dict:
+    """Arguments de render_cuts pour le punch-in (vide si désactivé)."""
+    from cutkiller.edit.timeline import punch_zooms
+
+    if a.punch_pattern:
+        pattern = [float(x) for x in a.punch_pattern.split(",") if x.strip()]
+    elif a.punch_in:
+        pattern = [1.0, a.punch_in]
+    else:
+        return {}
+    if any(z < 1.0 or z > 1.5 for z in pattern):
+        raise ValueError("Échelles de punch-in entre 1.0 et 1.5 (au-delà, l'image perd trop de définition)")
+    steps = [abs(b - a_) for a_, b in zip(pattern, pattern[1:] + pattern[:1]) if b != a_]
+    if steps and min(steps) < 0.1:
+        print("  ! écart de punch-in < 10 % : ça risque de ressembler à un saut d'image plutôt qu'à un recadrage",
+              file=sys.stderr)
+    fx, fy = (float(v) for v in a.punch_focus.split(","))
+    zooms = punch_zooms(n_clips, joins, pattern)
+    print(f"  Punch-in : {sum(z != 1.0 for z in zooms)}/{n_clips} plans resserrés")
+    return {"zooms": zooms, "focus": (fx, fy), "zoom_ramp": a.punch_ramp}
 
 
 # ---------------------------------------------------------------- listen
@@ -78,7 +107,8 @@ def cmd_cut(a: argparse.Namespace) -> int:
     from cutkiller.edit.cutlist import output_cut_points
 
     joins = _joins(a, output_cut_points(segs))
-    out = render_cuts(a.input, _out_path(Path(a.input), "_cut", a.output), segs, joins=joins, log=print)
+    out = render_cuts(a.input, _out_path(Path(a.input), "_cut", a.output), segs, joins=joins, log=print,
+                      **_punch(a, len(segs), joins))
     print(f"Export : {out}")
     return 0
 
@@ -128,11 +158,15 @@ def cmd_animate(a: argparse.Namespace) -> int:
         for name, (_, desc, params) in PRESETS.items():
             print(f"{name:<18} {desc:<48} [{params}]")
         print("\n+ script sur mesure : cutkiller animate mon_anim.py (fonction frame(t, ctx))")
+        print("+ page HTML/CSS/JS : cutkiller animate anim.html (temps piloté image par image, fond transparent)")
         return 0
     meta: dict = {}
+    is_html = a.name.lower().endswith((".html", ".htm"))
     if a.name.endswith(".py"):
         fn, meta = load_script(a.name)
         stem = Path(a.name).stem
+    elif is_html:
+        fn, stem = None, Path(a.name).stem
     else:
         fn, stem = preset_frame(a.name), a.name
     w, h, fps = 1080, 1920, 30.0
@@ -144,17 +178,55 @@ def cmd_animate(a: argparse.Namespace) -> int:
     if a.size:
         w, h = (int(v) for v in a.size.lower().split("x"))
     fps = a.fps or meta.get("fps") or fps
-    duration = a.duration or meta.get("duration") or 3.0
-    ctx = Ctx(w - w % 2, h - h % 2, float(fps), float(duration), font_path=a.font, params=_kv(a.params))
-    out = Path(a.output or f"{stem}.mov")
-    if a.preview is not None:
-        times = [float(x) for x in a.preview.split(",")] if a.preview else [duration * f for f in (0.1, 0.35, 0.6, 0.9)]
-        for p in stills(fn, ctx, times, out.with_name(out.stem + "_preview"), stem):
-            print(f"Aperçu : {p}")
-        return 0
-    render(fn, out, ctx, log=print)
-    print(f"{ctx.w}x{ctx.h}, {duration:g} s à {fps:g} i/s (fond transparent)" + ("" if out.suffix in (".mov", ".webm", ".mkv") else ""))
+    w, h = w - w % 2, h - h % 2
+    scene = None
+    if is_html:
+        from cutkiller.animate.html import HtmlScene
+
+        scene = fn = HtmlScene(a.name, w, h, float(fps), a.duration, params=_kv(a.params))
+        meta["duration"] = scene.duration
+    try:
+        duration = a.duration or meta.get("duration") or 3.0
+        ctx = Ctx(w, h, float(fps), float(duration), font_path=a.font, params=_kv(a.params))
+        out = Path(a.output or f"{stem}.mov")
+        if a.preview is not None:
+            times = [float(x) for x in a.preview.split(",")] if a.preview else [duration * f for f in (0.1, 0.35, 0.6, 0.9)]
+            for p in stills(fn, ctx, sorted(times), out.with_name(out.stem + "_preview"), stem):
+                print(f"Aperçu : {p}")
+            return 0
+        render(fn, out, ctx, log=print)
+    finally:
+        if scene is not None:
+            scene.close()
+    print(f"{ctx.w}x{ctx.h}, {duration:g} s à {fps:g} i/s (fond transparent)")
     print(f"Export : {out}")
+    return 0
+
+
+TEXTURE_FIELDS = ("grade", "contrast", "sharpen", "glow", "letterbox", "grain", "grain_mode", "grain_opacity",
+                  "dither", "colors", "pixel", "vignette")
+
+
+def cmd_texture(a: argparse.Namespace) -> int:
+    from cutkiller.edit.texture import LOOKS, TextureSettings, render_texture
+
+    values = dict(LOOKS[a.look]) if a.look else {}
+    values.update({k: getattr(a, k) for k in TEXTURE_FIELDS if getattr(a, k) is not None})  # les options priment
+    settings = TextureSettings(grain_file=Path(a.grain_file) if a.grain_file else None, **values)
+    if settings.letterbox:
+        from cutkiller.media import probe
+
+        info = probe(a.input)
+        if info.height and info.width and info.height > info.width:
+            print("  ! bandes cinéma sur une vidéo verticale : il ne reste qu'une bande d'image au centre",
+                  file=sys.stderr)
+    out = render_texture(a.input, _out_path(Path(a.input), "_texture", a.output), settings)
+    done = [f"look {a.look}"] if a.look else []
+    done += [k.replace("_", " ") for k in TEXTURE_FIELDS
+             if getattr(settings, k) and k not in ("grain_mode", "grain_opacity", "colors", "pixel")]
+    if a.grain_file:
+        done.append("grain scanné")
+    print(f"Finition : {', '.join(done)}\nExport : {out}")
     return 0
 
 
@@ -169,7 +241,7 @@ def cmd_overlay(a: argparse.Namespace) -> int:
 
 def cmd_captions(a: argparse.Namespace) -> int:
     from cutkiller.edit.captions import build_captions_ass, load_words
-    from cutkiller.edit.text import burn_ass
+    from cutkiller.edit.text import burn_ass, font_family
     from cutkiller.media import probe
 
     src = Path(a.input)
@@ -184,9 +256,10 @@ def cmd_captions(a: argparse.Namespace) -> int:
                              f"(ou passe --transcribe / --words rapport.listen.json).")
         words = load_words(report)
     info = probe(src)
+    family, font_file = font_family(a.font)
     ass = build_captions_ass(words, info.width or 1080, info.height or 1920, style=a.style, color=a.color,
-                             active=a.active, size=a.size, position=a.position, font=a.font, max_words=a.max_words)
-    out = burn_ass(src, _out_path(src, "_captions", a.output), ass)
+                             active=a.active, size=a.size, position=a.position, font=family, max_words=a.max_words)
+    out = burn_ass(src, _out_path(src, "_captions", a.output), ass, font_file=font_file)
     print(f"{len(words)} mots, style {a.style}\nExport : {out}")
     return 0
 
@@ -235,6 +308,13 @@ def run_doctor() -> list[dict]:
     add("transcription (faster-whisper)", "ok" if importlib.util.find_spec("faster_whisper") else "warn",
         "installé" if importlib.util.find_spec("faster_whisper") else "absent",
         "" if importlib.util.find_spec("faster_whisper") else "pip install 'cutkiller[transcribe]' (sous-titres, coupe des « euh »)")
+    if importlib.util.find_spec("playwright") is None:
+        add("animations HTML (Playwright)", "warn", "absent",
+            "pip install 'cutkiller[html]' puis playwright install chromium (animations HTML/CSS/JS, prompts motion design)")
+    else:
+        exe = os.environ.get("CUTKILLER_CHROMIUM")
+        add("animations HTML (Playwright)", "ok", f"Chromium : {exe}" if exe else "installé",
+            "" if exe else "si le rendu échoue : playwright install chromium (ou CUTKILLER_CHROMIUM=/chemin/vers/chrome)")
     add("serveur MCP", "ok" if importlib.util.find_spec("mcp") else "warn",
         "installé" if importlib.util.find_spec("mcp") else "absent",
         "" if importlib.util.find_spec("mcp") else "pip install 'cutkiller[mcp]'")
@@ -291,6 +371,7 @@ def _joins(a: argparse.Namespace, cut_times: list[float]):
     joins = assign_joins(cut_times, picker, duration=a.transition_duration, every=a.transition_every,
                          min_gap=a.transition_min_gap, audio_fade=a.audio_fade, jl=a.jl)
     a._transition_times = [t for t, j in zip(cut_times, joins) if j.transition is not None]
+    a._transition_events = [(t, j.transition) for t, j in zip(cut_times, joins) if j.transition is not None]
     return joins
 
 
@@ -461,7 +542,58 @@ def _sfx_times(where: str, cut_points: list[float], beats: list[float] | None,
     return [float(x) for x in where.split(",") if x.strip()]
 
 
-def _prepare_mix(a: argparse.Namespace, duration: float, cut_points: list[float], *, music_path: Path | None = None):
+def _resolve_role(role, override: str | None, credits):
+    """Son d'un rôle du kit : remplacement donné, sinon dossier local, sinon banques (requêtes dans l'ordre)."""
+    from cutkiller import sounds
+
+    if override:
+        return _resolve_sound(override, "sfx", credits, max_duration=role.max_duration)
+    for providers in (["local"], None):
+        for q in role.queries:
+            res, _ = sounds.search(q, kind="sfx", providers=providers, limit=8, max_duration=role.max_duration)
+            got = sounds.fetch_first(res, on_error=lambda s_, e: None) if res else None
+            if got:
+                pick, path = got
+                credits.add(pick)
+                print(f"  ♪ {role.name:<8} « {q} » → {pick.title} ({pick.provider}, {pick.license})")
+                return path
+    return None
+
+
+def _kit_cues(a: argparse.Namespace, duration: float, cut_points: list[float], credits, *, clicks: bool | None):
+    """Kit de sound design : un son par type d'événement, calé sur son pic ou son attaque."""
+    from cutkiller.edit.mixer import SfxCue
+    from cutkiller.sounds.kit import KITS, ROLES, hit_time, parse_overrides, plan_events
+
+    kit = KITS[a.sfx_kit]
+    overrides = parse_overrides(getattr(a, "kit_sound", None))
+    events = plan_events(kit, duration, cut_points, getattr(a, "_transition_events", None) or [], clicks=clicks)
+    if not events:
+        print(f"  (kit {kit.name} : aucun événement à sonoriser — ajoute des transitions avec --transition)")
+        return []
+    cues, placed = [], []
+    for name in dict.fromkeys(e.role for e in events):
+        role = ROLES[name]
+        path = _resolve_role(role, overrides.get(name), credits)
+        if path is None:
+            print(f"  ! kit {kit.name} : aucun son « {name} » trouvé (dossier local ni banques), rôle ignoré",
+                  file=sys.stderr)
+            continue
+        mine = [e for e in events if e.role == name]
+        placed.append(f"{name}×{len(mine)}")
+        gain = role.gain_db + a.kit_volume
+        if name == "ambience":
+            for e in mine:
+                cues.append(SfxCue(path=path, times=[e.time], gain_db=gain, loop_for=e.length, fade=min(1.0, e.length / 3)))
+            continue
+        hit = hit_time(path, role.align)
+        cues.append(SfxCue(path=path, times=[e.time - hit for e in mine], gain_db=gain))
+    print(f"  Kit {kit.name} : " + (", ".join(placed) or "aucun son placé"))
+    return cues
+
+
+def _prepare_mix(a: argparse.Namespace, duration: float, cut_points: list[float], *, music_path: Path | None = None,
+                 clicks: bool | None = None):
     """Résout musique + SFX (recherche, téléchargement) AVANT tout rendu : échec rapide."""
     from cutkiller.edit.mixer import MixPlan, MusicBed, SfxCue, spaced
     from cutkiller.media import ANALYSIS_SR, load_audio
@@ -478,15 +610,26 @@ def _prepare_mix(a: argparse.Namespace, duration: float, cut_points: list[float]
 
             beats = [b - a.music_start for b in analyze_beats(load_audio(mpath, ANALYSIS_SR), ANALYSIS_SR).beats
                      if b >= a.music_start]
+    align = getattr(a, "sfx_align", "start")
     for spec in a.sfx or []:
         src, where = _parse_sfx(spec)
         raw = _sfx_times(where, cut_points, beats, getattr(a, "_transition_times", None))
-        times = spaced([max(0.0, t + a.sfx_offset) for t in raw], a.sfx_spacing)
+        if align == "start":
+            times = spaced([max(0.0, t + a.sfx_offset) for t in raw], a.sfx_spacing)
+        else:
+            times = spaced(raw, a.sfx_spacing)
         if not times:
             print(f"  (aucune position pour {spec})")
             continue
         path = _resolve_sound(src, "sfx", credits, max_duration=4)
+        if align != "start":
+            from cutkiller.sounds.kit import hit_time
+
+            hit = hit_time(path, align)
+            times = [t - hit for t in times]
         plan.sfx.append(SfxCue(path=path, times=times, gain_db=a.sfx_volume))
+    if getattr(a, "sfx_kit", None):
+        plan.sfx += _kit_cues(a, duration, cut_points, credits, clicks=clicks)
     return plan, credits
 
 
@@ -522,9 +665,10 @@ def cmd_auto(a: argparse.Namespace) -> int:
     print(f"    {rep.media.duration:.1f} s → {total_duration(segs):.1f} s, {len(segs) - 1} coupes")
     joins = _joins(a, output_cut_points(segs))
     print("2/4 Sons…")
-    plan, credits = _prepare_mix(a, total_duration(segs), output_cut_points(segs))
+    plan, credits = _prepare_mix(a, total_duration(segs), output_cut_points(segs), clicks=False)
     print("3/4 Coupe" + (" + transitions…" if a.transition else "…"))
-    cut = render_cuts(src, final.with_name(final.stem + ".tmp" + final.suffix), segs, joins=joins, log=print)
+    cut = render_cuts(src, final.with_name(final.stem + ".tmp" + final.suffix), segs, joins=joins, log=print,
+                      **_punch(a, len(segs), joins))
     print("4/4 Mixage…")
     try:
         render_mix(cut, final, plan)
@@ -604,6 +748,16 @@ def _add_mix_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--sfx-volume", type=float, default=-8.0)
     p.add_argument("--sfx-offset", type=float, default=-0.12, help="décalage des SFX (un whoosh doit précéder la coupe)")
     p.add_argument("--sfx-spacing", type=float, default=1.5, help="écart min entre deux SFX (s)")
+    p.add_argument("--sfx-align", choices=["start", "peak", "onset"], default="start",
+                   help="point du SFX calé sur la position : start = début du fichier (+ --sfx-offset), "
+                        "peak = son maximum (whoosh, riser), onset = attaque (clic, impact, déclencheur)")
+    p.add_argument("--sfx-kit", choices=["cinematic", "minimal"],
+                   help="sound design automatique : le bon son par événement (whoosh sur les whip/zoom, déclic sur "
+                        "les flashs, clic sur les coupes sèches, riser, focus d'ouverture, ambiance de fin), calé sur son pic")
+    p.add_argument("--kit-sound", action="append", metavar="RÔLE=SOURCE",
+                   help="remplacer un son du kit : 'whoosh=sons/mon_whoosh.wav', 'riser=epic riser' "
+                        "(rôles : whoosh, flash, glitch, impact, sparkle, click, riser, focus, ambience)")
+    p.add_argument("--kit-volume", type=float, default=0.0, help="gain ajouté à tous les sons du kit (dB)")
     p.add_argument("--target-lufs", type=float, default=-14.0, help="loudness finale (-14 YouTube/TikTok)")
     p.add_argument("--no-normalize", action="store_true")
 
@@ -702,14 +856,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ass", help="graver tel quel un script ASS (animations libass écrites à la main)")
     p.add_argument("--size", type=float, default=6.0, help="taille du texte en %% de la hauteur (défaut 6)")
     p.add_argument("--color", default="white", help="white, yellow, red… ou code hexa RRGGBB")
-    p.add_argument("--font", default="Arial")
+    p.add_argument("--font", default="Arial", help="nom de police installée OU fichier .ttf/.otf (ex. Fontshare)")
     p.add_argument("--box", action="store_true", help="fond semi-transparent derrière le texte")
     p.add_argument("--outline", type=float, default=0.6, help="épaisseur du contour (0 = aucun)")
     p.add_argument("--fade", type=float, default=0.15, help="fondu d'entrée/sortie du texte (s)")
     p.set_defaults(func=cmd_text)
 
     p = sub.add_parser("animate", help="crée une animation à fond transparent (préréglage ou script .py sur mesure)")
-    p.add_argument("name", nargs="?", help="préréglage (title, kinetic, cta, counter…) ou script .py")
+    p.add_argument("name", nargs="?", help="préréglage (title, kinetic, cta, counter…), script .py ou page .html "
+                                        "(motion design HTML/CSS/JS rendu image par image)")
     p.add_argument("params", nargs="*", metavar="clé=valeur", help="ex. text=\"SOLDES -50 %%\" color=yellow")
     p.add_argument("-o", "--output", help=".mov (ProRes 4444 alpha, défaut), .webm (VP9 alpha), .mp4 (fond noir), .png")
     p.add_argument("--size", help="ex. 1080x1920 (défaut), 1920x1080")
@@ -720,6 +875,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--preview", nargs="?", const="", metavar="T1,T2", help="seulement des images clés PNG (vérification rapide)")
     p.add_argument("--list", action="store_true", help="lister les préréglages")
     p.set_defaults(func=cmd_animate)
+
+    p = sub.add_parser("texture", help="finition : look cinématique (étalonnage, lueur, netteté, noirs profonds), "
+                                       "grain argentique ou scanné, dither rétro, vignettage, bandes cinéma")
+    p.add_argument("input")
+    p.add_argument("-o", "--output")
+    p.add_argument("--look", choices=["cinematic", "night", "film", "noir", "retro"],
+                   help="préréglage complet (les autres options le modifient)")
+    p.add_argument("--grade", choices=["teal_orange", "green_orange", "warm", "cold", "bleach", "bw"], help="étalonnage")
+    p.add_argument("--contrast", type=float, help="noirs profonds / contraste 0..1")
+    p.add_argument("--sharpen", type=float, help="netteté 0..1 (le « 4K » des applis)")
+    p.add_argument("--glow", type=float, help="lueur des hautes lumières 0..1 (« luminescence »)")
+    p.add_argument("--letterbox", type=float, metavar="RAPPORT", help="bandes cinéma : 2.39, 2.0, 1.85…")
+    p.add_argument("--grain", type=float, help="grain procédural 0..1 (0.25 discret, 0.5 marqué)")
+    p.add_argument("--grain-file", help="vraie pellicule scannée (vidéo de grain, poussières, rayures), bouclée")
+    p.add_argument("--grain-mode", choices=["overlay", "softlight", "screen", "multiply", "addition"],
+                   help="fusion du scan : overlay/softlight pour un fond gris 50 %%%%, screen pour un fond noir (défaut overlay)")
+    p.add_argument("--grain-opacity", type=float, help="opacité du scan (défaut 0.6)")
+    p.add_argument("--dither", choices=["bayer", "floyd_steinberg", "sierra2_4a", "heckbert", "none"],
+                   help="trame rétro : bayer = trame ordonnée, floyd_steinberg = diffusion d'erreur")
+    p.add_argument("--colors", type=int, help="couleurs de la palette tramée (2 à 256, défaut 16)")
+    p.add_argument("--pixel", type=int, help="taille des pixels de la trame (1 = natif, 3-4 = rétro)")
+    p.add_argument("--vignette", type=float, help="assombrir les bords 0..1")
+    p.set_defaults(func=cmd_texture)
 
     p = sub.add_parser("overlay", help="incruste animations, logos, images, light leaks à un instant donné")
     p.add_argument("input")
@@ -742,7 +920,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--position", choices=["bottom", "lower", "center", "top"],
                    help="lower = tiers bas façon TikTok (défaut des styles tiktok/bold)")
     p.add_argument("--max-words", type=int, help="mots maximum par groupe")
-    p.add_argument("--font", default="Arial")
+    p.add_argument("--font", default="Arial", help="nom de police installée OU fichier .ttf/.otf (ex. Fontshare)")
     p.set_defaults(func=cmd_captions)
 
     p = sub.add_parser("doctor", help="vérifie l'installation (ffmpeg, OpenGL, options, banques de sons)")

@@ -1,7 +1,7 @@
 {
   "name": "cutkiller",
   "displayName": "CutKiller",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Montage vidéo piloté par l'écoute : coupe des silences, 280+ transitions, musique et SFX libres de droits, montage sur le rythme, texte, sous-titres animés, animations (préréglages ou écrites par Claude). Skills montage + animation et serveur MCP local.",
   "author": {
     "name": "BaldW1N69"

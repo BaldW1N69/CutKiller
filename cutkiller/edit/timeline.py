@@ -29,6 +29,8 @@ class Clip:
     src: Path
     start: float
     end: float
+    zoom: float = 1.0  # recadrage (punch-in) : 1.15 = plan resserré de 15 %
+    focus: tuple[float, float] = (0.5, 0.4)  # point gardé en zoomant (fractions ; 0.4 = un peu au-dessus du centre : visage)
 
 
 @dataclass
@@ -46,6 +48,8 @@ class _PClip:
     sf: int
     ef: int
     total: int  # frames disponibles dans la source
+    zoom: float = 1.0
+    focus: tuple[float, float] = (0.5, 0.4)
 
     @property
     def len(self) -> int:
@@ -106,7 +110,7 @@ def plan_timeline(clips: list[Clip], joins: list[Join], fmt: VideoFormat | None 
             continue
         if pc and i > 0:
             pj.append(joins[i - 1])
-        pc.append(_PClip(c.src, info, sf, ef, total))
+        pc.append(_PClip(c.src, info, sf, ef, total, c.zoom, c.focus))
     plan = TimelinePlan(fmt, pc)
     r_prev = 0
     for i, j in enumerate(pj):
@@ -168,7 +172,34 @@ def _audio_bounds(plan: TimelinePlan) -> list[tuple[float, float]]:
     return out
 
 
-def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audio: bool) -> tuple[str, list[Path]]:
+def _zoom_expr(z: float, zp: float | None, zn: float | None, length: int, ramp: int) -> str:
+    """Zoom de chaque image d'un morceau (`in` = index 0..length-1), avec la micro-rampe du « jump cut fix » :
+    le changement d'échelle s'étale sur `ramp` images à cheval sur la coupe (ex. 3 : 2 images avant, 1 après)."""
+    a = ramp // 2  # images de rampe en fin de morceau
+    b = max(0, ramp - a - 1)  # images de rampe au début du morceau suivant
+    expr = f"{z:.4f}"
+    if ramp >= 2 and zn is not None and abs(zn - z) > 1e-6 and a > 0:
+        k = length - a
+        expr = f"if(gte(in,{k}),{z:.4f}+({zn - z:.4f})*(in-{k}+1)/{ramp},{expr})"
+    if ramp >= 2 and zp is not None and abs(zp - z) > 1e-6 and b > 0:
+        expr = f"if(lt(in,{b}),{zp:.4f}+({z - zp:.4f})*({a + 1}+in)/{ramp},{expr})"
+    return expr
+
+
+def punch_zooms(n_clips: int, joins: list[Join], pattern: list[float]) -> list[float]:
+    """Échelle de chaque clip pour le « jump cut fix » : le motif tourne d'une coupe à l'autre (ex. 1, 1.15).
+    Un clip qui touche une transition reste à 1 : la transition est rendue sur l'image non recadrée."""
+    if not pattern or n_clips == 0:
+        return [1.0] * n_clips
+    zooms = [pattern[i % len(pattern)] for i in range(n_clips)]
+    for i, j in enumerate(joins):
+        if j.transition is not None:
+            zooms[i] = zooms[i + 1] = 1.0
+    return zooms
+
+
+def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audio: bool,
+                zoom_ramp: int = 3) -> tuple[str, list[Path]]:
     srcs: list[Path] = []
     for c in plan.clips:
         if c.src not in srcs:
@@ -180,6 +211,7 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
 
     # --- vidéo : une normalisation par source puis split vers chaque morceau
     pieces: list[tuple[int, int, int]] = []  # (src index, start_frame, end_frame) ou transition
+    piece_clip: list[int] = []  # clip d'origine de chaque morceau
     order: list[tuple[str, int]] = []
     for i, c in enumerate(plan.clips):
         r_prev = plan.joins[i - 1].n - plan.joins[i - 1].x if i > 0 else 0
@@ -188,6 +220,7 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
         if e > s:
             order.append(("m", len(pieces)))
             pieces.append((srcs.index(c.src), s, e))
+            piece_clip.append(i)
         if i in trans_files:
             order.append(("t", i))
     by_src: dict[int, list[int]] = {}
@@ -198,10 +231,22 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
         outs = "".join(f"[vs{p}]" for p in plist)
         parts.append(f"[{k}:v]{norm},split={len(plist)}{outs}" if len(plist) > 1 else f"[{k}:v]{norm}[vs{plist[0]}]")
     labels = []
+    W, H = plan.fmt.width, plan.fmt.height
     for kind, idx in order:
         if kind == "m":
             _, s, e = pieces[idx]
-            parts.append(f"[vs{idx}]trim=start_frame={s}:end_frame={e},setpts=PTS-STARTPTS[vp{idx}]")
+            i = piece_clip[idx]
+            c = plan.clips[i]
+            # voisins reliés par une coupe franche (pas de transition) : rampe de zoom à cheval sur la coupe
+            zp = plan.clips[i - 1].zoom if i > 0 and plan.joins[i - 1].n == 0 else None
+            zn = plan.clips[i + 1].zoom if i < len(plan.joins) and plan.joins[i].n == 0 else None
+            zoom = ""
+            if c.zoom != 1.0 or (zp not in (None, c.zoom)) or (zn not in (None, c.zoom)):
+                fx, fy = c.focus
+                expr = _zoom_expr(c.zoom, zp, zn, e - s, zoom_ramp)
+                zoom = (f",zoompan=z='{expr}':x='(iw-iw/zoom)*{fx:.4f}':y='(ih-ih/zoom)*{fy:.4f}':d=1:"
+                        f"s={W}x{H}:fps={F},setsar=1,setpts=PTS-STARTPTS")
+            parts.append(f"[vs{idx}]trim=start_frame={s}:end_frame={e},setpts=PTS-STARTPTS{zoom}[vp{idx}]")
             labels.append(f"[vp{idx}]")
         else:
             parts.append(f"[{tidx[idx]}:v]setpts=PTS-STARTPTS,fps={F},setsar=1,format=yuv420p[vt{idx}]")
@@ -244,7 +289,7 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
 
 def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fmt: VideoFormat | None = None,
                     fit: str = "crop", audio: bool = True, crf: int = 20, preset: str = "veryfast",
-                    allow_overlap: bool = True, log=None) -> TimelinePlan:
+                    allow_overlap: bool = True, zoom_ramp: int = 3, log=None) -> TimelinePlan:
     plan = plan_timeline(clips, joins, fmt, allow_overlap)
     if not plan.clips:
         raise ValueError("Timeline vide : aucun clip ne dure au moins une image.")
@@ -259,7 +304,7 @@ def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fm
                 log(f"    transition {k}/{len(todo)} : {j.transition.id} ({j.n / plan.fmt.fps:.2f} s)")
             trans_files[i] = render_transition(j.transition, a.src, a.ef - j.x, b.src, b.sf - j.x, j.n, plan.fmt, fit,
                                                Path(tmp) / f"t{i:05d}.mkv")
-        graph, inputs = build_graph(plan, trans_files, fit, has_audio)
+        graph, inputs = build_graph(plan, trans_files, fit, has_audio, zoom_ramp)
         script = Path(tmp) / "graph.txt"
         script.write_text(graph, encoding="utf-8")
         args = []

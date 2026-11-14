@@ -58,7 +58,8 @@ def search(
 def download(sound: Sound, dest_dir: Path | None = None) -> Path:
     """Télécharge (ou réutilise depuis le cache) et retourne le chemin local."""
     if sound.download_url.startswith("file://"):
-        return Path(urlparse(sound.download_url).path)
+        # url2pathname décode %20 & co. (« Whoosh Cinematic.wav ») et gère les lecteurs Windows
+        return Path(urllib.request.url2pathname(urlparse(sound.download_url).path))
     dest_dir = dest_dir or cache_dir() / sound.provider
     dest_dir.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha1(sound.ref.encode()).hexdigest()[:12]
