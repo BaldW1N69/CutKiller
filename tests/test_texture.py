@@ -69,3 +69,30 @@ def test_font_file(talk_video, tmp_path):
     out = tmp_path / "t.mp4"
     assert main(["text", str(talk_video), "-o", str(out), "--text", "Hello@0-2", "--font", FONTS[0]]) == 0
     assert probe(out).has_video
+
+
+def test_looks_and_letterbox():
+    from cutkiller.edit.texture import LOOKS
+
+    for name, values in LOOKS.items():
+        s = TextureSettings(**values)
+        s.validate()
+        build_texture_filter(s, 1920, 1080)
+    graph, _ = build_texture_filter(TextureSettings(grade="teal_orange", glow=0.5, sharpen=0.3, contrast=0.4,
+                                                    letterbox=2.39), 1920, 1080)
+    order = [graph.index(k) for k in ("colorbalance", "eq=contrast", "unsharp", "blend=all_mode=screen", "drawbox")]
+    assert order == sorted(order)
+    assert "h=138" in graph  # (1080 - 1920 / 2.39) / 2 ≈ 138
+    with pytest.raises(ValueError):
+        TextureSettings(grade="sepia").validate()
+    with pytest.raises(ValueError):
+        TextureSettings(letterbox=0.5).validate()
+
+
+def test_cli_look_letterbox_bars(talk_video, tmp_path):
+    out = tmp_path / "look.mp4"
+    assert main(["texture", str(talk_video), "-o", str(out), "--look", "cinematic", "--letterbox", "2.39",
+                 "--grain", "0"]) == 0
+    px = _frame(out).reshape(probe(out).height, probe(out).width, 3)
+    assert px[:20].max() < 30 and px[-20:].max() < 30  # bandes noires (grain désactivé)
+    assert px[px.shape[0] // 2].mean() > 30

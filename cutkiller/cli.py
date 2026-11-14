@@ -25,6 +25,35 @@ def _add_cut_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--remove-fillers", action="store_true", help="coupe aussi les 'euh/um' (nécessite la transcription)")
     p.add_argument("--whisper-model", default="small", help="modèle faster-whisper (tiny, base, small, medium, large-v3)")
     p.add_argument("--language", default=None, help="langue forcée pour la transcription (fr, en…)")
+    g = p.add_argument_group("punch-in (jump cut fix)")
+    g.add_argument("--punch-in", type=float, default=0.0, metavar="ÉCHELLE",
+                   help="alterne plan normal / plan resserré à chaque coupe (ex. 1.15) : les jump cuts deviennent "
+                        "des changements de cadrage volontaires. 0 = désactivé")
+    g.add_argument("--punch-pattern", metavar="Z1,Z2,…", help="motif d'échelles explicite, ex. 1,1.15,1,1.3 (max 1.5)")
+    g.add_argument("--punch-ramp", type=int, default=3, help="images de micro-zoom à cheval sur la coupe (0 = coupe sèche)")
+    g.add_argument("--punch-focus", default="0.5,0.4", metavar="X,Y", help="point gardé en zoomant (0.5,0.4 = visage)")
+
+
+def _punch(a: argparse.Namespace, n_clips: int, joins) -> dict:
+    """Arguments de render_cuts pour le punch-in (vide si désactivé)."""
+    from cutkiller.edit.timeline import punch_zooms
+
+    if a.punch_pattern:
+        pattern = [float(x) for x in a.punch_pattern.split(",") if x.strip()]
+    elif a.punch_in:
+        pattern = [1.0, a.punch_in]
+    else:
+        return {}
+    if any(z < 1.0 or z > 1.5 for z in pattern):
+        raise ValueError("Échelles de punch-in entre 1.0 et 1.5 (au-delà, l'image perd trop de définition)")
+    steps = [abs(b - a_) for a_, b in zip(pattern, pattern[1:] + pattern[:1]) if b != a_]
+    if steps and min(steps) < 0.1:
+        print("  ! écart de punch-in < 10 % : ça risque de ressembler à un saut d'image plutôt qu'à un recadrage",
+              file=sys.stderr)
+    fx, fy = (float(v) for v in a.punch_focus.split(","))
+    zooms = punch_zooms(n_clips, joins, pattern)
+    print(f"  Punch-in : {sum(z != 1.0 for z in zooms)}/{n_clips} plans resserrés")
+    return {"zooms": zooms, "focus": (fx, fy), "zoom_ramp": a.punch_ramp}
 
 
 # ---------------------------------------------------------------- listen
@@ -78,7 +107,8 @@ def cmd_cut(a: argparse.Namespace) -> int:
     from cutkiller.edit.cutlist import output_cut_points
 
     joins = _joins(a, output_cut_points(segs))
-    out = render_cuts(a.input, _out_path(Path(a.input), "_cut", a.output), segs, joins=joins, log=print)
+    out = render_cuts(a.input, _out_path(Path(a.input), "_cut", a.output), segs, joins=joins, log=print,
+                      **_punch(a, len(segs), joins))
     print(f"Export : {out}")
     return 0
 
@@ -173,16 +203,30 @@ def cmd_animate(a: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_texture(a: argparse.Namespace) -> int:
-    from cutkiller.edit.texture import TextureSettings, render_texture
+TEXTURE_FIELDS = ("grade", "contrast", "sharpen", "glow", "letterbox", "grain", "grain_mode", "grain_opacity",
+                  "dither", "colors", "pixel", "vignette")
 
-    settings = TextureSettings(grain=a.grain, grain_file=Path(a.grain_file) if a.grain_file else None,
-                               grain_mode=a.grain_mode, grain_opacity=a.grain_opacity, dither=a.dither,
-                               colors=a.colors, pixel=a.pixel, vignette=a.vignette)
+
+def cmd_texture(a: argparse.Namespace) -> int:
+    from cutkiller.edit.texture import LOOKS, TextureSettings, render_texture
+
+    values = dict(LOOKS[a.look]) if a.look else {}
+    values.update({k: getattr(a, k) for k in TEXTURE_FIELDS if getattr(a, k) is not None})  # les options priment
+    settings = TextureSettings(grain_file=Path(a.grain_file) if a.grain_file else None, **values)
+    if settings.letterbox:
+        from cutkiller.media import probe
+
+        info = probe(a.input)
+        if info.height and info.width and info.height > info.width:
+            print("  ! bandes cinéma sur une vidéo verticale : il ne reste qu'une bande d'image au centre",
+                  file=sys.stderr)
     out = render_texture(a.input, _out_path(Path(a.input), "_texture", a.output), settings)
-    done = [x for x, on in (("grain", a.grain), ("grain scanné", a.grain_file), (f"dither {a.dither}", a.dither),
-                            ("vignettage", a.vignette)) if on]
-    print(f"Texture : {', '.join(done)}\nExport : {out}")
+    done = [f"look {a.look}"] if a.look else []
+    done += [k.replace("_", " ") for k in TEXTURE_FIELDS
+             if getattr(settings, k) and k not in ("grain_mode", "grain_opacity", "colors", "pixel")]
+    if a.grain_file:
+        done.append("grain scanné")
+    print(f"Finition : {', '.join(done)}\nExport : {out}")
     return 0
 
 
@@ -623,7 +667,8 @@ def cmd_auto(a: argparse.Namespace) -> int:
     print("2/4 Sons…")
     plan, credits = _prepare_mix(a, total_duration(segs), output_cut_points(segs), clicks=False)
     print("3/4 Coupe" + (" + transitions…" if a.transition else "…"))
-    cut = render_cuts(src, final.with_name(final.stem + ".tmp" + final.suffix), segs, joins=joins, log=print)
+    cut = render_cuts(src, final.with_name(final.stem + ".tmp" + final.suffix), segs, joins=joins, log=print,
+                      **_punch(a, len(segs), joins))
     print("4/4 Mixage…")
     try:
         render_mix(cut, final, plan)
@@ -711,7 +756,7 @@ def _add_mix_args(p: argparse.ArgumentParser) -> None:
                         "les flashs, clic sur les coupes sèches, riser, focus d'ouverture, ambiance de fin), calé sur son pic")
     p.add_argument("--kit-sound", action="append", metavar="RÔLE=SOURCE",
                    help="remplacer un son du kit : 'whoosh=sons/mon_whoosh.wav', 'riser=epic riser' "
-                        "(rôles : whoosh, flash, glitch, click, riser, focus, ambience)")
+                        "(rôles : whoosh, flash, glitch, impact, sparkle, click, riser, focus, ambience)")
     p.add_argument("--kit-volume", type=float, default=0.0, help="gain ajouté à tous les sons du kit (dB)")
     p.add_argument("--target-lufs", type=float, default=-14.0, help="loudness finale (-14 YouTube/TikTok)")
     p.add_argument("--no-normalize", action="store_true")
@@ -831,19 +876,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--list", action="store_true", help="lister les préréglages")
     p.set_defaults(func=cmd_animate)
 
-    p = sub.add_parser("texture", help="grain argentique (procédural ou scan Super 8/16 mm), rendu rétro tramé (dither), vignettage")
+    p = sub.add_parser("texture", help="finition : look cinématique (étalonnage, lueur, netteté, noirs profonds), "
+                                       "grain argentique ou scanné, dither rétro, vignettage, bandes cinéma")
     p.add_argument("input")
     p.add_argument("-o", "--output")
-    p.add_argument("--grain", type=float, default=0.0, help="grain procédural 0..1 (0.25 discret, 0.5 marqué)")
+    p.add_argument("--look", choices=["cinematic", "night", "film", "noir", "retro"],
+                   help="préréglage complet (les autres options le modifient)")
+    p.add_argument("--grade", choices=["teal_orange", "green_orange", "warm", "cold", "bleach", "bw"], help="étalonnage")
+    p.add_argument("--contrast", type=float, help="noirs profonds / contraste 0..1")
+    p.add_argument("--sharpen", type=float, help="netteté 0..1 (le « 4K » des applis)")
+    p.add_argument("--glow", type=float, help="lueur des hautes lumières 0..1 (« luminescence »)")
+    p.add_argument("--letterbox", type=float, metavar="RAPPORT", help="bandes cinéma : 2.39, 2.0, 1.85…")
+    p.add_argument("--grain", type=float, help="grain procédural 0..1 (0.25 discret, 0.5 marqué)")
     p.add_argument("--grain-file", help="vraie pellicule scannée (vidéo de grain, poussières, rayures), bouclée")
-    p.add_argument("--grain-mode", choices=["overlay", "softlight", "screen", "multiply", "addition"], default="overlay",
-                   help="fusion du scan : overlay/softlight pour un fond gris 50 %%%%, screen pour un fond noir")
-    p.add_argument("--grain-opacity", type=float, default=0.6)
+    p.add_argument("--grain-mode", choices=["overlay", "softlight", "screen", "multiply", "addition"],
+                   help="fusion du scan : overlay/softlight pour un fond gris 50 %%%%, screen pour un fond noir (défaut overlay)")
+    p.add_argument("--grain-opacity", type=float, help="opacité du scan (défaut 0.6)")
     p.add_argument("--dither", choices=["bayer", "floyd_steinberg", "sierra2_4a", "heckbert", "none"],
                    help="trame rétro : bayer = trame ordonnée, floyd_steinberg = diffusion d'erreur")
-    p.add_argument("--colors", type=int, default=16, help="couleurs de la palette tramée (2 à 256)")
-    p.add_argument("--pixel", type=int, default=1, help="taille des pixels de la trame (1 = natif, 3-4 = rétro)")
-    p.add_argument("--vignette", type=float, default=0.0, help="assombrir les bords 0..1")
+    p.add_argument("--colors", type=int, help="couleurs de la palette tramée (2 à 256, défaut 16)")
+    p.add_argument("--pixel", type=int, help="taille des pixels de la trame (1 = natif, 3-4 = rétro)")
+    p.add_argument("--vignette", type=float, help="assombrir les bords 0..1")
     p.set_defaults(func=cmd_texture)
 
     p = sub.add_parser("overlay", help="incruste animations, logos, images, light leaks à un instant donné")

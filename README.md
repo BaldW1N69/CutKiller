@@ -70,6 +70,7 @@ cutkiller cut video.mp4 --dry-run             # affiche les segments sans rendre
 - `--threshold -40` : force le seuil en dBFS au lieu du mode automatique
 - `--snap-to-onsets` : cale les coupes sur les attaques sonores
 - Micro-fondus de 12 ms à chaque coupe : pas de clic audible
+- `--punch-in 1.15` : **jump cut fix**. Le cadrage alterne entre plan normal et plan resserré à chaque coupe, ce qui transforme les sauts d'image en changements de plan volontaires. Le zoom s'étale sur 3 images à cheval sur la coupe (`--punch-ramp`, 0 = coupe sèche) et se centre un peu au-dessus du milieu, sur le visage (`--punch-focus 0.5,0.4`). Motif libre : `--punch-pattern 1,1.15,1,1.3` (zoom avant pour appuyer une phrase, retour au large pour expliquer). Garde au moins 10 % d'écart, sinon ça ressemble à un bug, et pas plus de 135 %. Un plan voisin d'une transition reste non recadré.
 
 ## Mixage : `cutkiller mix`
 
@@ -98,9 +99,11 @@ Chaque événement reçoit **le son qui lui correspond**, et c'est le **pic** (o
 | Événement | Rôle | Calage |
 |---|---|---|
 | plan d'ouverture | `focus` (autofocus) | attaque au début du plan |
-| whip, zoom, slide, spin | `whoosh` | pic sur la coupe |
-| flash blanc | `flash` (déclic photo) | attaque sur la coupe |
-| glitch, aberration chromatique | `glitch` | attaque sur la coupe |
+| whip, pull-out, zoom, slide, spin | `whoosh` (deep whoosh) | pic sur la coupe |
+| flash, glare, light leak, film burn | `flash` (déclic d'obturateur) | sur le pic de lumière |
+| glitch, aberration chromatique, datamosh | `glitch` | attaque sur la coupe |
+| secousse caméra, rebond | `impact` | attaque sur la coupe |
+| grille, tuiles, mosaïque, pixels | `sparkle` (scintillement) | attaque sur la coupe |
 | coupe sèche (montage) | `click` | attaque sur la coupe |
 | premier gros raccord après 3 s | `riser` (build-up) | sommet sur la coupe |
 | dernier plan | `ambience` (pluie, ville) | nappe bouclée en fondu, −24 dB |
@@ -194,9 +197,11 @@ Des exemples avec leurs prompts : [Prompt Motion](https://prompt-motion.com) (ga
 
 Sortie : `.mov` ProRes 4444 avec transparence (par défaut, accepté par Premiere, DaVinci, Final Cut, CapCut), `.webm` VP9 avec transparence (léger), `.mp4` (fond noir), `.png` (une image).
 
-## Grain, pellicule, rétro : `cutkiller texture`
+## Look, grain, pellicule, rétro : `cutkiller texture`
 
 ```bash
+cutkiller texture video.mp4 --look cinematic                                  # look complet
+cutkiller texture video.mp4 --look night --letterbox 2.39                     # + bandes cinéma
 cutkiller texture video.mp4 --grain 0.3 --vignette 0.4                       # grain argentique procédural
 cutkiller texture video.mp4 --grain-file grain16mm.mov --grain-mode softlight # vrai grain scanné, bouclé
 cutkiller texture video.mp4 --dither bayer --colors 16 --pixel 3              # look rétro tramé
@@ -204,12 +209,16 @@ cutkiller texture video.mp4 --dither bayer --colors 16 --pixel 3              # 
 
 | Option | Effet |
 |---|---|
+| `--look` | `cinematic` (teal & orange, noirs profonds, netteté, lueur, grain léger), `night` (vert-orange, lueur forte : le look « CapCut » nuit/pluie), `film` (chaud, grain), `noir` (N&B contrasté), `retro` (tramé) ; les autres options le modifient |
+| `--grade` | étalonnage : `teal_orange`, `green_orange`, `warm`, `cold`, `bleach`, `bw` |
+| `--contrast`, `--sharpen`, `--glow` 0..1 | noirs profonds, netteté (le « 4K » des applis), lueur des hautes lumières (« luminescence ») |
+| `--letterbox 2.39` | bandes cinéma (pour du 16:9 ; sur du vertical il ne reste qu'une bande) |
 | `--grain 0..1` | grain sur la luminance, renouvelé à chaque image (0.25 discret, 0.5 marqué) |
 | `--grain-file` | pellicule scannée (Super 8, 16 mm, poussières, rayures, burns), bouclée sur toute la vidéo. Fond gris 50 % → `--grain-mode overlay`/`softlight` ; fond noir → `screen`. `--grain-opacity` |
 | `--dither` | palette réduite + trame : `bayer` (trame ordonnée, rétro), `floyd_steinberg`, `sierra2_4a`, `heckbert` ; `--colors 2..256`, `--pixel N` = gros pixels |
 | `--vignette 0..1` | assombrit les bords |
 
-Ordre : dither → grain → scan → vignettage. Le son est copié tel quel. À faire avant `text`/`captions` pour garder le texte net.
+Ordre : étalonnage → contraste → netteté → lueur → dither → grain → scan → vignettage → bandes. Le son est copié tel quel. À faire avant `text`/`captions` pour garder le texte net.
 
 ## Incrustation : `cutkiller overlay`
 

@@ -27,7 +27,7 @@ Plateforme/format, durée, ton, ressources (rushs, photos, logo, texte à affich
 
 | Demande | Commande |
 |---|---|
-| Une vidéo face caméra / tuto / podcast à nettoyer | `auto video.mp4 --music "lofi chill" --transition "random:clean" --transition-every 3` (+ `--remove-fillers` si transcription dispo) |
+| Une vidéo face caméra / tuto / podcast à nettoyer | `auto video.mp4 --punch-in 1.15 --music "lofi chill" --transition "random:clean" --transition-every 3` (+ `--remove-fillers` si transcription dispo). `--punch-in` = jump cut fix : cadrage alterné à chaque coupe, à mettre par défaut dès qu'il y a des jump cuts |
 | Plusieurs rushs et/ou photos → vidéo rythmée (pub, récap, reel) | `montage a.mp4 b.mp4 p.jpg --size 1080x1920 --music "upbeat" --beats-per-clip 2 --transition "random:dynamic" --sfx "whoosh@transitions"` |
 | Seulement couper les blancs | `cut video.mp4` (`--dry-run` pour valider les segments avant un long rendu) |
 | Seulement musique + SFX + loudness | `mix video.mp4 --music "…" --sfx "pop@2.5,8"` |
@@ -36,7 +36,7 @@ Plateforme/format, durée, ton, ressources (rushs, photos, logo, texte à affich
 | Titre, compteur, bouton CTA, lower third, logo, flèche… animés | `animate <préréglage> clé=valeur --like video.mp4 -o anim.mov` puis `overlay video.mp4 --add "anim.mov@2"` |
 | **Animation spécifique** (forme, mouvement, style de marque, idée originale) | **Skill `animation` : tu écris le code de l'animation toi-même**, tu regardes les images clés, puis tu incrustes avec `overlay` |
 | Logo, image, light leak, vidéo fond vert par-dessus | `overlay video.mp4 --add "logo.png@0-3?pos=top-right&scale=0.2"` ; `--add "leak.mp4@4?mode=screen"` |
-| Look pellicule / rétro (grain, Super 8, dither, vignettage) | `texture video.mp4 --grain 0.3 --vignette 0.4` ; vrai grain scanné : `--grain-file grain16mm.mov --grain-mode softlight` ; rétro : `--dither bayer --colors 16 --pixel 3` |
+| Look cinématique / pellicule / rétro | `texture video.mp4 --look cinematic` (ou `night`, `film`, `noir`, `retro`) ; bandes cinéma `--letterbox 2.39` (16:9 seulement) ; vrai grain scanné : `--grain-file grain16mm.mov --grain-mode softlight` ; rétro : `--dither bayer --colors 16 --pixel 3` |
 | Choisir une transition | `transitions list --tag glitch`, `transitions preview gl:Cube` |
 | Choisir un son | `sounds search "whoosh" --kind sfx --max-duration 3` |
 
@@ -51,9 +51,11 @@ Réglages de transition : durée 0,2–0,4 s ; en face caméra, une transition t
 | Événement | Son | Calage |
 |---|---|---|
 | Plan d'ouverture (plan d'ensemble) | `focus` : bip/moteur d'autofocus | au début du plan |
-| Whip, zoom, slide, spin | `whoosh` | pic du souffle sur la coupe |
-| Flash blanc, arrêt sur image | `flash` : déclic d'appareil photo | attaque sur la coupe |
+| Whip, pull-out, zoom, slide, spin | `whoosh` (deep whoosh) | pic du souffle sur la coupe |
+| Flash, glare, light leak, film burn | `flash` : déclic d'obturateur | sur le pic de lumière |
 | Glitch, aberration chromatique | `glitch` | attaque sur la coupe |
+| Secousse caméra, rebond | `impact` | attaque sur la coupe |
+| Grille, tuiles, mosaïque, pixels | `sparkle` : scintillement | attaque sur la coupe |
 | Coupe sèche sur le temps | `click` | attaque sur la coupe |
 | Montée vers le premier gros raccord (après 3 s) | `riser` / build-up | sommet sur la coupe |
 | Dernier plan, fin calme | `ambience` (pluie, ville, room tone) | nappe en fondu, très bas |
@@ -63,7 +65,9 @@ Réglages de transition : durée 0,2–0,4 s ; en face caméra, une transition t
 - **Face caméra** : `auto … --sfx-kit minimal` (seulement le son des transitions ; jamais de clic sur les coupes de parole).
 - **Pack de l'utilisateur** (ex. pack « SFX » d'un créateur, Freesound) : `CUTKILLER_SOUNDS_DIR=dossier`. Les fichiers sont trouvés par leur nom (« Whoosh Cinematic.wav », « Camera Focus.mp3 », « Jolt Build Up.wav », « Click 10.wav ») avant toute banque en ligne. Pour forcer un fichier : `--kit-sound whoosh=sons/w.wav` ; `--kit-volume -3` baisse tout le kit.
 - `--sfx` reste disponible pour un son ponctuel ; ajoute `--sfx-align peak` (whoosh, riser) ou `onset` (clic, impact) pour le caler sur son impact plutôt que sur son début.
-- Couple toujours le visuel et le son : un flash blanc sans déclic, ou un whoosh sans mouvement à l'image, se remarque.
+- Couple toujours le visuel et le son : un flash blanc sans déclic, ou un whoosh sans mouvement à l'image, se remarque. La matière du son imite celle de l'image (air → souffle, lumière → obturateur, numérique → friture, blocs → cristal).
+- Grosse transition = couches : riser qui monte + whoosh sur la coupe + éventuellement un accent court (le kit `cinematic` pose le riser sur le premier gros raccord).
+- Raccord sur l'action : un plan d'action commence avec le sujet déjà dans le cadre, jamais sur un cadre vide qui « attend » le sujet. Pour annoncer une menace ou une arrivée, fais entendre son son avant de la montrer (J-cut : `--jl -0.2`).
 
 ## 4. Pubs : structure à respecter
 

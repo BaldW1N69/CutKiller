@@ -5,14 +5,18 @@ Règles du kit `cinematic` (relevées sur les montages cinématiques type « My 
 | Événement du montage                           | Son        | Calage                              |
 |------------------------------------------------|------------|-------------------------------------|
 | plan d'ouverture (plan d'ensemble)             | focus      | bip d'autofocus au début du plan    |
-| transition en mouvement (whip, zoom, slide…)   | whoosh     | le pic du souffle tombe sur la coupe |
-| flash blanc / arrêt sur image                  | flash      | le déclic commence sur la coupe     |
-| glitch / aberration chromatique                | glitch     | l'attaque commence sur la coupe     |
+| transition en mouvement (whip, pull-out, slide) | whoosh     | le pic du souffle (grave) tombe sur la coupe |
+| flash, glare, light leak, film burn            | flash      | le déclic tombe sur le pic de lumière |
+| glitch / aberration chromatique / datamosh     | glitch     | l'attaque commence sur la coupe     |
+| secousse caméra, rebond                        | impact     | l'attaque commence sur la coupe     |
+| grille, tuiles, mosaïque, pixels (« tetris »)  | sparkle    | le scintillement démarre sur la coupe |
 | coupe sèche sur le temps (montage rythmé)      | click      | l'attaque commence sur la coupe     |
 | montée de tension avant le premier gros raccord | riser      | le sommet du riser tombe sur la coupe |
 | dernier plan (fin calme)                       | ambience   | nappe d'ambiance en fondu, très bas |
 
 Un fondu, une dissolution ou un volet doux ne reçoit pas de son : un whoosh sur un fondu sonne faux.
+Règle commune aux tutos « use this with this » : la matière du son imite celle de l'image (air → souffle,
+lumière → obturateur, numérique → friture, blocs → cristal) et son impact tombe sur l'image la plus intense.
 
 Le calage se fait sur le *pic* (ou l'attaque) mesuré dans le fichier, pas sur son début : un whoosh
 de 1,2 s dont le souffle culmine à 0,7 s démarre 0,7 s avant la coupe, quel que soit le fichier choisi.
@@ -22,7 +26,7 @@ Cinematic.wav », « Camera Focus.mp3 »), puis des banques libres de droits (Op
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -41,11 +45,15 @@ class Role:
 
 
 ROLES: dict[str, Role] = {r.name: r for r in [
-    Role("whoosh", ("whoosh cinematic", "whoosh", "swoosh"), "peak", -9.0, 3.0,
-         "transitions en mouvement : whip pan, zoom, slide, spin"),
-    Role("flash", ("camera flash", "camera shutter", "shutter"), "onset", -8.0, 2.0,
-         "flash blanc, arrêt sur image, effet photo"),
+    Role("whoosh", ("deep whoosh", "whoosh cinematic", "whoosh", "swoosh"), "peak", -9.0, 3.0,
+         "transitions en mouvement : whip pan, pull-out, zoom, slide, spin"),
+    Role("flash", ("camera shutter", "camera flash", "shutter"), "onset", -8.0, 2.0,
+         "flash blanc, glare, light leak, film burn, arrêt sur image"),
     Role("glitch", ("glitch", "digital glitch"), "onset", -12.0, 2.0, "glitch, aberration chromatique"),
+    Role("impact", ("cinematic impact", "impact hit", "boom"), "onset", -10.0, 3.0,
+         "secousse caméra, rebond : un coup sourd"),
+    Role("sparkle", ("sparkle", "shimmer", "magic chime"), "onset", -14.0, 2.0,
+         "transitions en grille, tuiles, mosaïque, pixels"),
     Role("click", ("click",), "onset", -14.0, 1.0, "coupe sèche calée sur le temps"),
     Role("riser", ("riser build up", "riser", "build up"), "peak", -11.0, 8.0,
          "montée de tension qui culmine sur le premier gros raccord"),
@@ -64,19 +72,23 @@ class Kit:
     riser: bool = False
     opening: bool = False  # bip de mise au point sur le plan d'ouverture
     ambience: bool = False  # nappe sous le dernier plan
-    roles: dict[str, str] = field(default_factory=dict)  # remplacements rôle → source par défaut du kit
 
 
 KITS: dict[str, Kit] = {k.name: k for k in [
     Kit("cinematic", "focus à l'ouverture, whoosh/flash/glitch sur les transitions, clic sur les coupes sèches, "
                      "riser vers le premier gros raccord, ambiance sur la fin", clicks=True, riser=True,
         opening=True, ambience=True),
-    Kit("minimal", "seulement le son de chaque transition (whoosh, flash, glitch) : sûr sur de la parole"),
+    Kit("minimal", "seulement le son de chaque transition (whoosh, flash, glitch, impact, sparkle) : sûr sur de la parole"),
 ]}
 
-MOTION_TAGS = {"motion-blur", "zoom", "spin", "slide", "push", "shake", "warp", "bounce", "rotate", "dynamic"}
-MOTION_WORDS = ("whip", "zoom", "slide", "push", "spin", "swipe", "swirl", "rotate", "squeeze", "cube", "door")
-GLITCH_TAGS = {"glitch", "chromatic", "static", "noise"}
+MOTION_TAGS = {"motion-blur", "zoom", "spin", "slide", "push", "warp", "rotate", "dynamic", "swipe", "swirl"}
+MOTION_WORDS = ("whip", "zoom", "slide", "push", "pull", "spin", "swipe", "swirl", "rotate", "squeeze", "cube", "door")
+FLASH_TAGS = {"flash", "light", "light-leak", "flare", "burn", "glint", "glints", "strobe", "bloom"}
+FLASH_WORDS = ("flash", "glare", "flare", "leak", "burn", "lightning", "strobe")
+GLITCH_TAGS = {"glitch", "chromatic", "chromatic-aberration", "static", "datamosh", "digital", "scanlines"}
+IMPACT_TAGS = {"shake", "bounce", "impact"}
+SPARKLE_TAGS = {"tiles", "grid", "pattern", "pixelate", "mosaic", "squares", "blocks", "sparkle", "shimmer", "dots",
+                "cells", "hexagon"}
 RISER_MIN_TIME = 3.0
 
 
@@ -86,12 +98,18 @@ def role_for(transition) -> str | None:
         return None
     name = transition.name.lower()
     tags = {t.lower() for t in transition.tags}
-    if "flash" in name or "flash" in tags:
+    if any(w in name for w in FLASH_WORDS) or tags & FLASH_TAGS:
         return "flash"
+    if "shake" in name:  # « shake & flash » est déjà pris par le flash ci-dessus
+        return "impact"
     if "glitch" in name or "rgb" in name or tags & GLITCH_TAGS:
         return "glitch"
+    if tags & IMPACT_TAGS:
+        return "impact"
     if any(w in name for w in MOTION_WORDS) or tags & MOTION_TAGS:
         return "whoosh"
+    if tags & SPARKLE_TAGS:
+        return "sparkle"
     return None
 
 
@@ -118,7 +136,7 @@ def plan_events(kit: Kit, duration: float, cut_times: list[float], transitions: 
                 events.append(Event("click", t))
     if kit.riser and duration >= 6.0:
         # après l'accroche (3 s) : il faut de la place pour que la tension monte
-        big = [e.time for e in events if e.role in ("whoosh", "flash", "glitch") and e.time >= RISER_MIN_TIME]
+        big = [e.time for e in events if e.role in ("whoosh", "flash", "glitch", "impact") and e.time >= RISER_MIN_TIME]
         if big:
             events.append(Event("riser", big[0]))
     if kit.opening and duration >= 3.0:

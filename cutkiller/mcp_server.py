@@ -31,7 +31,8 @@ fichier produit et le contenu du fichier de crédits.
 Animations : préréglages via cutkiller_animate ; animation sur mesure → écrire le code (Python frame(t, ctx),
 ou page HTML/CSS/JS avec language='html' pour le motion design riche) et cutkiller_animate_code (renvoie les
 images clés à regarder), puis cutkiller_overlay. Sound design : sfx_kit='cinematic' (montage) ou 'minimal'
-(parole). Finition : cutkiller_texture (grain, pellicule scannée, dither). cutkiller_look montre des images
+(parole). Face caméra : punch_in=1.15 (jump cut fix). Finition : cutkiller_texture (look cinematic/night/film/
+noir/retro, grain, pellicule scannée, dither, bandes cinéma). cutkiller_look montre des images
 d'une vidéo pour vérifier le rendu avant de livrer."""
 
 WAIT_DEFAULT = 40.0
@@ -236,12 +237,15 @@ def build_server():
                        target_lufs: float = -14.0, no_normalize: bool = False, seed: int | None = None,
                        jl: float = 0.0, audio_fade: float = 0.03, language: str | None = None,
                        sfx_kit: str | None = None, kit_sounds: dict[str, str] | None = None, kit_volume: float = 0.0,
-                       sfx_align: str = "start", extra_args: list[str] | None = None) -> str:
+                       sfx_align: str = "start", punch_in: float = 0.0, punch_pattern: str | None = None,
+                       extra_args: list[str] | None = None) -> str:
         """Pipeline complet sur UNE vidéo (face caméra, tuto, podcast filmé) : écoute → coupe silences (et « euh »)
         → transitions → musique de fond avec ducking + SFX → loudness. music et chaque sfx = fichier local OU requête
         texte cherchée sur les banques libres de droits (ex. 'lofi chill', 'whoosh@transitions', 'pop@2.5,8').
         sfx_kit='minimal' : le bon son par transition (whoosh/flash/glitch), calé sur son pic ; pas de clic sur les
         coupes de parole. kit_sounds={'whoosh': 'mon_whoosh.wav'} remplace un son. sfx_align='peak' cale les sfx sur leur pic.
+        punch_in=1.15 : « jump cut fix », alterne plan normal / resserré à chaque coupe avec une micro-rampe de 3 images
+        (punch_pattern='1,1.15,1,1.3' pour un motif ; écart ≥ 10 %, max 1.35 conseillé).
         transition : 'fade', 'gl:Cube', 'fx:zoom_punch', 'random:dynamic', 'fade|gl:WhipPan'… (voir cutkiller_transitions).
         Renvoie le fichier produit et les crédits à coller en description."""
         if err := _need_files([path]):
@@ -256,6 +260,8 @@ def build_server():
         transition_args(a, transition, transition_duration, transition_every, transition_min_gap, seed, jl, audio_fade)
         mix_args(a, music, music_volume, music_start, no_duck, sfx, sfx_volume, target_lufs, no_normalize)
         kit_args(a, sfx_kit, kit_sounds, kit_volume, sfx_align)
+        flag(a, "--punch-in", punch_in or None)
+        flag(a, "--punch-pattern", punch_pattern)
         a += list(extra_args or [])
         return _dumps(launch(a))
 
@@ -264,9 +270,11 @@ def build_server():
                       transition_duration: float = 0.4, transition_every: int = 1, remove_fillers: bool = False,
                       padding: float = 0.08, min_silence: float = 0.35, threshold_db: float | None = None,
                       dry_run: bool = False, seed: int | None = None, jl: float = 0.0, audio_fade: float = 0.03,
+                      punch_in: float = 0.0, punch_pattern: str | None = None,
                       extra_args: list[str] | None = None) -> str:
         """Jump cuts seuls : supprime silences (et « euh » si remove_fillers) avec marge de respiration, transitions
-        optionnelles. dry_run=True liste les segments gardés sans rendre (pour valider avant un long rendu)."""
+        optionnelles. dry_run=True liste les segments gardés sans rendre (pour valider avant un long rendu).
+        punch_in=1.15 : alterne plan normal / resserré à chaque coupe (« jump cut fix »)."""
         if err := _need_files([path]):
             return _dumps(err)
         a = ["cut", str(Path(path).expanduser())]
@@ -277,6 +285,8 @@ def build_server():
         flag(a, "--threshold", threshold_db)
         flag(a, "--dry-run", dry_run)
         transition_args(a, transition, transition_duration, transition_every, 0.0, seed, jl, audio_fade)
+        flag(a, "--punch-in", punch_in or None)
+        flag(a, "--punch-pattern", punch_pattern)
         a += list(extra_args or [])
         return _dumps(launch(a, tail=80 if dry_run else 40))
 
@@ -470,17 +480,27 @@ def build_server():
                            tmp / f"{src.stem}_sheet.png", [f"{t:.2f} s" for t in times])
 
     @tool
-    def cutkiller_texture(path: str, output: str | None = None, grain: float = 0.0, grain_file: str | None = None,
+    def cutkiller_texture(path: str, output: str | None = None, look: str | None = None, grade: str | None = None,
+                          contrast: float | None = None, sharpen: float | None = None, glow: float | None = None,
+                          letterbox: float | None = None, grain: float = 0.0, grain_file: str | None = None,
                           grain_mode: str = "overlay", grain_opacity: float = 0.6, dither: str | None = None,
                           colors: int = 16, pixel: int = 1, vignette: float = 0.0) -> str:
-        """Textures de finition : grain argentique procédural (grain 0..1 : 0.25 discret, 0.5 marqué), vraie pellicule
-        scannée bouclée (grain_file : Super 8/16 mm, poussières, rayures ; grain_mode overlay/softlight si fond gris,
-        screen si fond noir), rendu rétro tramé (dither bayer|floyd_steinberg, colors 2-256, pixel 3-4 = gros pixels),
-        vignettage 0..1. À appliquer en fin de chaîne, avant le texte/sous-titres."""
+        """Finition : look complet (look = cinematic | night | film | noir | retro), ou réglages séparés : étalonnage
+        (grade teal_orange|green_orange|warm|cold|bleach|bw), contrast/sharpen/glow 0..1 (noirs profonds, netteté
+        « 4K », lueur « luminescence »), bandes cinéma (letterbox 2.39 ; pas sur du vertical), grain procédural
+        (0.25 discret, 0.5 marqué), pellicule scannée bouclée (grain_file ; grain_mode overlay/softlight si fond
+        gris, screen si fond noir), dither rétro (bayer|floyd_steinberg, colors 2-256, pixel 3-4), vignettage 0..1.
+        Les réglages séparés modifient le look. À appliquer en fin de chaîne, avant le texte/sous-titres."""
         if err := _need_files([path] + ([grain_file] if grain_file else [])):
             return _dumps(err)
         a = ["texture", str(Path(path).expanduser())]
         flag(a, "-o", output)
+        flag(a, "--look", look)
+        flag(a, "--grade", grade)
+        flag(a, "--contrast", contrast)
+        flag(a, "--sharpen", sharpen)
+        flag(a, "--glow", glow)
+        flag(a, "--letterbox", letterbox)
         flag(a, "--grain", grain or None)
         flag(a, "--grain-file", grain_file)
         flag(a, "--grain-mode", grain_mode if grain_file else None)

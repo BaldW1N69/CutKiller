@@ -18,8 +18,10 @@ from cutkiller.transitions import resolve
 
 @pytest.mark.parametrize("spec,role", [
     ("fx:whip_left", "whoosh"), ("fx:zoom_punch", "whoosh"), ("fx:spin", "whoosh"), ("xfade:slideleft", "whoosh"),
-    ("fx:flash", "flash"), ("fx:glitch", "glitch"), ("fx:rgb_split", "glitch"),
-    ("xfade:fade", None), ("xfade:dissolve", None), ("fx:blur", None),
+    ("fx:flash", "flash"), ("fx:light_leak", "flash"), ("gl:FilmBurn", "flash"),
+    ("fx:glitch", "glitch"), ("fx:rgb_split", "glitch"),
+    ("fx:shake", "impact"), ("gl:CameraShake", "impact"), ("xfade:pixelize", "sparkle"), ("gl:GridFlip", "sparkle"),
+    ("xfade:fade", None), ("xfade:dissolve", None), ("fx:blur", None), ("xfade:circleopen", None),
 ])
 def test_role_for(spec, role):
     assert role_for(resolve(spec)) == role
