@@ -1,6 +1,6 @@
 # CutKiller
 
-Montage vidéo piloté par l'**écoute** : CutKiller analyse l'audio de ta vidéo pour couper les blancs et les hésitations, caler les coupes sur le rythme, ajoute **plus de 280 transitions** (et tes propres packs), des **animations** (préréglages ou écrites sur mesure par Claude), des sous-titres animés, puis une musique de fond et des SFX trouvés dans des banques de sons libres de droits, avec les crédits prêts à coller en description.
+Montage vidéo piloté par l'**écoute** : CutKiller analyse l'audio de ta vidéo pour couper les blancs et les hésitations, caler les coupes sur le rythme, ajoute **plus de 280 transitions** (et tes propres packs), un **sound design calé sur chaque transition**, des **animations** (préréglages, ou écrites sur mesure par Claude en Python ou en HTML), du grain argentique et des looks rétro, des sous-titres animés, puis une musique de fond et des SFX trouvés dans des banques de sons libres de droits, avec les crédits prêts à coller en description.
 
 ```bash
 cutkiller auto video.mp4 --music "lofi chill" --sfx "whoosh@cuts"
@@ -29,6 +29,7 @@ Options :
 pip install -e ".[transcribe]"   # transcription : sous-titres, suppression des « euh »
 pip install -e ".[gl]"           # 214 transitions GL (3D, glitch, light leaks…)
 pip install -e ".[mcp]"          # serveur MCP (pour piloter CutKiller depuis Claude)
+pip install -e ".[html]"         # animations HTML/CSS/JS (puis : playwright install chromium)
 pip install -e ".[all]"          # tout
 ```
 
@@ -80,8 +81,32 @@ cutkiller mix video.mp4 --music ma_musique.mp3 --music-volume -18 --music-start 
 - **Ducking automatique** : la musique baisse dès que tu parles (compresseur sidechain), remonte dans les blancs
 - **Boucle et fondus** : un morceau trop court est bouclé ; fondu d'entrée et de sortie
 - **SFX positionnés** : `source@cuts` (chaque coupe), `source@transitions` (seulement les coupes avec transition), `source@1.5,8` (instants précis), `source@beats:4` (un beat sur 4 de la musique). `--sfx-offset` décale le SFX avant la coupe, `--sfx-spacing` évite d'en mettre trop.
+- **Calage sur l'impact** : `--sfx-align peak` cale le maximum du son sur la position (whoosh, riser), `onset` son attaque (clic, impact) ; par défaut `start` (début du fichier + `--sfx-offset`).
 - **Normalisation finale** à `--target-lufs` (−14 par défaut)
 - `source` peut être un fichier local ou une requête texte cherchée dans les banques
+
+### Sound design automatique : `--sfx-kit`
+
+```bash
+cutkiller montage a.mp4 b.mp4 c.mp4 d.mp4 --music "cinematic" --transition "fx:whip_left|fx:flash|fx:zoom_punch|fade" \
+  --transition-every 2 --sfx-kit cinematic
+cutkiller auto interview.mp4 --transition "random:dynamic" --transition-every 3 --sfx-kit minimal
+```
+
+Chaque événement reçoit **le son qui lui correspond**, et c'est le **pic** (ou l'attaque) du son, mesuré dans le fichier, qui tombe sur la coupe :
+
+| Événement | Rôle | Calage |
+|---|---|---|
+| plan d'ouverture | `focus` (autofocus) | attaque au début du plan |
+| whip, zoom, slide, spin | `whoosh` | pic sur la coupe |
+| flash blanc | `flash` (déclic photo) | attaque sur la coupe |
+| glitch, aberration chromatique | `glitch` | attaque sur la coupe |
+| coupe sèche (montage) | `click` | attaque sur la coupe |
+| premier gros raccord après 3 s | `riser` (build-up) | sommet sur la coupe |
+| dernier plan | `ambience` (pluie, ville) | nappe bouclée en fondu, −24 dB |
+| fondu, dissolution, volet doux | aucun | |
+
+`cinematic` = tout le tableau ; `minimal` = seulement le son des transitions (et jamais de clic sur les coupes de parole avec `auto`). Les sons viennent d'abord de **ton dossier** (`CUTKILLER_SOUNDS_DIR` : par exemple le pack d'un créateur, « Whoosh Cinematic.wav », « Camera Focus.mp3 », « Jolt Build Up.wav »), puis des banques libres de droits. `--kit-sound whoosh=sons/w.wav` force un son, `--kit-volume -3` règle tout le kit.
 
 ## Utiliser CutKiller depuis Claude (skills + serveur MCP)
 
@@ -91,7 +116,7 @@ Deux skills et un serveur MCP font de CutKiller la base de tout montage demandé
 |---|---|
 | Skill `montage` | Se déclenche sur « montage, pub, vidéo, reel… » : cadrage, écoute, recette, structure de pub, vérifications, livraison avec crédits |
 | Skill `animation` | Décide si un préréglage suffit ou si **Claude prend le relais** : il écrit lui-même l'animation (script Python, ASS ou GLSL), regarde les images clés, puis rend et incruste |
-| Serveur MCP (18 outils) | Tourne **sur ta machine** : Claude lit et écrit tes vraies vidéos. `cutkiller_animate_code` et `cutkiller_look` renvoient des images, donc Claude voit ce qu'il produit |
+| Serveur MCP (19 outils) | Tourne **sur ta machine** : Claude lit et écrit tes vraies vidéos. `cutkiller_animate_code` et `cutkiller_look` renvoient des images, donc Claude voit ce qu'il produit |
 
 **Dans ce dépôt, rien à installer côté Claude.** Les skills sont dans `.claude/skills/` et le serveur MCP dans `.mcp.json` : Claude Code les charge à l'ouverture du dossier (il demande d'approuver le serveur MCP la première fois). Il faut seulement CutKiller lui-même :
 
@@ -128,6 +153,8 @@ cutkiller text video.mp4 --srt sous-titres.srt --srt-position center
 
 Format : `texte@début-fin[:position[:couleur[:taille%]]]` (fin vide = jusqu'à la fin ; position `top|center|bottom`). Marges de sécurité réseaux sociaux, fondu d'entrée/sortie, fond semi-transparent avec `--box`. Rendu par libass : fonctionne identiquement sous Windows, macOS et Linux.
 
+`--font` accepte un nom de police installée **ou un fichier** `.ttf`/`.otf` non installé, par exemple une police gratuite de [Fontshare](https://www.fontshare.com) : `--font Satoshi-Bold.otf` (idem pour `captions`).
+
 ## Animations : `cutkiller animate`
 
 ```bash
@@ -154,7 +181,35 @@ cutkiller animate mon_anim.py --like video.mp4 --preview 0.3,1,2   # vérifier
 cutkiller animate mon_anim.py --like video.mp4 -o mon_anim.mov     # rendre
 ```
 
+**Animation HTML** (CSS, JS, canvas, SVG, WebGL) : le format de la plupart des prompts de motion design pour Claude (démos d'interface, vidéos de lancement, typo cinétique, graphiques). CutKiller ouvre la page dans un Chromium sans écran et **pilote son horloge image par image** : rendu exact, sans saccade, fond transparent.
+
+```bash
+cutkiller animate lancement.html --like video.mp4 --preview 0.5,1.5,3   # images clés
+cutkiller animate lancement.html --like video.mp4 -o lancement.mov      # ProRes 4444 avec alpha
+```
+
+Temps : la page définit `window.cutkillerSeek(t)` (le plus fiable), ou utilise simplement des animations CSS, `requestAnimationFrame`, `performance.now()` : tout suit le temps de la vidéo. Durée : `--duration`, `<meta name="duration" content="3">`, `window.DURATION`, sinon la fin des animations CSS. `window.CUTKILLER = {width, height, fps, duration, params}` est fourni avant le chargement. Prérequis : `pip install -e ".[html]"` puis `playwright install chromium` (ou `CUTKILLER_CHROMIUM=/chemin/vers/chrome`).
+
+Des exemples avec leurs prompts : [Prompt Motion](https://prompt-motion.com) (galerie de 230+ animations faites avec Claude). Les prompts appartiennent à leurs créateurs : sers-t'en comme d'un brief, une entrée à la fois, et crédite l'auteur.
+
 Sortie : `.mov` ProRes 4444 avec transparence (par défaut, accepté par Premiere, DaVinci, Final Cut, CapCut), `.webm` VP9 avec transparence (léger), `.mp4` (fond noir), `.png` (une image).
+
+## Grain, pellicule, rétro : `cutkiller texture`
+
+```bash
+cutkiller texture video.mp4 --grain 0.3 --vignette 0.4                       # grain argentique procédural
+cutkiller texture video.mp4 --grain-file grain16mm.mov --grain-mode softlight # vrai grain scanné, bouclé
+cutkiller texture video.mp4 --dither bayer --colors 16 --pixel 3              # look rétro tramé
+```
+
+| Option | Effet |
+|---|---|
+| `--grain 0..1` | grain sur la luminance, renouvelé à chaque image (0.25 discret, 0.5 marqué) |
+| `--grain-file` | pellicule scannée (Super 8, 16 mm, poussières, rayures, burns), bouclée sur toute la vidéo. Fond gris 50 % → `--grain-mode overlay`/`softlight` ; fond noir → `screen`. `--grain-opacity` |
+| `--dither` | palette réduite + trame : `bayer` (trame ordonnée, rétro), `floyd_steinberg`, `sierra2_4a`, `heckbert` ; `--colors 2..256`, `--pixel N` = gros pixels |
+| `--vignette 0..1` | assombrit les bords |
+
+Ordre : dither → grain → scan → vignettage. Le son est copié tel quel. À faire avant `text`/`captions` pour garder le texte net.
 
 ## Incrustation : `cutkiller overlay`
 
@@ -253,8 +308,8 @@ Chaque export écrit un fichier `.credits.txt` avec les attributions exigées pa
 ## Développement
 
 ```bash
-pip install -e ".[dev]"
-pytest                 # tests hors réseau (médias de test générés à la volée)
+pip install -e ".[dev,html]"
+pytest                 # tests hors réseau (médias de test générés à la volée ; tests HTML ignorés sans Chromium)
 pytest -m network      # + appel réel à Openverse
 ```
 
@@ -262,12 +317,12 @@ pytest -m network      # + appel réel à Openverse
 cutkiller/
   media.py            ffprobe / ffmpeg, décodage audio → numpy
   listen/             silences, loudness, beats, transcription, rapport
-  edit/               coupes, timeline (transitions, raccords audio), montage, mixage, texte, sous-titres animés, incrustation
+  edit/               coupes, timeline (transitions, raccords audio), montage, mixage, texte, sous-titres animés, incrustation, textures
   transitions/        registre + moteurs xfade / gl / fx, aperçus et galerie
-  sounds/             banques de sons, cache, crédits
-  animate/            moteur d'animation (frame(t, ctx) → vidéo à alpha) + 12 préréglages
-  mcp_server.py       serveur MCP (18 outils, rendus en jobs, aperçus renvoyés en images)
-  cli.py              commandes listen / cut / mix / auto / montage / text / captions / animate / overlay / transitions / sounds / doctor
+  sounds/             banques de sons, cache, crédits, kits de sound design (kit.py)
+  animate/            moteur d'animation (frame(t, ctx) → vidéo à alpha) + 12 préréglages + pages HTML (html.py)
+  mcp_server.py       serveur MCP (19 outils, rendus en jobs, aperçus renvoyés en images)
+  cli.py              commandes listen / cut / mix / auto / montage / text / captions / animate / texture / overlay / transitions / sounds / doctor
 .claude/skills/       skills Claude : montage (recettes, pub, vérifications) et animation (relais : Claude code l'animation)
 .claude/settings.json déclare la marketplace du plugin
 .claude-plugin/       manifeste du plugin + marketplace

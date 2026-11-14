@@ -28,9 +28,11 @@ fois, cutkiller_listen pour diagnostiquer, puis cutkiller_auto (une vidéo) ou c
 (plusieurs clips/photos), cutkiller_text pour accroche/prix/appel à l'action. Les rendus renvoient
 un job_id si ça dépasse ~40 s : appeler cutkiller_job. Toujours donner à l'utilisateur le chemin du
 fichier produit et le contenu du fichier de crédits.
-Animations : préréglages via cutkiller_animate ; animation sur mesure → écrire le code (frame(t, ctx)) et
-cutkiller_animate_code (renvoie les images clés à regarder), puis cutkiller_overlay. cutkiller_look montre
-des images d'une vidéo pour vérifier le rendu avant de livrer."""
+Animations : préréglages via cutkiller_animate ; animation sur mesure → écrire le code (Python frame(t, ctx),
+ou page HTML/CSS/JS avec language='html' pour le motion design riche) et cutkiller_animate_code (renvoie les
+images clés à regarder), puis cutkiller_overlay. Sound design : sfx_kit='cinematic' (montage) ou 'minimal'
+(parole). Finition : cutkiller_texture (grain, pellicule scannée, dither). cutkiller_look montre des images
+d'une vidéo pour vérifier le rendu avant de livrer."""
 
 WAIT_DEFAULT = 40.0
 WAIT_MAX = 55.0
@@ -166,6 +168,13 @@ def transition_args(a: list[str], transition, duration, every, min_gap, seed, jl
     flag(a, "--audio-fade", audio_fade)
 
 
+def kit_args(a: list[str], sfx_kit, kit_sounds, kit_volume, sfx_align) -> None:
+    flag(a, "--sfx-kit", sfx_kit)
+    repeat(a, "--kit-sound", [f"{k}={v}" for k, v in (kit_sounds or {}).items()])
+    flag(a, "--kit-volume", kit_volume)
+    flag(a, "--sfx-align", sfx_align if sfx_align and sfx_align != "start" else None)
+
+
 def mix_args(a: list[str], music, music_volume, music_start, no_duck, sfx, sfx_volume, target_lufs, no_normalize) -> None:
     flag(a, "--music", music)
     if music:
@@ -226,10 +235,13 @@ def build_server():
                        music_start: float = 0.0, no_duck: bool = False, sfx_volume: float = -8.0,
                        target_lufs: float = -14.0, no_normalize: bool = False, seed: int | None = None,
                        jl: float = 0.0, audio_fade: float = 0.03, language: str | None = None,
-                       extra_args: list[str] | None = None) -> str:
+                       sfx_kit: str | None = None, kit_sounds: dict[str, str] | None = None, kit_volume: float = 0.0,
+                       sfx_align: str = "start", extra_args: list[str] | None = None) -> str:
         """Pipeline complet sur UNE vidéo (face caméra, tuto, podcast filmé) : écoute → coupe silences (et « euh »)
         → transitions → musique de fond avec ducking + SFX → loudness. music et chaque sfx = fichier local OU requête
         texte cherchée sur les banques libres de droits (ex. 'lofi chill', 'whoosh@transitions', 'pop@2.5,8').
+        sfx_kit='minimal' : le bon son par transition (whoosh/flash/glitch), calé sur son pic ; pas de clic sur les
+        coupes de parole. kit_sounds={'whoosh': 'mon_whoosh.wav'} remplace un son. sfx_align='peak' cale les sfx sur leur pic.
         transition : 'fade', 'gl:Cube', 'fx:zoom_punch', 'random:dynamic', 'fade|gl:WhipPan'… (voir cutkiller_transitions).
         Renvoie le fichier produit et les crédits à coller en description."""
         if err := _need_files([path]):
@@ -243,6 +255,7 @@ def build_server():
         flag(a, "--language", language)
         transition_args(a, transition, transition_duration, transition_every, transition_min_gap, seed, jl, audio_fade)
         mix_args(a, music, music_volume, music_start, no_duck, sfx, sfx_volume, target_lufs, no_normalize)
+        kit_args(a, sfx_kit, kit_sounds, kit_volume, sfx_align)
         a += list(extra_args or [])
         return _dumps(launch(a))
 
@@ -291,9 +304,13 @@ def build_server():
                           transition_every: int = 1, sfx: list[str] | None = None, keep_audio: bool = False,
                           fit: str = "crop", fps: float | None = None, music_volume: float = -16.0,
                           music_start: float = 0.0, target_lufs: float = -14.0, seed: int | None = None,
+                          sfx_kit: str | None = None, kit_sounds: dict[str, str] | None = None,
+                          kit_volume: float = 0.0, sfx_align: str = "start",
                           extra_args: list[str] | None = None) -> str:
         """Montage de PLUSIEURS vidéos et/ou photos (dans l'ordre donné), chaque coupe calée sur un temps de la
         musique (beats_per_clip=4 → un clip par mesure ; 2 pour plus nerveux). Photos animées (Ken Burns).
+        sfx_kit='cinematic' : sound design complet calé sur les pics (focus à l'ouverture, whoosh sur whip/zoom,
+        déclic sur flash, glitch, clic sur les coupes sèches, riser vers le 1er gros raccord, ambiance de fin).
         size : '1080x1920' vertical (TikTok/Reels/Shorts), '1920x1080' YouTube, '1080x1080' carré.
         Idéal pour pubs, récaps, reels. Pour ajouter accroche/prix/CTA, enchaîner avec cutkiller_text."""
         if err := _need_files(inputs):
@@ -310,6 +327,7 @@ def build_server():
         flag(a, "--keep-audio", keep_audio)
         transition_args(a, transition, transition_duration, transition_every, 0.0, seed, 0.0, None)
         mix_args(a, music, music_volume, music_start, False, sfx, -8.0, target_lufs, False)
+        kit_args(a, sfx_kit, kit_sounds, kit_volume, sfx_align)
         a += list(extra_args or [])
         return _dumps(launch(a))
 
@@ -394,15 +412,24 @@ def build_server():
     @tool
     def cutkiller_animate_code(code: str, name: str = "animation", preview_times: list[float] | None = None,
                                render: bool = False, output: str | None = None, like: str | None = None,
-                               size: str | None = None, duration: float | None = None, fps: float | None = None):
-        """Animation SUR MESURE : `code` = script Python définissant frame(t, ctx) → image RGBA (et DURATION, facultatif).
+                               size: str | None = None, duration: float | None = None, fps: float | None = None,
+                               language: str = "python"):
+        """Animation SUR MESURE, en Python ou en HTML.
+        language='python' : `code` = script définissant frame(t, ctx) → image RGBA (et DURATION, facultatif).
         Outils de ctx : blank(), text(img, txt, (x,y), size=, color=, alpha=, scale=, rotate=, stroke=), rect(), circle()
         (arcs), line(), polygon(), paste(img, 'logo.png', (x,y), scale=), glow(), prog(t, a, b, 'out_back'), in_out(),
-        measure()/fit() ; coordonnées en fractions 0..1. Le code s'exécute sur cette machine.
+        measure()/fit() ; coordonnées en fractions 0..1.
+        language='html' : `code` = une page HTML autonome (CSS, JS, canvas, SVG, WebGL), comme les prompts de motion
+        design (Prompt Motion…). Fond transparent (body{background:transparent}). Temps : définir
+        window.cutkillerSeek(t) (recommandé, déterministe) OU utiliser animations CSS / requestAnimationFrame /
+        performance.now (horloge pilotée image par image). Durée : <meta name="duration" content="4"> ou duration.
+        window.CUTKILLER = {width, height, fps, duration} est disponible. Le code s'exécute sur cette machine.
         render=False : renvoie les IMAGES CLÉS (à regarder avant de valider). render=True : rend la vidéo à alpha."""
         ANIM_DIR.mkdir(parents=True, exist_ok=True)
         safe = re.sub(r"[^\w-]", "_", name)[:40] or "animation"
-        script = ANIM_DIR / f"{safe}.py"
+        if language not in ("python", "html"):
+            return _dumps({"status": "error", "error": "language : 'python' ou 'html'"})
+        script = ANIM_DIR / f"{safe}.{'html' if language == 'html' else 'py'}"
         script.write_text(code, encoding="utf-8")
         out = Path(output) if output else ANIM_DIR / f"{safe}.mov"
         a = ["animate", str(script), "-o", str(out)]
@@ -441,6 +468,29 @@ def build_server():
             frames.append(f)
         return _with_sheet({"status": "done", "file": str(src), "duration": round(dur, 2)}, frames,
                            tmp / f"{src.stem}_sheet.png", [f"{t:.2f} s" for t in times])
+
+    @tool
+    def cutkiller_texture(path: str, output: str | None = None, grain: float = 0.0, grain_file: str | None = None,
+                          grain_mode: str = "overlay", grain_opacity: float = 0.6, dither: str | None = None,
+                          colors: int = 16, pixel: int = 1, vignette: float = 0.0) -> str:
+        """Textures de finition : grain argentique procédural (grain 0..1 : 0.25 discret, 0.5 marqué), vraie pellicule
+        scannée bouclée (grain_file : Super 8/16 mm, poussières, rayures ; grain_mode overlay/softlight si fond gris,
+        screen si fond noir), rendu rétro tramé (dither bayer|floyd_steinberg, colors 2-256, pixel 3-4 = gros pixels),
+        vignettage 0..1. À appliquer en fin de chaîne, avant le texte/sous-titres."""
+        if err := _need_files([path] + ([grain_file] if grain_file else [])):
+            return _dumps(err)
+        a = ["texture", str(Path(path).expanduser())]
+        flag(a, "-o", output)
+        flag(a, "--grain", grain or None)
+        flag(a, "--grain-file", grain_file)
+        flag(a, "--grain-mode", grain_mode if grain_file else None)
+        flag(a, "--grain-opacity", grain_opacity if grain_file else None)
+        flag(a, "--dither", dither)
+        if dither:
+            flag(a, "--colors", colors)
+            flag(a, "--pixel", pixel)
+        flag(a, "--vignette", vignette or None)
+        return _dumps(launch(a))
 
     @tool
     def cutkiller_overlay(path: str, layers: list[str], output: str | None = None) -> str:

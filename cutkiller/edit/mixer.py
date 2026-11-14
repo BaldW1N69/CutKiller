@@ -27,8 +27,10 @@ class MusicBed:
 @dataclass
 class SfxCue:
     path: Path
-    times: list[float]
+    times: list[float]  # début du son dans la vidéo ; négatif = le son commence avant 0 (début coupé)
     gain_db: float = -8.0
+    loop_for: float | None = None  # nappe : bouclée/coupée à cette durée
+    fade: float = 0.0  # fondu d'entrée et de sortie (s)
 
 
 @dataclass
@@ -83,19 +85,27 @@ def build_mix_filter(plan: MixPlan, duration: float, has_voice: bool) -> tuple[s
         idx += 1
 
     for k, cue in enumerate(plan.sfx):
-        times = [t for t in cue.times if 0 <= t < duration]
+        times = [t for t in cue.times if -30.0 < t < duration]
         if not times:
             continue
-        inputs.append(["-i", str(cue.path)])
+        inputs.append((["-stream_loop", "-1"] if cue.loop_for else []) + ["-i", str(cue.path)])
         src = f"[{idx}:a]{FMT},volume={cue.gain_db}dB"
+        if cue.loop_for:
+            length = min(cue.loop_for, duration)
+            src += f",atrim=0:{length:.3f},asetpts=PTS-STARTPTS"
+            if cue.fade:
+                f = min(cue.fade, length / 2)
+                src += f",afade=t=in:st=0:d={f:.3f},afade=t=out:st={length - f:.3f}:d={f:.3f}"
         if len(times) == 1:
             parts.append(f"{src}[sfx{k}_0]")
         else:
             outs = "".join(f"[sfx{k}_{j}]" for j in range(len(times)))
             parts.append(f"{src},asplit={len(times)}{outs}")
         for j, t in enumerate(times):
-            ms = int(round(t * 1000))
-            parts.append(f"[sfx{k}_{j}]adelay={ms}:all=1[sfx{k}_{j}d]")
+            if t < 0:  # le son démarre avant la vidéo : on coupe son début pour garder l'impact au bon endroit
+                parts.append(f"[sfx{k}_{j}]atrim=start={-t:.3f},asetpts=PTS-STARTPTS[sfx{k}_{j}d]")
+            else:
+                parts.append(f"[sfx{k}_{j}]adelay={int(round(t * 1000))}:all=1[sfx{k}_{j}d]")
             mix_labels.append(f"[sfx{k}_{j}d]")
         idx += 1
 

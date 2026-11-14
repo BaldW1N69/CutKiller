@@ -1,3 +1,4 @@
+import os
 import subprocess
 import wave
 from pathlib import Path
@@ -77,3 +78,8 @@ def music_wav(media_dir) -> Path:
 def sfx_wav(media_dir) -> Path:
     t = np.arange(int(0.3 * SR)) / SR
     return write_wav(media_dir / "whoosh.wav", (0.5 * np.sin(2 * np.pi * 600 * t) * np.exp(-t * 8)).astype(np.float32))
+
+
+# Chromium préinstallé (CI, conteneurs) : utilisé par les tests HTML si Playwright n'a pas le sien
+if not os.environ.get("CUTKILLER_CHROMIUM") and Path("/opt/pw-browsers/chromium").exists():
+    os.environ["CUTKILLER_CHROMIUM"] = "/opt/pw-browsers/chromium"

@@ -5,7 +5,7 @@ description: Use when the user asks to make, edit or produce a video — montage
 
 # Montage vidéo avec CutKiller
 
-CutKiller fait la base : écoute audio, coupes, 280+ transitions, musique + SFX libres de droits (avec crédits), montage sur le rythme, texte incrusté, animations (préréglages ou scripts écrits par toi), incrustation de calques, sous-titres animés. Tout travail vidéo démarre ici. Si une capacité manque, dis-le franchement et complète autour (voir « Limites »), sans réécrire du ffmpeg à la main pour ce que CutKiller fait déjà.
+CutKiller fait la base : écoute audio, coupes, 280+ transitions, musique + SFX libres de droits (avec crédits), sound design calé sur les transitions, montage sur le rythme, texte incrusté, animations (préréglages, scripts Python ou pages HTML écrits par toi), incrustation de calques, grain/dither, sous-titres animés. Tout travail vidéo démarre ici. Si une capacité manque, dis-le franchement et complète autour (voir « Limites »), sans réécrire du ffmpeg à la main pour ce que CutKiller fait déjà.
 
 ## 0. Quels outils utiliser
 
@@ -36,12 +36,34 @@ Plateforme/format, durée, ton, ressources (rushs, photos, logo, texte à affich
 | Titre, compteur, bouton CTA, lower third, logo, flèche… animés | `animate <préréglage> clé=valeur --like video.mp4 -o anim.mov` puis `overlay video.mp4 --add "anim.mov@2"` |
 | **Animation spécifique** (forme, mouvement, style de marque, idée originale) | **Skill `animation` : tu écris le code de l'animation toi-même**, tu regardes les images clés, puis tu incrustes avec `overlay` |
 | Logo, image, light leak, vidéo fond vert par-dessus | `overlay video.mp4 --add "logo.png@0-3?pos=top-right&scale=0.2"` ; `--add "leak.mp4@4?mode=screen"` |
+| Look pellicule / rétro (grain, Super 8, dither, vignettage) | `texture video.mp4 --grain 0.3 --vignette 0.4` ; vrai grain scanné : `--grain-file grain16mm.mov --grain-mode softlight` ; rétro : `--dither bayer --colors 16 --pixel 3` |
 | Choisir une transition | `transitions list --tag glitch`, `transitions preview gl:Cube` |
 | Choisir un son | `sounds search "whoosh" --kind sfx --max-duration 3` |
 
-Ordre quand tu combines : **montage/auto → overlay (animations, logo) → captions/text** (le texte se grave en dernier, sur l'image finale). Ne superpose pas deux textes au même endroit au même instant : titre au centre, sous-titres dans le tiers bas (défaut de `captions`).
+Ordre quand tu combines : **montage/auto → overlay (animations, logo) → texture (grain, dither) → captions/text** (le texte se grave en dernier, sur l'image finale, sans grain par-dessus). Ne superpose pas deux textes au même endroit au même instant : titre au centre, sous-titres dans le tiers bas (défaut de `captions`).
 
 Réglages de transition : durée 0,2–0,4 s ; en face caméra, une transition toutes les 3 coupes au plus (`--transition-every 3`), jamais de 3D ni de glitch sur de la parole ; en pub, `random:dynamic` + `whoosh@transitions` ; en contenu posé, `fade` ou `random:clean`. `--seed N` rend un tirage aléatoire reproductible (utile pour refaire le même rendu).
+
+## 3 bis. Sound design : un son par événement, calé sur son impact
+
+`--sfx-kit` remplace le « même whoosh partout » : chaque événement reçoit le son qui lui correspond, et c'est le **pic** du son (ou son attaque) qui tombe sur la coupe, quelle que soit la longueur du fichier.
+
+| Événement | Son | Calage |
+|---|---|---|
+| Plan d'ouverture (plan d'ensemble) | `focus` : bip/moteur d'autofocus | au début du plan |
+| Whip, zoom, slide, spin | `whoosh` | pic du souffle sur la coupe |
+| Flash blanc, arrêt sur image | `flash` : déclic d'appareil photo | attaque sur la coupe |
+| Glitch, aberration chromatique | `glitch` | attaque sur la coupe |
+| Coupe sèche sur le temps | `click` | attaque sur la coupe |
+| Montée vers le premier gros raccord (après 3 s) | `riser` / build-up | sommet sur la coupe |
+| Dernier plan, fin calme | `ambience` (pluie, ville, room tone) | nappe en fondu, très bas |
+| Fondu, dissolution, volet doux | aucun | un whoosh sur un fondu sonne faux |
+
+- **Montage rythmé, pub, reel cinématique** : `montage … --transition "fx:whip_left|fx:flash|fx:zoom_punch|fade" --transition-every 2 --sfx-kit cinematic` (des coupes sèches restent entre les transitions, elles reçoivent un clic).
+- **Face caméra** : `auto … --sfx-kit minimal` (seulement le son des transitions ; jamais de clic sur les coupes de parole).
+- **Pack de l'utilisateur** (ex. pack « SFX » d'un créateur, Freesound) : `CUTKILLER_SOUNDS_DIR=dossier`. Les fichiers sont trouvés par leur nom (« Whoosh Cinematic.wav », « Camera Focus.mp3 », « Jolt Build Up.wav », « Click 10.wav ») avant toute banque en ligne. Pour forcer un fichier : `--kit-sound whoosh=sons/w.wav` ; `--kit-volume -3` baisse tout le kit.
+- `--sfx` reste disponible pour un son ponctuel ; ajoute `--sfx-align peak` (whoosh, riser) ou `onset` (clic, impact) pour le caler sur son impact plutôt que sur son début.
+- Couple toujours le visuel et le son : un flash blanc sans déclic, ou un whoosh sans mouvement à l'image, se remarque.
 
 ## 4. Pubs : structure à respecter
 
@@ -65,6 +87,19 @@ CutKiller ne **génère** ni images, ni clips, ni voix, ni musique originale : i
 ## 7. Livrer
 
 Donne : le **chemin du fichier**, la durée avant/après, ce qui a été fait (une ligne), et le **contenu du fichier `.credits.txt`** à coller en description (obligatoire pour les licences CC-BY / CC-BY-SA). Signale toute licence NC/ND : interdite en vidéo monétisée. Si un son n'a pas pu être téléchargé, dis lequel et ce qui l'a remplacé.
+
+## Ressources gratuites à proposer quand il en manque
+
+| Besoin | Où | Comment l'utiliser |
+|---|---|---|
+| SFX (500 000+ sons, CC0/CC-BY) | freesound.org | déjà branché : clé gratuite `FREESOUND_API_KEY`, ou fichiers téléchargés dans `CUTKILLER_SOUNDS_DIR` |
+| Vrai grain Super 8 / 16 mm, burns, light leaks, poussières | packs de grain scanné (ex. Film Looks, pack gratuit) | `texture --grain-file` (fond gris → `softlight`/`overlay`, fond noir → `screen`) ; light leak ponctuel : `overlay --add "leak.mov@3?mode=screen"` |
+| Look rétro tramé / ASCII | Ditherboy (navigateur) | ou directement `texture --dither bayer --pixel 3` |
+| Polices gratuites avec associations | fontshare.com (Satoshi, Clash Display, General Sans… licence gratuite d'ITF, y compris en commercial) | télécharger le `.otf`, puis `text --font Satoshi-Bold.otf`, `captions --font …`, `animate --font …` |
+| Modèles 3D | Sketchfab | CutKiller ne fait pas de 3D : rendu dans Blender (ou three.js dans une animation HTML), puis `overlay` |
+| Exemples de motion design avec leurs prompts | prompt-motion.com | skill `animation`, § 3 bis (une entrée à la fois, créateur crédité) |
+
+Vérifie toujours la licence de chaque ressource avant une vidéo commerciale, et ajoute les attributions demandées.
 
 ## Limites à annoncer (ne pas promettre)
 

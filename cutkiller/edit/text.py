@@ -126,15 +126,39 @@ def build_ass(cues: list[Cue], width: int, height: int, duration: float, *, size
     return "\n".join(header + lines) + "\n"
 
 
-def burn_ass(src: str | Path, dst: str | Path, ass: str, *, crf: int = 18) -> Path:
-    """Grave un script ASS (texte, sous-titres, animations libass) sur la vidéo."""
+def font_family(font: str | None) -> tuple[str | None, Path | None]:
+    """Nom de police OU fichier .ttf/.otf (ex. téléchargé sur Fontshare) → (famille pour l'ASS, fichier à charger)."""
+    if not font:
+        return font, None
+    p = Path(font).expanduser()
+    if p.suffix.lower() in (".ttf", ".otf", ".ttc") or p.exists():
+        if not p.exists():
+            raise ValueError(f"Police introuvable : {p}")
+        from PIL import ImageFont
+
+        family = ImageFont.truetype(str(p), 12).getname()[0]
+        return family, p.resolve()
+    return font, None
+
+
+def burn_ass(src: str | Path, dst: str | Path, ass: str, *, crf: int = 18, font_file: str | Path | None = None) -> Path:
+    """Grave un script ASS (texte, sous-titres, animations libass) sur la vidéo.
+    `font_file` : police .ttf/.otf non installée à charger en plus de celles du système."""
     src, dst = Path(src).resolve(), Path(dst).resolve()
     info = probe(src)
     if not info.has_video:
         raise ValueError(f"{src} n'a pas de piste vidéo.")
     with tempfile.TemporaryDirectory(prefix="cutkiller_text_") as tmp:
         (Path(tmp) / "cues.ass").write_text(ass, encoding="utf-8")
-        args = ["-i", str(src), "-vf", "ass=cues.ass", "-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast",
+        vf = "ass=cues.ass"
+        if font_file:
+            import shutil
+
+            fdir = Path(tmp) / "fonts"  # copie locale : pas d'échappement de chemin dans le filtre ffmpeg
+            fdir.mkdir()
+            shutil.copy2(font_file, fdir / Path(font_file).name)
+            vf += ":fontsdir=fonts"
+        args = ["-i", str(src), "-vf", vf, "-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast",
                 "-pix_fmt", "yuv420p"]
         args += ["-c:a", "copy"] if info.has_audio else ["-an"]
         if dst.suffix.lower() in {".mp4", ".mov", ".m4a"}:
@@ -147,5 +171,8 @@ def burn_text(src: str | Path, dst: str | Path, cues: list[Cue], *, crf: int = 1
     if not cues:
         raise ValueError("Aucun texte à incruster.")
     info = probe(src)
+    family, font_file = font_family(style.get("font"))
+    if family:
+        style["font"] = family
     ass = build_ass(cues, info.width or 1080, info.height or 1920, info.duration, **style)
-    return burn_ass(src, dst, ass, crf=crf)
+    return burn_ass(src, dst, ass, crf=crf, font_file=font_file)
