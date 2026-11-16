@@ -220,7 +220,9 @@ Silences : ≥ 400 ms = coupe propre ; 150–400 ms = utilisable avec vérificat
 
 - **video-use** (browser-use) : pipeline transcription → EDL JSON → rendu ffmpeg → auto-évaluation. Base méthodologique.
 - **LosslessCut** (mifi) : coupe sans perte, smart cut, détection silences/noirs/scènes, import/export EDL CMX 3600, XML Resolve, FCPXML, OTIO ; API HTTP + CLI. Base pour la coupe rapide et l'interop Resolve.
-- **DaVinci Resolve** : finition (étalonnage, Fairlight, export). Pilotable par script Python (API Resolve) ou via Filmit (`dv_*`).
+- **DaVinci Resolve** : finition (étalonnage, Fairlight, export). Pilotable par script Python (API Resolve) ou via Filmit (`dv_*`). Pont CutKiller : `resolve/cutkiller_bridge.py`.
+- **X-Raym DaVinci-Resolve-Scripts** (Lua) : exemples d'API — marqueurs (export CSV/chapitres YouTube, import), couleurs de clips depuis CSV, versions d'étalonnage par piste, découpe de clips. API utilisée : `GetProjectManager`, `GetItemListInTrack`, `SetClipColor`, `AddMarker`, `GetMarkers`, `AddVersion`/`LoadVersionByName`.
+- **Limite connue** : le pilotage *externe* (script lancé hors de Resolve) est réservé à Resolve Studio ; la version gratuite n'exécute les scripts que depuis Workspace > Scripts ou la console.
 
 ---
 
