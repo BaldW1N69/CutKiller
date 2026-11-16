@@ -1,0 +1,14 @@
+{
+  "name": "cutkiller",
+  "description": "CutKiller : montage vidéo piloté par l'écoute",
+  "owner": {
+    "name": "BaldW1N69"
+  },
+  "plugins": [
+    {
+      "name": "cutkiller",
+      "source": "./",
+      "description": "Skills montage + animation et serveur MCP local CutKiller : coupes, transitions, sons libres de droits, texte, sous-titres animés, animations sur mesure écrites par Claude."
+    }
+  ]
+}
