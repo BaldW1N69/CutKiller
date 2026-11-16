@@ -194,7 +194,74 @@ Media (import) → Cut (dérush/montage rapide) → Edit (montage) → Fusion (V
 
 ## 7. DaVinci Resolve — cours complet (Casey Faris) [S14]
 
-_À compléter : analyse en cours._
+> Source : analyse vidéo automatique (vidIQ) du cours de 5 h, pas une transcription. Les valeurs chiffrées marquées ⚠ sont plausibles mais à vérifier en pratique.
+
+### 7.1 Media `[13:20–28:45]`
+- Glisser un dossier dans la **liste des bins** (arborescence de gauche) recrée l'arborescence en bins ; dans le Media Pool, les fichiers arrivent en vrac.
+- **Smart Bins** : filtres dynamiques sur les métadonnées (scène, prise, codec, résolution).
+- Métadonnées : Scene / Take / Angle / Keywords (panneau Metadata > All Groups).
+- **Synchro son double système** : sélectionner vidéo + son externe → clic droit > Auto Sync Audio > Based on Waveform.
+
+### 7.2 Edit `[28:45–1:30:48]`
+- Ordre : assemblage (I/O + commandes d'édition) → empilement (plan large continu en V1, inserts en V2) → trim → J/L cuts et fondus audio → keyframes avec easing.
+- **Trims** :
+  - Sélection `A` : laisse un trou.
+  - **Ripple** (Trim `T`) : décale la suite, la timeline reste sans trou.
+  - **Slip** (`T`, moitié haute du clip) : change le contenu, garde durée et position.
+  - **Slide** (`T`, moitié basse) : déplace le clip en raccourcissant ses voisins.
+  - **J/L cut** : `Alt` + glisser le bord audio indépendamment de la vidéo.
+  - Supprimer une coupe inutile : clic droit > Delete Through Edit.
+- **Raccourcis** : `J/K/L` (lecture arrière / stop / avant, `L`×2 = vitesse ×2), `I/O`, `B` lame, `Ctrl+\` couper à la tête de lecture, `Ctrl+Shift+[` / `]` ripple trim début/fin jusqu'à la tête de lecture, `N` magnétisme, `M` marqueur, `Ctrl+R` retime, `Ctrl+F` plein écran.
+- **Commandes d'édition** : Insert `F9`, Overwrite `F10`, Replace `F11`, Place on Top `F12`, Append at End `Shift+F12`.
+- **Fondu audio sur une coupe** : 12 ou 24 images.
+- **Inspector** : Transform, Cropping (adoucissement), Composite (modes, opacité), Stabilisation (Perspective / Similarity / Translation, Camera Lock), Retime (speed points pour les rampes de vitesse).
+- **Easing** : Curve Editor → aplatir les tangentes → courbe ease-out. Jamais linéaire (cohérent avec la règle de video-use).
+
+### 7.3 Cut `[1:30:48–1:45:20]`
+- Double timeline (vue globale + vue zoomée), **Smart Insert** sur la coupe la plus proche.
+- **Multicam** : Sync Clips by Audio → Save Sync → Sync Bin → touches `1`–`9` pour choisir l'angle → Place on Top.
+
+### 7.4 Fusion `[1:45:50–2:50:31]`
+- Graphe de nœuds de gauche à droite : `MediaIn1 → … → MediaOut1`.
+- Entrées des nœuds : jaune = arrière-plan (fixe résolution et fréquence), vert = premier plan, bleu = masque.
+- Nœuds clés : Merge, Blur, ColorCorrector, BrightnessContrast, FastNoise, masques Polygon / Rectangle / Ellipse, Tracker (Match Move).
+- Raccourcis : `Shift+Espace` ajouter un outil, `F2` renommer, `1` / `2` afficher le nœud dans le viewer gauche / droit, `Ctrl+P` bypass.
+- Piège : un masque Polygon s'anime tout seul pendant qu'on fait défiler la timeline. Clic droit > Remove Polyline pour l'empêcher.
+
+### 7.5 Color `[2:50:31–4:17:11]`
+- **Gestion couleur** : DaVinci YRGB Color Managed, Automatic désactivé, traitement DaVinci Wide Gamut Intermediate, sortie Rec.709 Gamma 2.4. Taguer l'espace couleur d'entrée par caméra (profil log) plutôt que d'empiler des LUT.
+- **Ordre type des nœuds (clip)** : exposition/offset → balance des blancs → contraste/pivot → secondaires **en parallèle** (visage, yeux…). Nœud série `Alt+S`, parallèle `Alt+P`.
+- **Nœuds timeline** : look global appliqué à tous les plans (look, émulation pellicule, grain).
+- **Roues primaires** : Lift = noirs, Gamma = tons moyens, Gain = blancs, Offset = décalage global. Les roues Log ont des bornes réglables.
+- **Courbes** : S-curve pour le contraste ; Hue vs Hue / Hue vs Sat ; Lum vs Sat pour désaturer les noirs profonds (moins de bruit chromatique).
+- **Secondaires** : qualifieur HSL + Matte Finesse ; fenêtres de forme + Tracker (avant/arrière).
+- **Scopes** : waveform de 0 à 1023 (ni noirs bouchés ni blancs écrêtés) ; parade RGB équilibrée = neutre ; vectorscope : peau sur la skin line, saturation naturelle d'environ 50 % vers les cibles ⚠.
+- **Raccord plan à plan** : Grab Still sur le plan de référence (« héros ») → Play Still (volet de comparaison) → aligner les scopes. Clic molette sur une still = copier tout l'étalonnage.
+
+### 7.6 Fairlight `[4:17:11–4:53:18]`
+- **Chaîne** : clips → pistes → bus (dialogues, effets, musique) → Bus 1 (sortie principale).
+- **Dialogues sur pistes mono** (Clip Attributes > Audio pour séparer un clip double mono).
+- Modes : Range `R` (sélection de plage), Focus (hybride) ; grouper des pistes `Ctrl+G`.
+- **Compresseur voix** ⚠ : seuil −20 à −14 dB, ratio 2:1 à 4:1, réduction de gain visée 2–4 dB, makeup +2 à +4 dB.
+- **EQ** paramétrique 4 à 6 bandes ; passe-bas pour un son « à travers une porte ».
+- Automation : `Alt+clic` ajoute un point sur la ligne d'automation.
+- Outils IA de Resolve Studio : Voice Isolation, Dialogue Leveler, Music Editor.
+
+### 7.7 Deliver `[4:53:18–5:10:00]`
+
+| Cible | Conteneur / codec | Audio |
+|---|---|---|
+| Web / YouTube | MP4 ou MOV, H.265 (ou H.264) | AAC 320 kbps, 48 kHz |
+| Master / archive | MOV ProRes 422 HQ (4444 si alpha) | PCM 24 bits ou 32 bits flottant |
+| Échange avec Avid / autre logiciel | MXF DNxHR HQX | PCM 24 bits |
+
+- Modes de rendu : *Single clip* (master) ou *Individual clips* (un fichier par clip).
+- **Astuce YouTube** ⚠ : exporter du 1080p en UHD 3840×2160 pour obtenir l'encodage VP9/AV1 à plus haut débit.
+- **Stems audio** : Output Track = « All Timeline Tracks » → une piste séparée par piste de timeline dans le fichier.
+
+### 7.8 Ce que CutKiller peut automatiser (API de script Resolve)
+- Import, bins, métadonnées, création de timeline, pose de clips, marqueurs, couleurs de clips, versions d'étalonnage, file de rendu : **oui** (API officielle).
+- Trims fins (ripple / slip / slide), transitions, keyframes, nœuds Color/Fusion détaillés, mixage Fairlight : **limités ou absents** dans l'API. Stratégie : calculer la coupe hors de Resolve (EDL/FCPXML généré par CutKiller), l'importer, et laisser l'étalonnage et le mixage fins à l'humain ou à des presets (LUT, PowerGrade, presets Fairlight).
 
 ---
 
