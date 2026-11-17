@@ -200,45 +200,98 @@ def punch_zooms(n_clips: int, joins: list[Join], pattern: list[float]) -> list[f
     return zooms
 
 
+@dataclass
+class _Run:
+    """Une lecture d'une source : seek rapide puis décodage continu pour un groupe de clips proches."""
+    src: Path
+    clips: list[int]
+    seek_frame: int = 0  # frame (cadence de sortie) où démarre le décodage
+    end_s: float = 0.0  # fin utile (s, temps source)
+
+
+SEEK_GAP_S = 3.0  # au-delà, un nouveau seek coûte moins que décoder le trou (keyframe + préroll ≈ 1-3 s)
+PREROLL_S = 1.0
+
+
+def _plan_runs(plan: TimelinePlan, ranges: list[tuple[float, float]]) -> list[_Run]:
+    """Regroupe les clips d'une même source dont les plages (s) sont proches : un seul décodage par groupe.
+    Une source montée par morceaux éloignés (montage : un extrait de 2 s au milieu de 20 s) n'est plus
+    décodée et mise à l'échelle en entier ; une source coupée finement (jump cuts) reste en un seul run."""
+    F = plan.fmt.fps
+    by_src: dict[Path, list[int]] = {}
+    for i, c in enumerate(plan.clips):
+        by_src.setdefault(c.src, []).append(i)
+    runs: list[_Run] = []
+    for src, idx in by_src.items():
+        idx = sorted(idx, key=lambda i: ranges[i][0])
+        cur: _Run | None = None
+        for i in idx:
+            a, b = ranges[i]
+            if cur is None or a - cur.end_s > SEEK_GAP_S:
+                cur = _Run(src, [], 0, b)
+                runs.append(cur)
+            cur.clips.append(i)
+            cur.end_s = max(cur.end_s, b)
+        for r in runs:
+            if r.src == src:
+                first = min(ranges[i][0] for i in r.clips)
+                r.seek_frame = max(0, int(math.floor((first - PREROLL_S) * F)))
+    return runs
+
+
 def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audio: bool,
-                zoom_ramp: int = 3) -> tuple[str, list[Path]]:
-    srcs: list[Path] = []
-    for c in plan.clips:
-        if c.src not in srcs:
-            srcs.append(c.src)
-    inputs = srcs + [trans_files[k] for k in sorted(trans_files)]
-    tidx = {k: len(srcs) + n for n, k in enumerate(sorted(trans_files))}
+                zoom_ramp: int = 3) -> tuple[str, list[tuple[list[str], Path]]]:
+    """Retourne (filtergraph, entrées) ; chaque entrée = (options avant -i, fichier)."""
     F = plan.fmt.fps
     parts: list[str] = []
 
-    # --- vidéo : une normalisation par source puis split vers chaque morceau
-    pieces: list[tuple[int, int, int]] = []  # (src index, start_frame, end_frame) ou transition
-    piece_clip: list[int] = []  # clip d'origine de chaque morceau
+    # --- morceaux vidéo (hors fenêtres de transition) et plages audio de chaque clip
+    piece_of: dict[int, tuple[int, int]] = {}  # clip -> (start_frame, end_frame) source
     order: list[tuple[str, int]] = []
     for i, c in enumerate(plan.clips):
         r_prev = plan.joins[i - 1].n - plan.joins[i - 1].x if i > 0 else 0
         x = plan.joins[i].x if i < len(plan.joins) else 0
         s, e = c.sf + r_prev, c.ef - x
         if e > s:
-            order.append(("m", len(pieces)))
-            pieces.append((srcs.index(c.src), s, e))
-            piece_clip.append(i)
+            order.append(("m", i))
+            piece_of[i] = (s, e)
         if i in trans_files:
             order.append(("t", i))
-    by_src: dict[int, list[int]] = {}
-    for p, (k, _, _) in enumerate(pieces):
-        by_src.setdefault(k, []).append(p)
+    bounds = _audio_bounds(plan) if audio else None
+    ranges = []
+    for i, c in enumerate(plan.clips):
+        lo, hi = c.sf / F, c.ef / F
+        if bounds and c.info.has_audio:
+            lo, hi = min(lo, bounds[i][0]), max(hi, bounds[i][1])
+        ranges.append((max(0.0, lo), hi))
+    runs = _plan_runs(plan, ranges)
+    run_of = {i: k for k, r in enumerate(runs) for i in r.clips}
+
+    inputs: list[tuple[list[str], Path]] = []
+    for r in runs:
+        pre = ["-ss", f"{r.seek_frame / F:.6f}"] if r.seek_frame > 0 else []
+        dur = r.end_s - r.seek_frame / F + 2.0 / F + 0.5  # marge : la fin est coupée par trim/atrim
+        inputs.append((pre + ["-t", f"{dur:.6f}"], r.src))
+    tidx = {}
+    for k in sorted(trans_files):
+        tidx[k] = len(inputs)
+        inputs.append(([], trans_files[k]))
+
     norm = norm_chain(plan.fmt, fit)
-    for k, plist in by_src.items():
-        outs = "".join(f"[vs{p}]" for p in plist)
+    for k, r in enumerate(runs):
+        plist = [i for i in r.clips if i in piece_of]
+        if not plist:
+            continue
+        outs = "".join(f"[vs{i}]" for i in plist)
         parts.append(f"[{k}:v]{norm},split={len(plist)}{outs}" if len(plist) > 1 else f"[{k}:v]{norm}[vs{plist[0]}]")
     labels = []
     W, H = plan.fmt.width, plan.fmt.height
     for kind, idx in order:
         if kind == "m":
-            _, s, e = pieces[idx]
-            i = piece_clip[idx]
+            i = idx
             c = plan.clips[i]
+            off = runs[run_of[i]].seek_frame
+            s, e = piece_of[i][0] - off, piece_of[i][1] - off
             # voisins reliés par une coupe franche (pas de transition) : rampe de zoom à cheval sur la coupe
             zp = plan.clips[i - 1].zoom if i > 0 and plan.joins[i - 1].n == 0 else None
             zn = plan.clips[i + 1].zoom if i < len(plan.joins) and plan.joins[i].n == 0 else None
@@ -248,19 +301,18 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
                 expr = _zoom_expr(c.zoom, zp, zn, e - s, zoom_ramp)
                 zoom = (f",zoompan=z='{expr}':x='(iw-iw/zoom)*{fx:.4f}':y='(ih-ih/zoom)*{fy:.4f}':d=1:"
                         f"s={W}x{H}:fps={F},setsar=1,setpts=PTS-STARTPTS")
-            parts.append(f"[vs{idx}]trim=start_frame={s}:end_frame={e},setpts=PTS-STARTPTS{zoom}[vp{idx}]")
-            labels.append(f"[vp{idx}]")
+            parts.append(f"[vs{i}]trim=start_frame={s}:end_frame={e},setpts=PTS-STARTPTS{zoom}[vp{i}]")
+            labels.append(f"[vp{i}]")
         else:
             parts.append(f"[{tidx[idx]}:v]setpts=PTS-STARTPTS,fps={F},setsar=1,format=yuv420p[vt{idx}]")
             labels.append(f"[vt{idx}]")
     parts.append(f"{''.join(labels)}concat=n={len(labels)}:v=1:a=0[outv]")
 
     if audio:
-        bounds = _audio_bounds(plan)
         a_by_src: dict[int, list[int]] = {}
         for i, c in enumerate(plan.clips):
             if c.info.has_audio:
-                a_by_src.setdefault(srcs.index(c.src), []).append(i)
+                a_by_src.setdefault(run_of[i], []).append(i)
         for k, ilist in a_by_src.items():
             outs = "".join(f"[as{i}]" for i in ilist)
             parts.append(f"[{k}:a]{AUDIO_FMT},asetpts=PTS-STARTPTS,asplit={len(ilist)}{outs}" if len(ilist) > 1
@@ -274,7 +326,8 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
                 fades.append(f"afade=t=out:st={max(0.0, e - s - MICRO_FADE):.6f}:d={MICRO_FADE}")
             tail = ("," + ",".join(fades)) if fades else ""
             if c.info.has_audio:
-                parts.append(f"[as{i}]atrim=start={s:.6f}:end={e:.6f},asetpts=PTS-STARTPTS{tail}[ap{i}]")
+                off = runs[run_of[i]].seek_frame / F
+                parts.append(f"[as{i}]atrim=start={s - off:.6f}:end={e - off:.6f},asetpts=PTS-STARTPTS{tail}[ap{i}]")
             else:
                 parts.append(f"anullsrc=channel_layout=stereo:sample_rate=48000,atrim=duration={e - s:.6f}[ap{i}]")
         acc = "[ap0]"
@@ -348,8 +401,8 @@ def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fm
         script = Path(tmp) / "graph.txt"
         script.write_text(graph, encoding="utf-8")
         args = []
-        for p in inputs:
-            args += ["-i", str(p)]
+        for pre, p in inputs:
+            args += [*pre, "-i", str(p)]
         args += ["-filter_complex_script", str(script), "-map", "[outv]", "-c:v", "libx264", "-crf", str(crf),
                  "-preset", preset, "-pix_fmt", "yuv420p", "-r", str(plan.fmt.fps)]
         if has_audio:

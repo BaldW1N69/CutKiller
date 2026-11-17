@@ -177,3 +177,45 @@ def test_parallel_transitions_match_sequential(talk_video, tmp_path):
     render_timeline(clips, joins, tmp_path / "seq.mp4", fmt=FMT, audio=False, jobs=1)
     render_timeline(clips, joins, tmp_path / "par.mp4", fmt=FMT, audio=False, jobs=3)
     assert _frame_md5(tmp_path / "seq.mp4") == _frame_md5(tmp_path / "par.mp4")
+
+
+@pytest.fixture(scope="module")
+def long_video(tmp_path_factory):
+    out = tmp_path_factory.mktemp("long") / "long.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25", "-f", "lavfi",
+                    "-i", "sine=frequency=330:sample_rate=48000", "-t", "20", "-g", "50", "-c:v", "libx264",
+                    "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(out)], check=True)
+    return out
+
+
+def _md5(path, stream) -> str:
+    return subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-map", f"0:{stream}", "-f", "md5", "-"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_seek_runs_are_frame_exact(long_video, tmp_path, monkeypatch):
+    """Seeking to each far-apart clip must give the same frames and samples as decoding the whole source."""
+    import cutkiller.edit.timeline as tl
+
+    clips = [Clip(long_video, 2.0, 3.0), Clip(long_video, 9.0, 10.2), Clip(long_video, 15.0, 16.0),
+             Clip(long_video, 16.4, 17.4)]
+    joins = [Join(resolve("xfade:fade"), 0.4), Join(), Join(jl=0.2)]
+    render_timeline(clips, joins, tmp_path / "seek.mkv", fmt=FMT, jobs=1)
+    graph, inputs = tl.build_graph(tl.plan_timeline(clips, joins, FMT), {}, "crop", True)
+    assert sum(p == long_video for _, p in inputs) == 3  # 2 s, 9 s and 15-17 s: three seeks
+    monkeypatch.setattr(tl, "SEEK_GAP_S", 1e9)
+    monkeypatch.setattr(tl, "PREROLL_S", 1e9)  # one run from 0: the former full-decode behaviour
+    render_timeline(clips, joins, tmp_path / "full.mkv", fmt=FMT, jobs=1)
+    assert _md5(tmp_path / "seek.mkv", "v") == _md5(tmp_path / "full.mkv", "v")
+    # audio is AAC-encoded: same length, no lag, difference far below the signal (encoder noise only)
+    a, b = _pcm(tmp_path / "seek.mkv"), _pcm(tmp_path / "full.mkv")
+    assert a.size == b.size
+    lag = int(np.argmax(np.correlate(a[24000:28000], b[23950:28050], "valid"))) - 50
+    assert lag == 0
+    assert np.sqrt(np.mean((a - b) ** 2)) < 0.02 * np.sqrt(np.mean(b ** 2))
+
+
+def _pcm(path) -> np.ndarray:
+    out = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "f32le", "-ac", "1", "-"],
+                         capture_output=True, check=True).stdout
+    return np.frombuffer(out, np.float32)
