@@ -9,3 +9,6 @@ dist/
 *.wav
 *.mp3
 !tests/fixtures/**
+
+# benchmark fixtures and outputs
+bench/.work/
