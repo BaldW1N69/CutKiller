@@ -655,6 +655,7 @@ def cmd_mix(a: argparse.Namespace) -> int:
 
 def cmd_auto(a: argparse.Namespace) -> int:
     from cutkiller.edit.cutlist import output_cut_points, total_duration
+    from cutkiller.media import atomic_output
     from cutkiller.edit.mixer import render_mix
     from cutkiller.edit.render import render_cuts
 
@@ -667,11 +668,12 @@ def cmd_auto(a: argparse.Namespace) -> int:
     print("2/4 Sons…")
     plan, credits = _prepare_mix(a, total_duration(segs), output_cut_points(segs), clicks=False)
     print("3/4 Coupe" + (" + transitions…" if a.transition else "…"))
-    cut = render_cuts(src, final.with_name(final.stem + ".tmp" + final.suffix), segs, joins=joins, log=print,
-                      **_punch(a, len(segs), joins))
-    print("4/4 Mixage…")
+    cut = final.with_name(f".{final.stem}.cut{final.suffix}")  # intermédiaire caché, supprimé quoi qu'il arrive
     try:
-        render_mix(cut, final, plan)
+        with atomic_output(final) as tmp_final:
+            render_cuts(src, cut, segs, joins=joins, log=print, **_punch(a, len(segs), joins))
+            print("4/4 Mixage…")
+            render_mix(cut, tmp_final, plan)
     finally:
         cut.unlink(missing_ok=True)
     return _finish(final, credits)
@@ -684,7 +686,7 @@ def cmd_montage(a: argparse.Namespace) -> int:
     from cutkiller.edit.montage import MontageSettings, beat_grid, build_montage
     from cutkiller.edit.timeline import Join, plan_timeline, render_timeline
     from cutkiller.listen.beats import analyze_beats
-    from cutkiller.media import ANALYSIS_SR, load_audio, probe
+    from cutkiller.media import ANALYSIS_SR, atomic_output, load_audio, probe
     from cutkiller.sounds import Credits
     from cutkiller.transitions.frames import VideoFormat
 
@@ -728,13 +730,11 @@ def cmd_montage(a: argparse.Namespace) -> int:
         if mixplan.music:
             mixplan.music.duck = a.keep_audio and not a.no_duck
         print("3/4 Rendu vidéo…")
-        tmp = out.with_name(out.stem + ".tmp" + out.suffix)
+        tmp = Path(work) / f"timeline{out.suffix or '.mp4'}"
         render_timeline(clips, joins, tmp, fmt=fmt, fit=a.fit, audio=a.keep_audio, log=print)
         print("4/4 Mixage…")
-        try:
-            render_mix(tmp, out, mixplan)
-        finally:
-            tmp.unlink(missing_ok=True)
+        with atomic_output(out) as tmp_out:
+            render_mix(tmp, tmp_out, mixplan)
     return _finish(out, credits)
 
 
@@ -955,6 +955,14 @@ def _utf8_console() -> None:
             pass
 
 
+def _stdout_closed() -> bool:
+    try:
+        sys.stdout.flush()
+    except (BrokenPipeError, ValueError):
+        return True
+    return False
+
+
 def main(argv: list[str] | None = None) -> int:
     _utf8_console()
     args = build_parser().parse_args(argv)
@@ -962,8 +970,11 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args)
     except KeyboardInterrupt:
         return 130
-    except BrokenPipeError:  # `cutkiller ... | head` : fermeture normale du tube
-        return 0
+    except BrokenPipeError as exc:
+        if _stdout_closed():  # `cutkiller ... | head` : fermeture normale du tube
+            return 0
+        print(f"Erreur : un processus ffmpeg s'est arrêté en cours de route ({exc})", file=sys.stderr)
+        return 1
     except (RuntimeError, ValueError, OSError) as exc:
         print(f"Erreur : {exc}", file=sys.stderr)
         return 1

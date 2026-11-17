@@ -29,7 +29,7 @@ def test_cli_listen_cut_mix_auto(talk_video, music_wav, sfx_wav, tmp_path, capsy
                  "--sfx", f"{sfx_wav}@cuts", "--sfx", f"{sfx_wav}@beats:4"]) == 0
     info = probe(out)
     assert info.has_video and info.has_audio and info.duration < 5
-    assert not (tmp_path / "auto.tmp.mp4").exists()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["auto.mp4", "r.json"]  # aucun intermédiaire laissé
 
 
 def test_cli_errors_are_clean(tmp_path, capsys):

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import functools
 import json
+import os
 import shutil
 import subprocess
-from dataclasses import dataclass
+import tempfile
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -36,9 +40,22 @@ class MediaInfo:
 
 
 def probe(path: str | Path) -> MediaInfo:
+    """Infos du média. Mis en cache par (chemin, date de modification, taille) : un fichier réécrit est re-sondé."""
     path = Path(path)
-    if not path.exists():
-        raise MediaError(f"Fichier introuvable : {path}")
+    try:
+        st = path.stat()
+    except OSError:
+        raise MediaError(f"Fichier introuvable : {path}") from None
+    info = _probe_cached(str(path.resolve()), st.st_mtime_ns, st.st_size)
+    return info if info.path == path else replace(info, path=path)
+
+
+@functools.lru_cache(maxsize=512)
+def _probe_cached(resolved: str, _mtime_ns: int, _size: int) -> MediaInfo:
+    return _probe(Path(resolved))
+
+
+def _probe(path: Path) -> MediaInfo:
     out = subprocess.run(
         [_require("ffprobe"), "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)],
         capture_output=True,
@@ -85,3 +102,20 @@ def run_ffmpeg(args: list[str], *, quiet: bool = True, cwd: str | Path | None = 
     if out.returncode != 0:
         raise MediaError(f"ffmpeg a échoué :\n{' '.join(cmd + args)[:2000]}\n{out.stderr[-3000:]}")
     return out
+
+
+@contextmanager
+def atomic_output(dst: str | Path):
+    """Écrit d'abord dans un fichier voisin caché, puis le renomme : jamais de sortie à moitié écrite.
+
+    Le fichier temporaire reste dans le même dossier (même disque : renommage instantané, pas de copie)."""
+    dst = Path(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{dst.stem}.", suffix=f".partial{dst.suffix}", dir=dst.parent)
+    os.close(fd)
+    tmp = Path(tmp)
+    try:
+        yield tmp
+        os.replace(tmp, dst)
+    finally:
+        tmp.unlink(missing_ok=True)

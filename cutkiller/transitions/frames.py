@@ -97,13 +97,24 @@ class FrameWriter:
         )
 
     def write(self, frame: np.ndarray) -> None:
-        self.proc.stdin.write(np.ascontiguousarray(frame[..., :3], dtype=np.uint8).tobytes())
+        try:
+            self.proc.stdin.write(np.ascontiguousarray(frame[..., :3], dtype=np.uint8).tobytes())
+        except (BrokenPipeError, OSError) as exc:
+            # ffmpeg died (disk full, bad path…): surface its own error instead of a bare EPIPE,
+            # which the CLI would otherwise mistake for a closed stdout and exit 0.
+            self.proc.kill()
+            err = self.proc.stderr.read().decode(errors="replace")
+            self.proc.wait()
+            raise RuntimeError(f"Encodage de la transition impossible ({self.path.name}) : {err[-800:] or exc}") from exc
 
     def __enter__(self) -> "FrameWriter":
         return self
 
     def __exit__(self, exc_type, *_):
-        self.proc.stdin.close()
+        try:
+            self.proc.stdin.close()
+        except OSError:
+            pass
         err = self.proc.stderr.read().decode(errors="replace")
         code = self.proc.wait()
         if code != 0 and exc_type is None:
