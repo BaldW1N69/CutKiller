@@ -234,3 +234,33 @@ def test_inline_xfade_matches_file_path(long_video, talk_video, tmp_path, monkey
     monkeypatch.setattr(tl, "inline_joins", lambda plan: set())
     render_timeline(clips, joins, tmp_path / "files.mkv", fmt=FMT, audio=False, jobs=1)
     assert _md5(tmp_path / "inline.mkv", "v") == _md5(tmp_path / "files.mkv", "v")
+
+
+def test_affine_fast_paths_match_general_bilinear():
+    """Separable zoom path and flat-gather sampling equal a naive 2-D bilinear sample."""
+    rng = np.random.default_rng(1)
+    img = rng.integers(0, 256, (37, 53, 3), dtype=np.uint8)
+    h, w = img.shape[:2]
+
+    def naive(scale, angle, dx, dy):
+        y, x = np.mgrid[0:h, 0:w].astype(np.float64)
+        cx, cy = (w - 1) / 2, (h - 1) / 2
+        u, v = x - cx - dx * w, y - cy - dy * h
+        c, s = np.cos(-angle), np.sin(-angle)
+        xs = np.clip((c * u - s * v) / scale + cx, 0, w - 1.001)
+        ys = np.clip((s * u + c * v) / scale + cy, 0, h - 1.001)
+        x0, y0 = xs.astype(int), ys.astype(int)
+        fx_, fy_ = (xs - x0)[..., None], (ys - y0)[..., None]
+        im = img.astype(np.float64)
+        top = im[y0, x0] * (1 - fx_) + im[y0, x0 + 1] * fx_
+        bot = im[y0 + 1, x0] * (1 - fx_) + im[y0 + 1, x0 + 1] * fx_
+        return top * (1 - fy_) + bot * fy_
+
+    for args in [(1.3, 0.0, 0.0, 0.0), (0.8, 0.0, 0.05, -0.1), (1.2, 0.3, 0.02, 0.0)]:
+        assert np.abs(fx.affine(img, *args) - naive(*args)).max() < 0.05
+    one = img[..., :1]  # any channel count
+    assert fx.affine(one, 1.1).shape == one.shape
+    blur = fx.motion_blur(img, 5, 1)
+    ref = np.stack([np.convolve(np.pad(img[r, :, 0].astype(float), (2, 3), mode="edge"), np.ones(5) / 5, "valid")[:w]
+                    for r in range(h)])
+    assert np.abs(blur[..., 0] - ref).max() < 0.01

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 
 import numpy as np
@@ -26,28 +27,58 @@ def bump(p: float) -> float:
 
 
 def sample(img: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """Échantillonnage bilinéaire avec bords étendus (clamp)."""
+    """Échantillonnage bilinéaire avec bords étendus (clamp).
+
+    Gathers 1-D sur l'image aplatie (bien plus rapides que l'indexation 2-D), conversion en float
+    après la lecture : seuls les pixels lus sont convertis."""
     h, w = img.shape[:2]
     xs = np.clip(xs, 0, w - 1.001)
     ys = np.clip(ys, 0, h - 1.001)
     x0, y0 = xs.astype(np.int32), ys.astype(np.int32)
     fx, fy = (xs - x0)[..., None], (ys - y0)[..., None]
-    im = img.astype(np.float32)
-    top = im[y0, x0] * (1 - fx) + im[y0, x0 + 1] * fx
-    bot = im[y0 + 1, x0] * (1 - fx) + im[y0 + 1, x0 + 1] * fx
-    return top * (1 - fy) + bot * fy
+    flat = img.reshape(h * w, -1)
+    i00 = y0 * w + x0
+    p00 = flat.take(i00, axis=0).astype(np.float32)
+    p01 = flat.take(i00 + 1, axis=0).astype(np.float32)
+    p10 = flat.take(i00 + w, axis=0).astype(np.float32)
+    p11 = flat.take(i00 + w + 1, axis=0).astype(np.float32)
+    top = p00 + (p01 - p00) * fx
+    bot = p10 + (p11 - p10) * fx
+    return top + (bot - top) * fy
+
+
+@functools.lru_cache(maxsize=8)
+def _axes(h: int, w: int) -> tuple[np.ndarray, np.ndarray]:
+    return np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32)
+
+
+def _sample_separable(img: np.ndarray, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+    """Bilinéaire quand x ne dépend que de la colonne et y que de la ligne (zoom, translation) :
+    interpolation des lignes puis des colonnes, deux gathers 1-D au lieu de quatre gathers 2-D."""
+    h, w = img.shape[:2]
+    xs = np.clip(xs, 0, w - 1.001)
+    ys = np.clip(ys, 0, h - 1.001)
+    x0, y0 = xs.astype(np.int32), ys.astype(np.int32)
+    fx, fy = (xs - x0)[None, :, None], (ys - y0)[:, None, None]
+    r0 = img.take(y0, axis=0).astype(np.float32)
+    rows = r0 + (img.take(y0 + 1, axis=0).astype(np.float32) - r0) * fy
+    c0 = rows.take(x0, axis=1)
+    return c0 + (rows.take(x0 + 1, axis=1) - c0) * fx
 
 
 def affine(img: np.ndarray, scale: float = 1.0, angle: float = 0.0, dx: float = 0.0, dy: float = 0.0) -> np.ndarray:
     """Zoom/rotation autour du centre + translation (en fraction de l'image)."""
     h, w = img.shape[:2]
-    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    xr, yr = _axes(h, w)
     cx, cy = (w - 1) / 2, (h - 1) / 2
-    u, v = x - cx - dx * w, y - cy - dy * h
+    u, v = xr - cx - dx * w, yr - cy - dy * h
+    if angle == 0.0:
+        return _sample_separable(img, u / scale + cx, v / scale + cy)
     c, s = np.cos(-angle), np.sin(-angle)
+    u, v = u[None, :], v[:, None]
     xs = (c * u - s * v) / scale + cx
     ys = (s * u + c * v) / scale + cy
-    return sample(img, xs, ys)
+    return sample(img, xs.astype(np.float32), ys.astype(np.float32))
 
 
 def motion_blur(img: np.ndarray, length: int, axis: int) -> np.ndarray:
@@ -56,12 +87,14 @@ def motion_blur(img: np.ndarray, length: int, axis: int) -> np.ndarray:
         return img.astype(np.float32)
     im = img.astype(np.float32)
     pad = [(0, 0)] * im.ndim
-    pad[axis] = (length // 2, length - length // 2)
+    pad[axis] = (length // 2 + 1, length - length // 2)  # +1 : zéro de tête de la somme cumulée
     p = np.pad(im, pad, mode="edge")
     c = np.cumsum(p, axis=axis, dtype=np.float32)
-    c = np.concatenate([np.zeros_like(np.take(c, [0], axis=axis)), c], axis=axis)
     n = im.shape[axis]
-    return (np.take(c, np.arange(length, length + n), axis=axis) - np.take(c, np.arange(0, n), axis=axis)) / length
+    hi = [slice(None)] * im.ndim
+    lo = [slice(None)] * im.ndim
+    hi[axis], lo[axis] = slice(length, length + n), slice(0, n)
+    return (c[tuple(hi)] - c[tuple(lo)]) / length
 
 
 def box_blur(img: np.ndarray, radius: int) -> np.ndarray:
@@ -164,8 +197,8 @@ def fx_rgb_split(a, b, p, prm):
     base = mix(a, b, ease(p))
     out = base.copy()
     s = float(prm.get("amount", 0.08)) * q
-    out[..., 0] = affine(base[..., :1].repeat(3, 2), 1 + s)[..., 0]
-    out[..., 2] = affine(base[..., 2:].repeat(3, 2), 1 - s / 2)[..., 0]
+    out[..., 0] = affine(base[..., :1], 1 + s)[..., 0]
+    out[..., 2] = affine(base[..., 2:], 1 - s / 2)[..., 0]
     return out
 
 
