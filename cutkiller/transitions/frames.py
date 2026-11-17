@@ -83,8 +83,14 @@ def read_all(src: str | Path, fmt: VideoFormat, fit: str = "stretch", alpha: boo
     return read_window(src, 0, n, fmt, fit, alpha=alpha)
 
 
+# Intermédiaires (fenêtres de transition) : x264 sans perte en 4:2:0. Avant : CRF 12, soit une
+# génération de pertes de plus sur chaque transition, réencodée ensuite dans le rendu final.
+# ultrafast : l'intermédiaire ne vit que le temps du rendu, la taille importe peu.
+LOSSLESS = ["-c:v", "libx264", "-qp", "0", "-preset", "ultrafast", "-pix_fmt", "yuv420p"]
+
+
 class FrameWriter:
-    """Encode des frames rgb24 en vidéo intermédiaire de haute qualité."""
+    """Encode des frames rgb24 en vidéo intermédiaire sans perte."""
 
     def __init__(self, path: str | Path, fmt: VideoFormat):
         self.path = Path(path)
@@ -92,7 +98,7 @@ class FrameWriter:
         self.proc = subprocess.Popen(
             [_require("ffmpeg"), "-nostdin", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
              "-s", f"{fmt.width}x{fmt.height}", "-r", str(fmt.fps), "-i", "-",
-             "-c:v", "libx264", "-preset", "veryfast", "-crf", "12", "-pix_fmt", "yuv420p", str(self.path)],
+             *LOSSLESS, str(self.path)],
             stdin=subprocess.PIPE, stderr=subprocess.PIPE,
         )
 

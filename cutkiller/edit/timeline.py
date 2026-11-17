@@ -21,6 +21,7 @@ from cutkiller.media import MediaInfo, probe, run_ffmpeg
 from cutkiller.transitions import Transition, fixed_duration
 from cutkiller.transitions import render as render_transition
 from cutkiller.transitions.frames import VideoFormat, norm_chain
+from cutkiller.transitions.xfade import xfade_filter
 
 AUDIO_FMT = "aformat=sample_rates=48000:channel_layouts=stereo"
 MICRO_FADE = 0.008
@@ -239,11 +240,18 @@ def _plan_runs(plan: TimelinePlan, ranges: list[tuple[float, float]]) -> list[_R
     return runs
 
 
+def inline_joins(plan: TimelinePlan) -> set[int]:
+    """Raccords dont la transition est un xfade ffmpeg : calculée dans le graphe principal, sans fichier
+    intermédiaire (un processus, un décodage et une génération d'encodage de moins par transition)."""
+    return {i for i, j in enumerate(plan.joins) if j.transition is not None and j.transition.family == "xfade"}
+
+
 def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audio: bool,
                 zoom_ramp: int = 3) -> tuple[str, list[tuple[list[str], Path]]]:
     """Retourne (filtergraph, entrées) ; chaque entrée = (options avant -i, fichier)."""
     F = plan.fmt.fps
     parts: list[str] = []
+    inline = inline_joins(plan) - set(trans_files)
 
     # --- morceaux vidéo (hors fenêtres de transition) et plages audio de chaque clip
     piece_of: dict[int, tuple[int, int]] = {}  # clip -> (start_frame, end_frame) source
@@ -255,7 +263,7 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
         if e > s:
             order.append(("m", i))
             piece_of[i] = (s, e)
-        if i in trans_files:
+        if i in trans_files or i in inline:
             order.append(("t", i))
     bounds = _audio_bounds(plan) if audio else None
     ranges = []
@@ -263,7 +271,15 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
         lo, hi = c.sf / F, c.ef / F
         if bounds and c.info.has_audio:
             lo, hi = min(lo, bounds[i][0]), max(hi, bounds[i][1])
-        ranges.append((max(0.0, lo), hi))
+        ranges.append([max(0.0, lo), hi])
+    # fenêtres xfade calculées dans ce graphe : A déborde après la fin du clip, B commence avant le sien
+    windows: dict[int, tuple[int, int]] = {}  # join -> (début fenêtre A, début fenêtre B), frames source
+    for i in inline:
+        j, a, b = plan.joins[i], plan.clips[i], plan.clips[i + 1]
+        windows[i] = (a.ef - j.x, b.sf - j.x)
+        ranges[i][1] = max(ranges[i][1], (a.ef - j.x + j.n) / F)
+        ranges[i + 1][0] = max(0.0, min(ranges[i + 1][0], (b.sf - j.x) / F))
+    ranges = [tuple(r) for r in ranges]
     runs = _plan_runs(plan, ranges)
     run_of = {i: k for k, r in enumerate(runs) for i in r.clips}
 
@@ -279,11 +295,18 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
 
     norm = norm_chain(plan.fmt, fit)
     for k, r in enumerate(runs):
-        plist = [i for i in r.clips if i in piece_of]
-        if not plist:
+        branches = []
+        for i in sorted(r.clips):
+            if i - 1 in windows:
+                branches.append(f"wb{i - 1}")
+            if i in piece_of:
+                branches.append(f"vs{i}")
+            if i in windows:
+                branches.append(f"wa{i}")
+        if not branches:
             continue
-        outs = "".join(f"[vs{i}]" for i in plist)
-        parts.append(f"[{k}:v]{norm},split={len(plist)}{outs}" if len(plist) > 1 else f"[{k}:v]{norm}[vs{plist[0]}]")
+        outs = "".join(f"[{b}]" for b in branches)
+        parts.append(f"[{k}:v]{norm},split={len(branches)}{outs}" if len(branches) > 1 else f"[{k}:v]{norm}{outs}")
     labels = []
     W, H = plan.fmt.width, plan.fmt.height
     for kind, idx in order:
@@ -303,6 +326,14 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
                         f"s={W}x{H}:fps={F},setsar=1,setpts=PTS-STARTPTS")
             parts.append(f"[vs{i}]trim=start_frame={s}:end_frame={e},setpts=PTS-STARTPTS{zoom}[vp{i}]")
             labels.append(f"[vp{i}]")
+        elif idx in windows:
+            j = plan.joins[idx]
+            wa, wb = windows[idx]
+            oa, ob = runs[run_of[idx]].seek_frame, runs[run_of[idx + 1]].seek_frame
+            parts.append(f"[wa{idx}]trim=start_frame={wa - oa}:end_frame={wa - oa + j.n},setpts=PTS-STARTPTS[xa{idx}]")
+            parts.append(f"[wb{idx}]trim=start_frame={wb - ob}:end_frame={wb - ob + j.n},setpts=PTS-STARTPTS[xb{idx}]")
+            parts.append(f"[xa{idx}][xb{idx}]{xfade_filter(j.transition.name, j.transition.params, j.n, F)}[vt{idx}]")
+            labels.append(f"[vt{idx}]")
         else:
             parts.append(f"[{tidx[idx]}:v]setpts=PTS-STARTPTS,fps={F},setsar=1,format=yuv420p[vt{idx}]")
             labels.append(f"[vt{idx}]")
@@ -355,13 +386,15 @@ def _render_one(args) -> Path:
     return render_transition(t, a_src, a_start, b_src, b_start, n, fmt, fit, out)
 
 
-def render_transitions(plan: TimelinePlan, fit: str, tmp: Path, *, log=None, jobs: int | None = None) -> dict[int, Path]:
+def render_transitions(plan: TimelinePlan, fit: str, tmp: Path, *, log=None, jobs: int | None = None,
+                       inline: bool = True) -> dict[int, Path]:
     """Rend chaque fenêtre de transition dans son fichier. Indépendantes entre elles : rendues en parallèle
     (processus séparés : le calcul numpy des fx ne partage pas le GIL). Les shaders GL restent dans ce
     processus, un contexte OpenGL par processus, pendant que les autres avancent."""
     todo = []
+    skip = inline_joins(plan) if inline else set()
     for i, j in enumerate(plan.joins):
-        if j.transition is None:
+        if j.transition is None or i in skip:
             continue
         a, b = plan.clips[i], plan.clips[i + 1]
         todo.append((i, (j.transition, a.src, a.ef - j.x, b.src, b.sf - j.x, j.n, plan.fmt, fit, tmp / f"t{i:05d}.mkv")))

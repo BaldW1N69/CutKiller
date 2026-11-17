@@ -219,3 +219,18 @@ def _pcm(path) -> np.ndarray:
     out = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "f32le", "-ac", "1", "-"],
                          capture_output=True, check=True).stdout
     return np.frombuffer(out, np.float32)
+
+
+@pytest.mark.parametrize("same_source", [True, False])
+def test_inline_xfade_matches_file_path(long_video, talk_video, tmp_path, monkeypatch, same_source):
+    """xfade computed inside the main graph gives the same frames as the (lossless) intermediate file."""
+    import cutkiller.edit.timeline as tl
+
+    other = long_video if same_source else talk_video
+    clips = [Clip(long_video, 2.0, 3.0), Clip(other, 3.4, 4.4), Clip(long_video, 12.0, 13.0)]
+    joins = [Join(resolve("xfade:slideleft"), 0.4), Join(resolve("xfade:fade"), 0.32)]
+    plan = render_timeline(clips, joins, tmp_path / "inline.mkv", fmt=FMT, audio=False, jobs=1)
+    assert all(j.n > 0 for j in plan.joins)
+    monkeypatch.setattr(tl, "inline_joins", lambda plan: set())
+    render_timeline(clips, joins, tmp_path / "files.mkv", fmt=FMT, audio=False, jobs=1)
+    assert _md5(tmp_path / "inline.mkv", "v") == _md5(tmp_path / "files.mkv", "v")

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cutkiller.media import run_ffmpeg
-from cutkiller.transitions.frames import VideoFormat, norm_chain, seek_args
+from cutkiller.transitions.frames import LOSSLESS, VideoFormat, norm_chain, seek_args
 
 XFADE = {
     "fade": "fondu enchaîné", "dissolve": "dissolution en grain", "fadeblack": "fondu au noir",
@@ -52,11 +52,8 @@ def tags_for(name: str) -> list[str]:
     return []
 
 
-def render(name: str, params: dict, a_src: Path, a_start: int, b_src: Path, b_start: int, n: int,
-           fmt: VideoFormat, fit: str, out: Path) -> Path:
-    dur = n / fmt.fps
-    seek_a, skip_a = seek_args(a_start, fmt.fps)
-    seek_b, skip_b = seek_args(b_start, fmt.fps)
+def xfade_filter(name: str, params: dict, n: int, fps: float) -> str:
+    """Filtre xfade complet pour une fenêtre de `n` images (les deux entrées commencent à 0)."""
     if name == "custom":
         expr = params.get("expr")
         if not expr:
@@ -64,12 +61,20 @@ def render(name: str, params: dict, a_src: Path, a_start: int, b_src: Path, b_st
         trans = f"transition=custom:expr='{expr}'"
     else:
         trans = f"transition={name}"
+    return f"xfade={trans}:duration={n / fps:.6f}:offset=0,format=yuv420p"
+
+
+def render(name: str, params: dict, a_src: Path, a_start: int, b_src: Path, b_start: int, n: int,
+           fmt: VideoFormat, fit: str, out: Path) -> Path:
+    """Fenêtre xfade isolée (aperçus). Dans une timeline, xfade est calculé dans le graphe principal."""
+    seek_a, skip_a = seek_args(a_start, fmt.fps)
+    seek_b, skip_b = seek_args(b_start, fmt.fps)
     norm = norm_chain(fmt, fit)
     graph = (
         f"[0:v]{norm},trim=start_frame={skip_a}:end_frame={skip_a + n},setpts=PTS-STARTPTS[a];"
         f"[1:v]{norm},trim=start_frame={skip_b}:end_frame={skip_b + n},setpts=PTS-STARTPTS[b];"
-        f"[a][b]xfade={trans}:duration={dur:.6f}:offset=0,format=yuv420p[v]"
+        f"[a][b]{xfade_filter(name, params, n, fmt.fps)}[v]"
     )
     run_ffmpeg([*seek_a, "-i", str(a_src), *seek_b, "-i", str(b_src), "-filter_complex", graph, "-map", "[v]",
-                "-frames:v", str(n), "-c:v", "libx264", "-preset", "veryfast", "-crf", "12", str(out)])
+                "-frames:v", str(n), *LOSSLESS, str(out)])
     return out
