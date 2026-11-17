@@ -109,8 +109,16 @@ def scenarios(f: dict[str, Path], out: Path) -> dict[str, list[str]]:
 
 # ----------------------------------------------------------------------------- instrumentation
 
-_real_run = subprocess.run
 _real_popen = subprocess.Popen
+
+
+def _real_run(cmd, **k):
+    with _real_popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=k.get("text", False),
+                     cwd=k.get("cwd")) as p:
+        out, err = p.communicate()
+    if k.get("check") and p.returncode:
+        raise subprocess.CalledProcessError(p.returncode, cmd, out, err)
+    return subprocess.CompletedProcess(cmd, p.returncode, out, err)
 
 
 class Recorder:
@@ -144,18 +152,16 @@ class Recorder:
     def install(self):
         rec = self
 
-        def run(cmd, *a, **k):
-            return _real_run(rec._inspect(cmd), *a, **k)
-
+        # subprocess.run goes through subprocess.Popen: patching Popen alone sees every process once
         class Popen(_real_popen):  # noqa: N801
             def __init__(self, cmd, *a, **k):
                 super().__init__(rec._inspect(cmd), *a, **k)
 
-        subprocess.run, subprocess.Popen = run, Popen
+        subprocess.Popen = Popen
         try:
             yield self
         finally:
-            subprocess.run, subprocess.Popen = _real_run, _real_popen
+            subprocess.Popen = _real_popen
 
 
 def _lossless(args: list[str]) -> list[str]:
