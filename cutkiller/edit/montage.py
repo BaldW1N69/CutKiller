@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,6 +51,7 @@ def build_montage(inputs: list[Path], fmt: VideoFormat, settings: MontageSetting
     """Un extrait centré par source. Avec une grille de beats, chaque coupe vise un temps ;
     un clip trop court décale une coupe, la suivante se recale sur la grille."""
     clips: list[Clip] = []
+    photos: list[tuple[Path, float, Path]] = []
     F = fmt.fps
     t, bi = 0.0, 0
     for src in inputs:
@@ -64,7 +67,8 @@ def build_montage(inputs: list[Path], fmt: VideoFormat, settings: MontageSetting
             target = None
             want = settings.photo_duration if is_photo else settings.clip_duration
         if is_photo:
-            path = photo_to_clip(src, want, fmt, settings.ken_burns, work / f"photo_{len(clips):04d}.mp4")
+            path = work / f"photo_{len(clips):04d}.mp4"
+            photos.append((src, want, path))  # rendues ensemble, en parallèle, une fois le plan connu
             avail = want + 2.0
         else:
             path = src
@@ -86,4 +90,15 @@ def build_montage(inputs: list[Path], fmt: VideoFormat, settings: MontageSetting
         start = round(max(0.0, (avail - dur) / 2) * F) / F  # centré : poignées pour les transitions
         clips.append(Clip(path, start, start + n_frames / F))
         t += dur
+    used = {c.src for c in clips}
+    render_photos([p for p in photos if p[2] in used], fmt, settings.ken_burns)
     return clips
+
+
+def render_photos(jobs: list[tuple[Path, float, Path]], fmt: VideoFormat, zoom: float) -> None:
+    """Photos → clips Ken Burns. Chaque rendu est un ffmpeg indépendant : threads suffisants."""
+    if not jobs:
+        return
+    with ThreadPoolExecutor(max_workers=max(1, min(len(jobs), os.cpu_count() or 1))) as ex:
+        for fut in [ex.submit(photo_to_clip, img, sec, fmt, zoom, out) for img, sec, out in jobs]:
+            fut.result()

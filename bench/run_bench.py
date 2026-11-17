@@ -126,24 +126,41 @@ class Recorder:
 
     def __init__(self, lossless: bool = False):
         self.lossless = lossless
-        self.counts: dict[str, int] = defaultdict(int)
         self.stages: dict[str, float] = defaultdict(float)
+        # events go to an append-only file: forked worker processes (parallel renders) inherit the
+        # patched Popen and report through the same file (O_APPEND writes of one short line are atomic)
+        WORK.mkdir(parents=True, exist_ok=True)
+        self.log = WORK / f"events-{os.getpid()}-{time.monotonic_ns()}.log"
+        self.log.write_text("", encoding="utf-8")
+
+    def _event(self, *names: str) -> None:
+        with open(self.log, "a", encoding="utf-8") as fh:
+            fh.write(" ".join(names) + "\n")
+
+    @property
+    def counts(self) -> dict[str, int]:
+        c: dict[str, int] = defaultdict(int)
+        for line in self.log.read_text(encoding="utf-8").splitlines():
+            for name in line.split():
+                c[name] += 1
+        return dict(c)
 
     def _inspect(self, cmd):
         if not isinstance(cmd, (list, tuple)) or not cmd:
             return cmd
         exe = Path(str(cmd[0])).name.lower()
         if exe.startswith("ffprobe"):
-            self.counts["ffprobe"] += 1
+            self._event("ffprobe")
         elif exe.startswith("ffmpeg"):
-            self.counts["ffmpeg"] += 1
+            ev = ["ffmpeg"]
             args = [str(c) for c in cmd]
             vcodecs = [args[i + 1] for i, a in enumerate(args[:-1]) if a in ("-c:v", "-vcodec", "-codec:v")]
             vcodecs = [c for c in vcodecs if c != "copy"]
             if vcodecs:
-                self.counts["video_encodes"] += 1
+                ev.append("video_encodes")
             if any(args[i + 1] == "aac" for i, a in enumerate(args[:-1]) if a in ("-c:a", "-acodec")):
-                self.counts["aac_encodes"] += 1
+                ev.append("aac_encodes")
+            self._event(*ev)
             if self.lossless and "libx264" in vcodecs:
                 cmd = _lossless(args)
         return cmd
@@ -180,13 +197,13 @@ def _lossless(args: list[str]) -> list[str]:
     return out[:k] + ["-qp", "0", "-preset", "ultrafast"] + out[k:]
 
 
-# Stage timing: wrap pipeline functions by name. Missing names are ignored, so the bench keeps
-# working while the code evolves (a renamed stage simply disappears from the breakdown).
+# Stage timing: wrap pipeline functions by name. For each stage the first target that exists is used
+# (newer names first), so the bench keeps working on older commits too.
 STAGES = {
     "listen": [("cutkiller.listen", "listen")],
     "sounds": [("cutkiller.cli", "_prepare_mix")],
-    "photos": [("cutkiller.edit.montage", "photo_to_clip")],
-    "transitions": [("cutkiller.edit.timeline", "render_transition")],
+    "photos": [("cutkiller.edit.montage", "render_photos"), ("cutkiller.edit.montage", "photo_to_clip")],
+    "transitions": [("cutkiller.edit.timeline", "render_transitions"), ("cutkiller.edit.timeline", "render_transition")],
     "timeline": [("cutkiller.edit.timeline", "render_timeline")],
     "mix": [("cutkiller.edit.mixer", "render_mix")],
 }
@@ -206,6 +223,8 @@ def stage_timers(rec: Recorder):
             fn = getattr(mod, attr, None)
             if fn is None:
                 continue
+            if any(st == stage for st in (p[3] for p in patched)):
+                break
 
             def wrapper(*a, __fn=fn, __stage=stage, **k):
                 t0 = time.perf_counter()
@@ -218,11 +237,11 @@ def stage_timers(rec: Recorder):
             for m in list(sys.modules.values()):
                 if m and getattr(m, "__name__", "").startswith("cutkiller") and getattr(m, attr, None) is fn:
                     setattr(m, attr, wrapper)
-                    patched.append((m, attr, fn))
+                    patched.append((m, attr, fn, stage))
     try:
         yield
     finally:
-        for m, attr, fn in patched:
+        for m, attr, fn, _stage in patched:
             setattr(m, attr, fn)
 
 
@@ -246,7 +265,9 @@ def run_scenario(argv: list[str], lossless: bool = False) -> dict:
     # transitions are rendered inside render_timeline: report the timeline's own share
     if "timeline" in stages and "transitions" in stages:
         stages["timeline"] = max(0.0, stages["timeline"] - stages["transitions"])
-    return {"wall_s": wall, "cpu_s": _children_cpu() - cpu0, "stages_s": stages, "counts": dict(rec.counts)}
+    counts = rec.counts
+    rec.log.unlink(missing_ok=True)
+    return {"wall_s": wall, "cpu_s": _children_cpu() - cpu0, "stages_s": stages, "counts": counts}
 
 
 # ----------------------------------------------------------------------------- measures

@@ -11,7 +11,9 @@ Tout est calculé en frames de la cadence de sortie : pas de dérive, même avec
 from __future__ import annotations
 
 import math
+import os
 import tempfile
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -287,23 +289,61 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
     return ";\n".join(parts), inputs
 
 
+def default_jobs() -> int:
+    """Rendus parallèles : CUTKILLER_JOBS, sinon le nombre de cœurs (4 au plus : mémoire des fenêtres d'images)."""
+    env = os.environ.get("CUTKILLER_JOBS", "").strip()
+    if env.isdigit() and int(env) > 0:
+        return int(env)
+    return max(1, min(4, os.cpu_count() or 1))
+
+
+def _render_one(args) -> Path:
+    t, a_src, a_start, b_src, b_start, n, fmt, fit, out = args
+    return render_transition(t, a_src, a_start, b_src, b_start, n, fmt, fit, out)
+
+
+def render_transitions(plan: TimelinePlan, fit: str, tmp: Path, *, log=None, jobs: int | None = None) -> dict[int, Path]:
+    """Rend chaque fenêtre de transition dans son fichier. Indépendantes entre elles : rendues en parallèle
+    (processus séparés : le calcul numpy des fx ne partage pas le GIL). Les shaders GL restent dans ce
+    processus, un contexte OpenGL par processus, pendant que les autres avancent."""
+    todo = []
+    for i, j in enumerate(plan.joins):
+        if j.transition is None:
+            continue
+        a, b = plan.clips[i], plan.clips[i + 1]
+        todo.append((i, (j.transition, a.src, a.ef - j.x, b.src, b.sf - j.x, j.n, plan.fmt, fit, tmp / f"t{i:05d}.mkv")))
+    if not todo:
+        return {}
+    jobs = jobs or default_jobs()
+    if log:
+        names = ", ".join(dict.fromkeys(args[0].id for _, args in todo))
+        log(f"    {len(todo)} transition(s) ({names}) sur {min(jobs, len(todo))} processus")
+    out: dict[int, Path] = {}
+    gl_jobs = [(i, args) for i, args in todo if args[0].needs_gl]
+    cpu_jobs = [(i, args) for i, args in todo if not args[0].needs_gl]
+    if jobs <= 1 or len(cpu_jobs) <= 1:
+        for i, args in cpu_jobs + gl_jobs:
+            out[i] = _render_one(args)
+        return out
+    with ProcessPoolExecutor(max_workers=min(jobs, len(cpu_jobs))) as ex:
+        futures = {ex.submit(_render_one, args): i for i, args in cpu_jobs}
+        for i, args in gl_jobs:
+            out[i] = _render_one(args)
+        for fut, i in futures.items():
+            out[i] = fut.result()
+    return out
+
+
 def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fmt: VideoFormat | None = None,
                     fit: str = "crop", audio: bool = True, crf: int = 20, preset: str = "veryfast",
-                    allow_overlap: bool = True, zoom_ramp: int = 3, log=None) -> TimelinePlan:
+                    allow_overlap: bool = True, zoom_ramp: int = 3, log=None, jobs: int | None = None) -> TimelinePlan:
     plan = plan_timeline(clips, joins, fmt, allow_overlap)
     if not plan.clips:
         raise ValueError("Timeline vide : aucun clip ne dure au moins une image.")
     has_audio = audio and any(c.info.has_audio for c in plan.clips)
     out = Path(out)
     with tempfile.TemporaryDirectory(prefix="cutkiller_") as tmp:
-        trans_files: dict[int, Path] = {}
-        todo = [(i, j) for i, j in enumerate(plan.joins) if j.transition is not None]
-        for k, (i, j) in enumerate(todo, 1):
-            a, b = plan.clips[i], plan.clips[i + 1]
-            if log:
-                log(f"    transition {k}/{len(todo)} : {j.transition.id} ({j.n / plan.fmt.fps:.2f} s)")
-            trans_files[i] = render_transition(j.transition, a.src, a.ef - j.x, b.src, b.sf - j.x, j.n, plan.fmt, fit,
-                                               Path(tmp) / f"t{i:05d}.mkv")
+        trans_files = render_transitions(plan, fit, Path(tmp), log=log, jobs=jobs)
         graph, inputs = build_graph(plan, trans_files, fit, has_audio, zoom_ramp)
         script = Path(tmp) / "graph.txt"
         script.write_text(graph, encoding="utf-8")

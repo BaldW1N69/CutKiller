@@ -163,3 +163,17 @@ def test_pack_and_luma(talk_video, tmp_path):
 def test_read_window_pads_past_end(talk_video):
     frames = read_window(talk_video, int(6.4 * 25), 10, FMT)
     assert frames.shape == (10, 90, 160, 3)
+
+
+def _frame_md5(path) -> str:
+    return subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v", "-f", "md5", "-"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_parallel_transitions_match_sequential(talk_video, tmp_path):
+    """Rendering transitions in worker processes must give the exact same frames as one by one."""
+    clips = [Clip(talk_video, 0, 1.2), Clip(talk_video, 1.6, 2.6), Clip(talk_video, 3.0, 4.0), Clip(talk_video, 4.4, 5.5)]
+    joins = [Join(resolve("fx:zoom_punch"), 0.4), Join(resolve("xfade:fade"), 0.4), Join(resolve("fx:glitch"), 0.4)]
+    render_timeline(clips, joins, tmp_path / "seq.mp4", fmt=FMT, audio=False, jobs=1)
+    render_timeline(clips, joins, tmp_path / "par.mp4", fmt=FMT, audio=False, jobs=3)
+    assert _frame_md5(tmp_path / "seq.mp4") == _frame_md5(tmp_path / "par.mp4")
