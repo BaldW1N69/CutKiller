@@ -1,3 +1,4 @@
+import subprocess
 import json
 
 from cutkiller.cli import _sfx_times, build_parser, main
@@ -30,6 +31,11 @@ def test_cli_listen_cut_mix_auto(talk_video, music_wav, sfx_wav, tmp_path, capsy
     info = probe(out)
     assert info.has_video and info.has_audio and info.duration < 5
     assert sorted(p.name for p in tmp_path.iterdir()) == ["auto.mp4", "r.json"]  # aucun intermédiaire laissé
+    # constant frame rate with exact timestamps (an .mkv intermediate rounded them to the millisecond)
+    rates = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v", "-show_entries",
+                            "stream=r_frame_rate,avg_frame_rate", "-of", "csv=p=0", str(out)],
+                           capture_output=True, text=True, check=True).stdout.strip().split(",")
+    assert rates[0] == rates[1]
 
 
 def test_cli_errors_are_clean(tmp_path, capsys):

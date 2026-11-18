@@ -34,7 +34,7 @@ def build_cut_filter(segments: list[Interval], has_video: bool, fade: float = FA
 
 def render_cuts(src: str | Path, dst: str | Path, segments: list[Interval], *, crf: int = 20, preset: str = "veryfast",
                 joins=None, zooms: list[float] | None = None, focus: tuple[float, float] = (0.5, 0.4),
-                zoom_ramp: int = 3, log=None) -> Path:
+                zoom_ramp: int = 3, log=None, audio_codec: str = "aac") -> Path:
     """Rend les segments gardés. Vidéo : via la timeline (transitions, punch-in) ; audio seul : concat simple."""
     if not segments:
         raise ValueError("Aucun segment à garder : vérifie le seuil de silence.")
@@ -45,15 +45,15 @@ def render_cuts(src: str | Path, dst: str | Path, segments: list[Interval], *, c
 
         clips = [Clip(Path(src), s.start, s.end, zooms[k] if zooms else 1.0, focus) for k, s in enumerate(segments)]
         render_timeline(clips, joins or [Join() for _ in clips[1:]], dst, crf=crf, preset=preset, zoom_ramp=zoom_ramp,
-                        log=log)
+                        log=log, audio_codec=audio_codec)
         return dst
     graph = build_cut_filter(segments, has_video=False)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as fh:
         fh.write(graph)
         script = fh.name
     try:
-        run_ffmpeg(["-i", str(src), "-filter_complex_script", script, "-map", "[outa]", "-c:a", "aac", "-b:a", "192k",
-                    str(dst)])
+        acodec = ["-c:a", "pcm_s16le"] if audio_codec == "pcm" else ["-c:a", "aac", "-b:a", "192k"]
+        run_ffmpeg(["-i", str(src), "-filter_complex_script", script, "-map", "[outa]", *acodec, str(dst)])
     finally:
         Path(script).unlink(missing_ok=True)
     return dst

@@ -668,10 +668,11 @@ def cmd_auto(a: argparse.Namespace) -> int:
     print("2/4 Sons…")
     plan, credits = _prepare_mix(a, total_duration(segs), output_cut_points(segs), clicks=False)
     print("3/4 Coupe" + (" + transitions…" if a.transition else "…"))
-    cut = final.with_name(f".{final.stem}.cut{final.suffix}")  # intermédiaire caché, supprimé quoi qu'il arrive
+    # intermédiaire caché, supprimé quoi qu'il arrive ; son en PCM : une seule génération AAC (au mixage)
+    cut = final.with_name(f".{final.stem}.cut.mov")  # .mov : PCM + base de temps exacte (mkv arrondit à la ms)
     try:
         with atomic_output(final) as tmp_final:
-            render_cuts(src, cut, segs, joins=joins, log=print, **_punch(a, len(segs), joins))
+            render_cuts(src, cut, segs, joins=joins, log=print, audio_codec="pcm", **_punch(a, len(segs), joins))
             print("4/4 Mixage…")
             render_mix(cut, tmp_final, plan)
     finally:
@@ -730,8 +731,8 @@ def cmd_montage(a: argparse.Namespace) -> int:
         if mixplan.music:
             mixplan.music.duck = a.keep_audio and not a.no_duck
         print("3/4 Rendu vidéo…")
-        tmp = Path(work) / f"timeline{out.suffix or '.mp4'}"
-        render_timeline(clips, joins, tmp, fmt=fmt, fit=a.fit, audio=a.keep_audio, log=print)
+        tmp = Path(work) / "timeline.mov"  # son PCM (une seule génération AAC) et base de temps exacte
+        render_timeline(clips, joins, tmp, fmt=fmt, fit=a.fit, audio=a.keep_audio, log=print, audio_codec="pcm")
         print("4/4 Mixage…")
         with atomic_output(out) as tmp_out:
             render_mix(tmp, tmp_out, mixplan)

@@ -373,6 +373,10 @@ def build_graph(plan: TimelinePlan, trans_files: dict[int, Path], fit: str, audi
     return ";\n".join(parts), inputs
 
 
+def _audio_args(codec: str) -> list[str]:
+    return ["-c:a", "pcm_s16le"] if codec == "pcm" else ["-c:a", "aac", "-b:a", "192k"]
+
+
 def default_jobs() -> int:
     """Rendus parallèles : CUTKILLER_JOBS, sinon le nombre de cœurs (4 au plus : mémoire des fenêtres d'images)."""
     env = os.environ.get("CUTKILLER_JOBS", "").strip()
@@ -422,7 +426,10 @@ def render_transitions(plan: TimelinePlan, fit: str, tmp: Path, *, log=None, job
 
 def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fmt: VideoFormat | None = None,
                     fit: str = "crop", audio: bool = True, crf: int = 20, preset: str = "veryfast",
-                    allow_overlap: bool = True, zoom_ramp: int = 3, log=None, jobs: int | None = None) -> TimelinePlan:
+                    allow_overlap: bool = True, zoom_ramp: int = 3, log=None, jobs: int | None = None,
+                    audio_codec: str = "aac") -> TimelinePlan:
+    """`audio_codec="pcm"` : son non compressé, pour un intermédiaire qui sera mixé ensuite (.mkv/.mov) :
+    évite une génération AAC de plus."""
     plan = plan_timeline(clips, joins, fmt, allow_overlap)
     if not plan.clips:
         raise ValueError("Timeline vide : aucun clip ne dure au moins une image.")
@@ -439,7 +446,7 @@ def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fm
         args += ["-filter_complex_script", str(script), "-map", "[outv]", "-c:v", "libx264", "-crf", str(crf),
                  "-preset", preset, "-pix_fmt", "yuv420p", "-r", str(plan.fmt.fps)]
         if has_audio:
-            args += ["-map", "[outa]", "-c:a", "aac", "-b:a", "192k"]
+            args += ["-map", "[outa]", *_audio_args(audio_codec)]
         if out.suffix.lower() in {".mp4", ".mov", ".m4a"}:
             args += ["-movflags", "+faststart"]
         run_ffmpeg(args + [str(out)])

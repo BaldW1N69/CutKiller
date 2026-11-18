@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -50,8 +52,15 @@ def spaced(times: list[float], min_spacing: float) -> list[float]:
     return out
 
 
-def build_mix_filter(plan: MixPlan, duration: float, has_voice: bool) -> tuple[str, list[list[str]]]:
-    """Retourne (filter_complex, arguments d'entrée supplémentaires par input)."""
+TRUE_PEAK = -1.0  # plafond visé après encodage AAC (dBTP), recommandation des plateformes
+LRA = 11
+
+
+def build_mix_filter(plan: MixPlan, duration: float, has_voice: bool, *, measured: dict | None = None,
+                     tp: float = -1.5) -> tuple[str, list[list[str]]]:
+    """Retourne (filter_complex, arguments d'entrée supplémentaires par input).
+
+    `measured` : mesures loudnorm d'une première passe (render_mix) → normalisation linéaire exacte."""
     inputs: list[list[str]] = []
     parts: list[str] = []
     mix_labels: list[str] = []
@@ -116,31 +125,72 @@ def build_mix_filter(plan: MixPlan, duration: float, has_voice: bool) -> tuple[s
         f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:normalize=0:duration=first:dropout_transition=0,"
         f"atrim=0:{duration:.3f}[mixed]"
     )
-    if plan.target_lufs is not None:
-        parts.append(f"[mixed]loudnorm=I={plan.target_lufs}:TP=-1.5:LRA=11,{FMT}[aout]")
-    else:
+    if plan.target_lufs is None:
         parts.append(f"[mixed]alimiter=limit=0.89,{FMT}[aout]")
+    elif measured is None:  # passe d'analyse (ou rendu en une passe)
+        parts.append(f"[mixed]loudnorm=I={plan.target_lufs}:TP={tp:.2f}:LRA={LRA}:print_format=json,{FMT}[aout]")
+    else:  # passe 2 : gain linéaire calculé sur la mesure, la dynamique du mix est conservée
+        m = measured
+        parts.append(
+            f"[mixed]loudnorm=I={plan.target_lufs}:TP={tp:.2f}:LRA={LRA}:linear=true:"
+            f"measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}:"
+            f"measured_thresh={m['input_thresh']}:offset={m['target_offset']},{FMT}[aout]"
+        )
     return ";\n".join(parts), inputs
 
 
-def render_mix(src: str | Path, dst: str | Path, plan: MixPlan) -> Path:
-    info = probe(src)
-    graph, extra_inputs = build_mix_filter(plan, info.duration, info.has_audio)
-    dst = Path(dst)
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as fh:
-        fh.write(graph)
-        script = fh.name
+def _loudnorm_json(stderr: str) -> dict:
+    blob = stderr[stderr.rfind("{"): stderr.rfind("}") + 1]
     try:
-        args = ["-i", str(src)]
-        for inp in extra_inputs:
-            args += inp
-        args += ["-filter_complex_script", script]
-        if info.has_video:
-            args += ["-map", "0:v:0", "-c:v", "copy"]
-        args += ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-t", f"{info.duration:.3f}"]
-        if dst.suffix.lower() in {".mp4", ".mov", ".m4a"}:
-            args += ["-movflags", "+faststart"]
-        run_ffmpeg(args + [str(dst)])
-    finally:
-        Path(script).unlink(missing_ok=True)
+        data = json.loads(blob)
+        return {k: data[k] for k in ("input_i", "input_tp", "input_lra", "input_thresh", "target_offset")}
+    except (ValueError, KeyError) as exc:
+        raise RuntimeError(f"Mesure de loudness illisible : {stderr[-500:]}") from exc
+
+
+def true_peak(path: str | Path) -> float | None:
+    """True peak (dBTP) du fichier final, après encodage."""
+    res = run_ffmpeg(["-i", str(path), "-vn", "-af", "ebur128=peak=true", "-f", "null", "-"], quiet=False)
+    m = re.search(r"Peak:\s+(-?[\d.]+|-inf)\s+dBFS", res.stderr[res.stderr.rfind("Summary:"):])
+    return None if not m or m.group(1) == "-inf" else float(m.group(1))
+
+
+def render_mix(src: str | Path, dst: str | Path, plan: MixPlan) -> Path:
+    """Mixe et normalise. Avec une cible LUFS : 1) mesure du mix, 2) gain linéaire exact (la dynamique n'est
+    pas compressée comme en loudnorm une passe), 3) contrôle du true peak APRÈS l'AAC, qui peut dépasser
+    de quelques dixièmes de dB : si besoin, rendu refait avec un plafond abaissé d'autant."""
+    info = probe(src)
+    dst = Path(dst)
+    with tempfile.TemporaryDirectory(prefix="cutkiller_mix_") as tmp:
+        script = Path(tmp) / "graph.txt"
+
+        def base_args(graph: str) -> list[str]:
+            script.write_text(graph, encoding="utf-8")
+            args = ["-i", str(src)]
+            for inp in extra_inputs:
+                args += inp
+            return args + ["-filter_complex_script", str(script)]
+
+        measured, tp = None, -1.5
+        graph, extra_inputs = build_mix_filter(plan, info.duration, info.has_audio)
+        if plan.target_lufs is not None:
+            res = run_ffmpeg(base_args(graph) + ["-map", "[aout]", "-t", f"{info.duration:.3f}", "-f", "null", "-"],
+                             quiet=False)
+            measured = _loudnorm_json(res.stderr)
+        for _ in range(2):
+            if measured is not None:
+                graph, extra_inputs = build_mix_filter(plan, info.duration, info.has_audio, measured=measured, tp=tp)
+            args = base_args(graph)
+            if info.has_video:
+                args += ["-map", "0:v:0", "-c:v", "copy"]
+            args += ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-t", f"{info.duration:.3f}"]
+            if dst.suffix.lower() in {".mp4", ".mov", ".m4a"}:
+                args += ["-movflags", "+faststart"]
+            run_ffmpeg(args + [str(dst)])
+            if measured is None:
+                break
+            peak = true_peak(dst)
+            if peak is None or peak <= TRUE_PEAK:
+                break
+            tp -= peak - TRUE_PEAK + 0.1
     return dst

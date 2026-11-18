@@ -59,3 +59,21 @@ def test_render_cut_and_mix(talk_video, music_wav, sfx_wav, tmp_path):
     # la musique (4 s) a été bouclée sur toute la durée : la fin n'est pas muette
     end = listen(mixed, with_loudness=True)
     assert end.loudness.integrated_lufs is not None and abs(end.loudness.integrated_lufs + 14) < 3
+
+
+def test_mix_hits_target_loudness_and_true_peak(tmp_path):
+    """Two-pass linear normalisation lands on the target and the AAC output respects -1 dBTP."""
+    import subprocess
+
+    from cutkiller.edit.mixer import true_peak
+    from cutkiller.listen.loudness import parse_ebur128
+    from cutkiller.media import run_ffmpeg
+
+    loud = tmp_path / "loud.wav"  # dense, peaky material: the case where AAC overshoots the peak
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i",
+                    "aevalsrc='0.9*sgn(sin(2*PI*110*t))*exp(-6*mod(t,0.5))+0.3*sin(2*PI*2200*t)':s=48000:c=stereo",
+                    "-t", "12", str(loud)], check=True)
+    out = render_mix(loud, tmp_path / "out.m4a", MixPlan(target_lufs=-14.0))
+    ebu = parse_ebur128(run_ffmpeg(["-i", str(out), "-af", "ebur128=peak=true", "-f", "null", "-"], quiet=False).stderr)
+    assert abs(ebu["integrated_lufs"] - (-14.0)) <= 0.5
+    assert true_peak(out) <= -1.0
