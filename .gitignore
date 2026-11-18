@@ -1,0 +1,14 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+.venv/
+*.mp4
+*.mov
+*.wav
+*.mp3
+!tests/fixtures/**
+
+# benchmark fixtures and outputs
+bench/.work/

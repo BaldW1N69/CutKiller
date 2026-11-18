@@ -1,0 +1,123 @@
+{
+ "env": {
+  "commit": "06b9db1",
+  "python": "3.13.18",
+  "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
+  "cpus": 4,
+  "platform": "Linux-6.18.44-fc-v595-x86_64-with-glibc2.39",
+  "gpu": false
+ },
+ "runs": 3,
+ "results": {
+  "montage": {
+   "wall_s_median": 48.92,
+   "wall_s_all": [
+    48.87,
+    49.8,
+    48.92
+   ],
+   "cpu_s": 103.9,
+   "stages_s": {
+    "transitions": 28.51,
+    "timeline": 14.43,
+    "photos": 3.0,
+    "mix": 1.21,
+    "sounds": 0.06
+   },
+   "counts": {
+    "ffprobe": 31,
+    "ffmpeg": 27,
+    "video_encodes": 12,
+    "aac_encodes": 1
+   },
+   "output": {
+    "size_mb": 8.709,
+    "duration_s": 20.0,
+    "bitrate_kbps": 3484,
+    "video": {
+     "codec_name": "h264",
+     "profile": "High",
+     "pix_fmt": "yuv420p",
+     "width": 1080,
+     "height": 1920,
+     "avg_frame_rate": "30/1",
+     "color_space": null,
+     "color_primaries": null,
+     "color_transfer": null,
+     "color_range": null
+    },
+    "audio": {
+     "codec_name": "aac",
+     "sample_rate": "48000",
+     "channels": 2,
+     "bit_rate": "190442"
+    },
+    "faststart": true
+   },
+   "loudness": {
+    "integrated_lufs": -14.5,
+    "true_peak_dbtp": -1.2,
+    "lra_lu": 0.7
+   },
+   "quality_vs_lossless": {
+    "ssim": 0.996992,
+    "psnr_db": 47.594235
+   }
+  },
+  "auto": {
+   "wall_s_median": 20.5,
+   "wall_s_all": [
+    20.39,
+    20.93,
+    20.5
+   ],
+   "cpu_s": 57.4,
+   "stages_s": {
+    "timeline": 13.23,
+    "transitions": 3.63,
+    "mix": 3.12,
+    "listen": 0.33,
+    "sounds": 0.0
+   },
+   "counts": {
+    "ffprobe": 4,
+    "ffmpeg": 8,
+    "video_encodes": 6,
+    "aac_encodes": 2
+   },
+   "output": {
+    "size_mb": 42.917,
+    "duration_s": 47.233,
+    "bitrate_kbps": 7269,
+    "video": {
+     "codec_name": "h264",
+     "profile": "High",
+     "pix_fmt": "yuv420p",
+     "width": 1920,
+     "height": 1080,
+     "avg_frame_rate": "30/1",
+     "color_space": null,
+     "color_primaries": null,
+     "color_transfer": null,
+     "color_range": null
+    },
+    "audio": {
+     "codec_name": "aac",
+     "sample_rate": "48000",
+     "channels": 2,
+     "bit_rate": "186727"
+    },
+    "faststart": true
+   },
+   "loudness": {
+    "integrated_lufs": -14.0,
+    "true_peak_dbtp": -10.9,
+    "lra_lu": 0.3
+   },
+   "quality_vs_lossless": {
+    "ssim": 0.994499,
+    "psnr_db": 44.900285
+   }
+  }
+ }
+}
