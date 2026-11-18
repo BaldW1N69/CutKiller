@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cutkiller.media import run_ffmpeg
-from cutkiller.transitions.frames import LOSSLESS, VideoFormat, norm_chain, seek_args
+from cutkiller.transitions.frames import LOSSLESS, VideoFormat, color_tags, norm_chain, seek_args
 
 XFADE = {
     "fade": "fondu enchaîné", "dissolve": "dissolution en grain", "fadeblack": "fondu au noir",
@@ -76,5 +76,5 @@ def render(name: str, params: dict, a_src: Path, a_start: int, b_src: Path, b_st
         f"[a][b]{xfade_filter(name, params, n, fmt.fps)}[v]"
     )
     run_ffmpeg([*seek_a, "-i", str(a_src), *seek_b, "-i", str(b_src), "-filter_complex", graph, "-map", "[v]",
-                "-frames:v", str(n), *LOSSLESS, str(out)])
+                "-frames:v", str(n), *LOSSLESS, *color_tags(fmt.width, fmt.height), str(out)])
     return out

@@ -20,7 +20,7 @@ from pathlib import Path
 from cutkiller.media import MediaInfo, probe, run_ffmpeg
 from cutkiller.transitions import Transition, fixed_duration
 from cutkiller.transitions import render as render_transition
-from cutkiller.transitions.frames import VideoFormat, norm_chain
+from cutkiller.transitions.frames import VideoFormat, color_tags, norm_chain
 from cutkiller.transitions.xfade import xfade_filter
 
 AUDIO_FMT = "aformat=sample_rates=48000:channel_layouts=stereo"
@@ -444,7 +444,8 @@ def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fm
         for pre, p in inputs:
             args += [*pre, "-i", str(p)]
         args += ["-filter_complex_script", str(script), "-map", "[outv]", "-c:v", "libx264", "-crf", str(crf),
-                 "-preset", preset, "-pix_fmt", "yuv420p", "-r", str(plan.fmt.fps)]
+                 "-preset", preset, "-pix_fmt", "yuv420p", "-r", str(plan.fmt.fps),
+                 *color_tags(plan.fmt.width, plan.fmt.height)]
         if has_audio:
             args += ["-map", "[outa]", *_audio_args(audio_codec)]
         if out.suffix.lower() in {".mp4", ".mov", ".m4a"}:

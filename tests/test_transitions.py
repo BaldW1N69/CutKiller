@@ -264,3 +264,32 @@ def test_affine_fast_paths_match_general_bilinear():
     ref = np.stack([np.convolve(np.pad(img[r, :, 0].astype(float), (2, 3), mode="edge"), np.ones(5) / 5, "valid")[:w]
                     for r in range(h)])
     assert np.abs(blur[..., 0] - ref).max() < 0.01
+
+
+def test_rgb_paths_keep_bt709_colours(tmp_path):
+    """fx/GL transitions go through RGB: on a bt709 source they must not shift colour (was luma 124 -> 110),
+    and photos must keep their RGB colour when displayed as HD (bt709) video (was up to 19 levels off)."""
+    from PIL import Image
+
+    from cutkiller.edit.montage import photo_to_clip
+
+    src = tmp_path / "green.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=0x28A03C:s=320x240:r=25", "-t", "6",
+                    "-vf", "scale=out_color_matrix=bt709,format=yuv420p", "-colorspace", "bt709", "-c:v", "libx264",
+                    "-qp", "0", str(src)], check=True)
+    render_timeline([Clip(src, 0, 2), Clip(src, 3, 5)], [Join(resolve("fx:cut"), 0.4)], tmp_path / "o.mkv",
+                    fmt=VideoFormat(320, 240, 25.0), audio=False, jobs=1)
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(tmp_path / "o.mkv"), "-f", "rawvideo", "-pix_fmt",
+                          "yuv420p", "-"], capture_output=True, check=True).stdout
+    n = 320 * 240 * 3 // 2
+    assert {raw[k * n + 120 * 320 + 160] for k in range(len(raw) // n)} == {124}
+
+    fmt = VideoFormat(1080, 1920, 30.0)
+    for colour in [(200, 40, 40), (40, 160, 60), (30, 60, 200)]:
+        Image.new("RGB", (1080, 1920), colour).save(tmp_path / "c.png")
+        photo_to_clip(tmp_path / "c.png", 1.0, fmt, 0.0, tmp_path / "c.mp4")
+        out = subprocess.run(["ffmpeg", "-v", "error", "-i", str(tmp_path / "c.mp4"), "-frames:v", "1", "-vf",
+                              "scale=in_color_matrix=bt709,format=rgb24", "-f", "rawvideo", "-"],
+                             capture_output=True, check=True).stdout
+        got = np.frombuffer(out, np.uint8).reshape(1920, 1080, 3)[960, 540].astype(int)
+        assert np.abs(got - np.array(colour)).max() <= 3

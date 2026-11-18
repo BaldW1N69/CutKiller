@@ -11,6 +11,8 @@ Spec d'un calque :  SOURCE@DÉBUT[-FIN]?pos=…&scale=…&mode=…&opacity=…
 
 from __future__ import annotations
 
+from cutkiller.transitions.frames import color_tags, rgb_yuv
+
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -88,6 +90,7 @@ def _xy_expr(layer: Layer) -> tuple[str, str]:
 
 
 def build_overlay_graph(layers: list[Layer], base_w: int, base_h: int, duration: float) -> tuple[str, list[list[str]]]:
+    conv = rgb_yuv(base_w, base_h)  # calques RGBA -> YUV avec la matrice de la vidéo
     parts: list[str] = []
     inputs: list[list[str]] = []
     cur = "[0:v]"
@@ -114,13 +117,13 @@ def build_overlay_graph(layers: list[Layer], base_w: int, base_h: int, duration:
             x, y = _xy_expr(L)
             parts.append(f"[bk{i}][l{i}]overlay=x={x}:y={y}:eof_action=pass:enable='between(t,{L.start:.4f},{end:.4f})',"
                          f"format=gbrp,colorchannelmixer=rr={L.opacity}:gg={L.opacity}:bb={L.opacity}[s{i}]")
-            parts.append(f"{cur}format=gbrp[b{i}]")
-            parts.append(f"[b{i}][s{i}]blend=all_mode=screen:shortest=1,format=yuv420p[v{i}]")
+            parts.append(f"{cur}{conv},format=gbrp[b{i}]")
+            parts.append(f"[b{i}][s{i}]blend=all_mode=screen:shortest=1,{conv},format=yuv420p[v{i}]")
         else:
             chain += ",format=rgba"
             if L.opacity < 1:
                 chain += f",colorchannelmixer=aa={L.opacity}"
-            parts.append(f"{chain}[l{i}]")
+            parts.append(f"{chain},{conv},format=yuva420p[l{i}]")
             x, y = _xy_expr(L)
             parts.append(f"{cur}[l{i}]overlay=x={x}:y={y}:eof_action=pass:format=auto:"
                          f"enable='between(t,{L.start:.4f},{end:.4f})'[v{i}]")
@@ -144,7 +147,8 @@ def render_overlays(src: str | Path, dst: str | Path, layers: list[Layer], *, cr
         for inp in extra:
             args += inp
         args += ["-filter_complex_script", str(script), "-map", "[outv]", "-c:v", "libx264", "-crf", str(crf),
-                 "-preset", "veryfast", "-r", str(info.fps or 30)]
+                 "-preset", "veryfast", "-r", str(info.fps or 30),
+                 *color_tags(info.width or 0, info.height or 0)]
         if info.has_audio:
             args += ["-map", "0:a:0", "-c:a", "copy"]
         args += ["-t", f"{info.duration:.3f}"]

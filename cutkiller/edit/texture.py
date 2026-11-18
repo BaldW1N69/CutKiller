@@ -22,6 +22,8 @@ Préréglages `LOOKS` (look cinématique des tutos CapCut : vert-orange + 4K + l
 
 from __future__ import annotations
 
+from cutkiller.transitions.frames import color_tags
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -166,7 +168,8 @@ def render_texture(src: str | Path, dst: str | Path, s: TextureSettings, *, crf:
     args += ["-filter_complex", graph, "-map", "[vout]"]
     if info.has_audio:
         args += ["-map", "0:a:0", "-c:a", "copy"]
-    args += ["-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast", "-t", f"{info.duration:.3f}"]
+    args += ["-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast",
+             *color_tags(info.width or 0, info.height or 0), "-t", f"{info.duration:.3f}"]
     if dst.suffix.lower() in {".mp4", ".mov"}:
         args += ["-movflags", "+faststart"]
     run_ffmpeg(args + [str(dst)])

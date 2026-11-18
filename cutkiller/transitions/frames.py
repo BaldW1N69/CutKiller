@@ -33,16 +33,47 @@ class VideoFormat:
         return cls(w - w % 2, h - h % 2, round(f, 3))
 
 
+# Matrice YUV : celle que les lecteurs supposent pour une vidéo non étiquetée de cette taille, BT.709 en HD
+# (plus petit côté >= 720), BT.601 en SD. Toute conversion RGB <-> YUV l'utilise explicitement : sans ça
+# swscale prend BT.601 partout, et une source HD de smartphone lue en RGB pour une transition fx/GL puis
+# réencodée changeait de teinte pendant la transition (luma 124 -> 110 sur un vert), les photos étaient
+# décalées jusqu'à 19 niveaux. YUV -> YUV : aucune conversion, le filtre laisse passer les images.
+# Arrondis précis : l'aller-retour YUV -> RGB -> YUV redonne exactement les mêmes valeurs.
+
+
+def matrix(width: int, height: int) -> str:
+    return "bt709" if min(width, height) >= 720 else "bt601"
+
+
+def rgb_yuv(width: int, height: int) -> str:
+    m = matrix(width, height)
+    return (f"scale=in_color_matrix={m}:out_color_matrix={m}:out_range=tv:"
+            "flags=accurate_rnd+full_chroma_int+full_chroma_inp")
+
+
+def color_tags(width: int, height: int) -> list[str]:
+    """Étiquettes de sortie : BT.709 explicite en HD ; en SD on laisse la valeur par défaut des lecteurs."""
+    if matrix(width, height) != "bt709":
+        return []
+    return ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
+
+
 def norm_chain(fmt: VideoFormat, fit: str = "crop", pix_fmt: str = "yuv420p") -> str:
     """Normalise n'importe quelle source vers le format de sortie (taille, cadence, pixels)."""
     w, h = fmt.width, fmt.height
+    # Sortie RGB (fenêtres de transition) : conversion explicite, arrondis précis. Sortie YUV : rien à
+    # ajouter (YUV -> YUV ne convertit pas ; une option de matrice sur ce scale le ferait passer par un
+    # chemin 2x plus lent, mesuré).
+    rgb = pix_fmt.startswith(("rgb", "bgr", "gbr"))
     if fit == "pad":
-        scale = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black"
+        scale = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black")
     elif fit == "stretch":
         scale = f"scale={w}:{h}"
     else:
         scale = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
-    return f"setpts=PTS-STARTPTS,fps={fmt.fps},{scale},setsar=1,format={pix_fmt}"
+    conv = f",{rgb_yuv(w, h)}" if rgb else ""
+    return f"setpts=PTS-STARTPTS,fps={fmt.fps},{scale},setsar=1{conv},format={pix_fmt}"
 
 
 def seek_args(start_frame: int, fps: float, preroll: float = 1.0) -> tuple[list[str], int]:
@@ -98,7 +129,8 @@ class FrameWriter:
         self.proc = subprocess.Popen(
             [_require("ffmpeg"), "-nostdin", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
              "-s", f"{fmt.width}x{fmt.height}", "-r", str(fmt.fps), "-i", "-",
-             *LOSSLESS, str(self.path)],
+             "-vf", f"{rgb_yuv(fmt.width, fmt.height)},format=yuv420p", *LOSSLESS,
+             *color_tags(fmt.width, fmt.height), str(self.path)],
             stdin=subprocess.PIPE, stderr=subprocess.PIPE,
         )
 

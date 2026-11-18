@@ -7,6 +7,8 @@ d'échappement des chemins Windows (`C:\\...`) dans les filtres ffmpeg.
 
 from __future__ import annotations
 
+from cutkiller.transitions.frames import color_tags
+
 import re
 import tempfile
 from dataclasses import dataclass
@@ -101,7 +103,8 @@ def build_ass(cues: list[Cue], width: int, height: int, duration: float, *, size
         if key not in styles:
             styles[key] = f"S{len(styles)}"
     header = [
-        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {width}", f"PlayResY: {height}", "WrapStyle: 0",
+        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {width}", f"PlayResY: {height}",
+        f"YCbCr Matrix: {'TV.709' if min(width, height) >= 720 else 'TV.601'}", "WrapStyle: 0",
         "ScaledBorderAndShadow: yes", "", "[V4+ Styles]",
         "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,"
         "StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
@@ -159,7 +162,7 @@ def burn_ass(src: str | Path, dst: str | Path, ass: str, *, crf: int = 18, font_
             shutil.copy2(font_file, fdir / Path(font_file).name)
             vf += ":fontsdir=fonts"
         args = ["-i", str(src), "-vf", vf, "-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast",
-                "-pix_fmt", "yuv420p"]
+                "-pix_fmt", "yuv420p", *color_tags(info.width or 0, info.height or 0)]
         args += ["-c:a", "copy"] if info.has_audio else ["-an"]
         if dst.suffix.lower() in {".mp4", ".mov", ".m4a"}:
             args += ["-movflags", "+faststart"]

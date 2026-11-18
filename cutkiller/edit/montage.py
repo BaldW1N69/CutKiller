@@ -9,7 +9,7 @@ from pathlib import Path
 
 from cutkiller.edit.timeline import Clip
 from cutkiller.media import probe, run_ffmpeg
-from cutkiller.transitions.frames import VideoFormat
+from cutkiller.transitions.frames import VideoFormat, color_tags, rgb_yuv
 
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".heic"}
 
@@ -40,8 +40,8 @@ def photo_to_clip(img: Path, seconds: float, fmt: VideoFormat, zoom: float, out:
         "-loop", "1", "-i", str(img), "-t", f"{total:.3f}",
         "-vf", (f"scale={w * 2}:{h * 2}:force_original_aspect_ratio=increase,crop={w * 2}:{h * 2},"
                 f"zoompan=z='1+{zoom}*on/{frames}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={w}x{h}:fps={fmt.fps},"
-                "format=yuv420p"),
-        "-frames:v", str(frames), "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", str(out),
+                f"{rgb_yuv(w, h)},format=yuv420p"),
+        "-frames:v", str(frames), "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", *color_tags(w, h), str(out),
     ])
     return out
 
