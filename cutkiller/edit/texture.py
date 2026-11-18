@@ -91,12 +91,15 @@ class TextureSettings:
                              "--grain-file, --dither, --vignette ou --letterbox")
 
 
-def build_texture_filter(s: TextureSettings, w: int, h: int) -> tuple[str, list[list[str]]]:
-    """(filter_complex de [0:v] vers [vout], entrées supplémentaires)."""
+def build_texture_filter(s: TextureSettings, w: int, h: int, *, src: str = "[0:v]", out: str = "[vout]",
+                         first_input: int = 1) -> tuple[str, list[list[str]]]:
+    """(filter_complex de `src` vers `out`, entrées supplémentaires numérotées à partir de `first_input`).
+
+    `src`/`first_input` permettent de greffer la finition au bout d'un autre graphe (rendu en une passe)."""
     w, h = w - w % 2, h - h % 2
     parts: list[str] = []
     inputs: list[list[str]] = []
-    cur = "[0:v]"
+    cur = src
 
     pre = []
     if s.grade:
@@ -132,7 +135,7 @@ def build_texture_filter(s: TextureSettings, w: int, h: int) -> tuple[str, list[
 
     if s.grain_file:
         inputs.append(["-stream_loop", "-1", "-i", str(s.grain_file)])
-        parts.append(f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,format=gbrp[gf]")
+        parts.append(f"[{first_input}:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1,format=gbrp[gf]")
         parts.append(f"{cur}scale={w}:{h},setsar=1,format=gbrp[gb]")
         parts.append(f"[gb][gf]blend=all_mode={s.grain_mode}:all_opacity={s.grain_opacity:.3f}:shortest=1,"
                      f"format=yuv420p[gfo]")
@@ -151,7 +154,7 @@ def build_texture_filter(s: TextureSettings, w: int, h: int) -> tuple[str, list[
                          f"drawbox=x=0:y=ih-{bar}:w=iw:h={bar}:color=black:t=fill[lbx]")
             cur = "[lbx]"
 
-    parts.append(f"{cur}format=yuv420p[vout]")
+    parts.append(f"{cur}format=yuv420p{out}")
     return ";\n".join(parts), inputs
 
 

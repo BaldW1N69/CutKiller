@@ -427,9 +427,10 @@ def render_transitions(plan: TimelinePlan, fit: str, tmp: Path, *, log=None, job
 def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fmt: VideoFormat | None = None,
                     fit: str = "crop", audio: bool = True, crf: int = 20, preset: str = "veryfast",
                     allow_overlap: bool = True, zoom_ramp: int = 3, log=None, jobs: int | None = None,
-                    audio_codec: str = "aac") -> TimelinePlan:
+                    audio_codec: str = "aac", gop: int | None = None, finish=None) -> TimelinePlan:
     """`audio_codec="pcm"` : son non compressé, pour un intermédiaire qui sera mixé ensuite (.mkv/.mov) :
-    évite une génération AAC de plus."""
+    évite une génération AAC de plus. `gop` : une image clé toutes les `gop` images (préréglages plateforme).
+    `finish` (edit.finish.Finish) : look, texte et sous-titres appliqués dans ce même encodage."""
     plan = plan_timeline(clips, joins, fmt, allow_overlap)
     if not plan.clips:
         raise ValueError("Timeline vide : aucun clip ne dure au moins une image.")
@@ -438,28 +439,47 @@ def render_timeline(clips: list[Clip], joins: list[Join], out: str | Path, *, fm
     with tempfile.TemporaryDirectory(prefix="cutkiller_") as tmp:
         trans_files = render_transitions(plan, fit, Path(tmp), log=log, jobs=jobs)
         graph, inputs = build_graph(plan, trans_files, fit, has_audio, zoom_ramp)
+        if finish:
+            from cutkiller.edit.finish import append_finish
+
+            graph = graph.replace("[outv]", "[prefinish]")
+            fparts: list[str] = []
+            extra = append_finish(fparts, "[prefinish]", "[outv]", finish, plan.fmt.width, plan.fmt.height,
+                                  len(inputs), Path(tmp))
+            graph += ";\n" + ";\n".join(fparts)
+            inputs += [(e[:-2], Path(e[-1])) for e in extra]
         script = Path(tmp) / "graph.txt"
         script.write_text(graph, encoding="utf-8")
         args = []
         for pre, p in inputs:
-            args += [*pre, "-i", str(p)]
+            args += [*pre, "-i", str(Path(p).resolve())]  # absolus : le rendu tourne dans le dossier temporaire
         args += ["-filter_complex_script", str(script), "-map", "[outv]", "-c:v", "libx264", "-crf", str(crf),
                  "-preset", preset, "-pix_fmt", "yuv420p", "-r", str(plan.fmt.fps),
                  *color_tags(plan.fmt.width, plan.fmt.height)]
+        if gop:
+            args += ["-g", str(gop), "-keyint_min", str(min(gop, max(1, int(plan.fmt.fps))))]
         if has_audio:
             args += ["-map", "[outa]", *_audio_args(audio_codec)]
         if out.suffix.lower() in {".mp4", ".mov", ".m4a"}:
             args += ["-movflags", "+faststart"]
-        run_ffmpeg(args + [str(out)])
+        run_ffmpeg(args + [str(out.resolve())], cwd=tmp)
     return plan
 
 
 def assign_joins(cut_times: list[float], picker=None, *, duration: float = 0.4, every: int = 1,
-                 min_gap: float = 0.0, audio_fade: float = 0.03, jl: float = 0.0) -> list[Join]:
-    """Un raccord par coupe : transition toutes les `every` coupes, espacées d'au moins `min_gap` s."""
-    joins, last = [], -1e9
+                 min_gap: float = 0.0, audio_fade: float = 0.03, jl: float = 0.0,
+                 strong: list[bool] | None = None) -> list[Join]:
+    """Un raccord par coupe : transition toutes les `every` coupes, espacées d'au moins `min_gap` s.
+    `strong` : si fourni, seules les coupes marquées (temps forts de la musique) reçoivent une transition ;
+    les autres restent des coupes franches (`every` compte alors parmi les coupes fortes)."""
+    joins, last, n_strong = [], -1e9, 0
     for k, t in enumerate(cut_times):
-        use = picker is not None and k % max(1, every) == 0 and t - last >= min_gap
+        if strong is not None:
+            is_strong = k < len(strong) and strong[k]
+            use = picker is not None and is_strong and n_strong % max(1, every) == 0 and t - last >= min_gap
+            n_strong += is_strong
+        else:
+            use = picker is not None and k % max(1, every) == 0 and t - last >= min_gap
         if use:
             last = t
             joins.append(Join(picker.next(), duration, max(audio_fade, min(duration, 0.25)), jl))

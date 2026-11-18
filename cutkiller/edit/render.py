@@ -34,8 +34,9 @@ def build_cut_filter(segments: list[Interval], has_video: bool, fade: float = FA
 
 def render_cuts(src: str | Path, dst: str | Path, segments: list[Interval], *, crf: int = 20, preset: str = "veryfast",
                 joins=None, zooms: list[float] | None = None, focus: tuple[float, float] = (0.5, 0.4),
-                zoom_ramp: int = 3, log=None, audio_codec: str = "aac") -> Path:
-    """Rend les segments gardés. Vidéo : via la timeline (transitions, punch-in) ; audio seul : concat simple."""
+                zoom_ramp: int = 3, log=None, audio_codec: str = "aac", **timeline) -> Path:
+    """Rend les segments gardés. Vidéo : via la timeline (transitions, punch-in) ; audio seul : concat simple.
+    `timeline` : options passées à render_timeline (fmt, fit, gop, finish)."""
     if not segments:
         raise ValueError("Aucun segment à garder : vérifie le seuil de silence.")
     info = probe(src)
@@ -45,7 +46,7 @@ def render_cuts(src: str | Path, dst: str | Path, segments: list[Interval], *, c
 
         clips = [Clip(Path(src), s.start, s.end, zooms[k] if zooms else 1.0, focus) for k, s in enumerate(segments)]
         render_timeline(clips, joins or [Join() for _ in clips[1:]], dst, crf=crf, preset=preset, zoom_ramp=zoom_ramp,
-                        log=log, audio_codec=audio_codec)
+                        log=log, audio_codec=audio_codec, **timeline)
         return dst
     graph = build_cut_filter(segments, has_video=False)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as fh:

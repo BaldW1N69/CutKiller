@@ -287,6 +287,37 @@ cutkiller montage rush/*.mp4 photos/*.jpg --size 1080x1920 --music "upbeat" \
 - Photos animées avec un zoom lent (effet Ken Burns).
 - Format libre : vertical `1080x1920`, horizontal `1920x1080`, carré… `--fit crop|pad|stretch` choisit comment adapter chaque source.
 - `--keep-audio` garde le son des clips, avec la musique baissée dessous.
+- `--pacing energy` : **courbe de rythme**. Les plans raccourcissent quand la musique pousse (moitié de `--beats-per-clip` sur les passages les plus forts) et s'allongent quand elle respire (le double sur les plus calmes). L'énergie est lissée sur une phrase de 8 temps ; sur un morceau sans vraie dynamique (moins de 3 dB d'écart), le rythme reste régulier.
+- `--transition-on strong` : transitions seulement sur les **temps forts** (premier temps de mesure, montée d'énergie type drop), coupe franche partout ailleurs. Le montage démarre alors sur un premier temps, pour que les coupes tombent sur les « 1 ».
+
+```bash
+cutkiller montage rush/*.mp4 --music titre.mp3 --platform shorts --pacing energy \
+  --transition "random:dynamic" --transition-on strong --sfx-kit cinematic --look film
+```
+
+## Diffusion et finition : `--platform`, `--draft`, `--look`, `--text`, `--captions`
+
+Options de `auto` et `montage`, appliquées **dans le même encodage** que le montage. Avant, enchaîner `texture` puis `text` réencodait toute la vidéo à chaque étape.
+
+| Option | Effet |
+|---|---|
+| `--platform tiktok\|shorts\|reels\|youtube` | Format (1080x1920 ou 1920x1080), cadence plafonnée à 60 i/s, -14 LUFS / -1 dBTP, envoi en CRF 18, image clé toutes les 2 s. Prévient si la durée dépasse la limite indicative de la plateforme (à vérifier, ces limites évoluent). |
+| `--draft` | Brouillon en 540p et encodage ultrafast, environ 2 fois plus rapide : pour valider le montage avant le rendu final. |
+| `--look cinematic\|night\|film\|noir\|retro` | Les looks de `cutkiller texture`, sans réencodage. |
+| `--text "ACCROCHE@0-3:center:yellow"` | Même syntaxe que `cutkiller text` (répétable), avec `--text-size` et `--font`. |
+| `--captions tiktok\|bold\|karaoke\|minimal` (`auto`) | Sous-titres animés, recalés sur la vidéo **après** la coupe des silences. Les mots viennent de `--words`, de `<vidéo>.listen.json`, ou d'une transcription. |
+
+Mesuré (`python bench/features_bench.py`) : `montage --look film --text …` prend 34,6 s contre 46,5 s pour l'enchaînement `montage` → `texture` → `text`. Il fait 3 encodages vidéo au lieu de 5, avec une qualité supérieure (SSIM 0,948 contre 0,944).
+
+## Performances et benchmark
+
+```bash
+python bench/run_bench.py --runs 3 --compare baseline
+```
+
+Le script génère ses propres vidéos de test. Il mesure le temps total et par étape, les processus ffmpeg et les encodages, la loudness (ebur128) et le SSIM/PSNR par rapport au même rendu sans perte. Il compare ensuite à `bench/baseline.json`.
+
+- **Parallélisme :** les transitions sont rendues en parallèle. `CUTKILLER_JOBS=N` fixe le nombre de processus ; par défaut, le nombre de cœurs, plafonné à 4.
 
 ## Banques de sons : `cutkiller sounds`
 

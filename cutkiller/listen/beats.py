@@ -139,3 +139,66 @@ def snap(t: float, grid: list[float], tolerance: float) -> float:
     arr = np.asarray(grid)
     i = int(np.argmin(np.abs(arr - t)))
     return float(arr[i]) if abs(arr[i] - t) <= tolerance else t
+
+
+@dataclass
+class MusicStructure:
+    """Lecture musicale de la grille de beats, pour monter « avec » le morceau et pas seulement en mesure."""
+    energy_db: list[float]  # niveau RMS de chaque intervalle entre deux beats
+    downbeats: list[int]  # indices des premiers temps de mesure (4/4)
+    drops: list[int]  # indices où l'énergie monte nettement (entrée du refrain, drop)
+
+    def level(self, i: int, phrase: int = 8, min_range_db: float = 3.0) -> float:
+        """Énergie relative de la phrase autour du beat i : 0 = passage le plus calme, 1 = le plus fort.
+        Lissée sur `phrase` beats (le rythme suit les sections, pas chaque temps) ; 0.5 partout si le
+        morceau n'a pas de vraie dynamique (moins de `min_range_db` entre passages calmes et forts)."""
+        e = np.asarray(self.energy_db, dtype=np.float64)
+        if e.size == 0:
+            return 0.5
+        k = min(phrase, e.size)
+        smooth = np.convolve(np.pad(e, (k // 2, k - k // 2 - 1), mode="edge"), np.ones(k) / k, mode="valid")
+        if np.percentile(smooth, 90) - np.percentile(smooth, 10) < min_range_db:
+            return 0.5
+        return float((smooth < smooth[min(i, e.size - 1)] - 0.5).mean())
+
+    def strong(self, i: int) -> bool:
+        return i in self._strong
+
+    def __post_init__(self):
+        self._strong = set(self.downbeats) | set(self.drops)
+
+    def from_beat(self, k: int) -> "MusicStructure":
+        """Même structure, indices décalés pour une grille qui commence au beat k."""
+        return MusicStructure(self.energy_db[k:], [d - k for d in self.downbeats if d >= k],
+                              [d - k for d in self.drops if d >= k])
+
+
+def music_structure(audio: np.ndarray, sr: int, beats: list[float], *, drop_db: float = 6.0,
+                    window: int = 4) -> MusicStructure:
+    """Énergie par beat, premiers temps de mesure (phase 4/4 la plus accentuée) et drops (hausse
+    d'énergie >= `drop_db` entre les `window` beats d'avant et ceux d'après)."""
+    if len(beats) < 2:
+        return MusicStructure([], [], [])
+    bounds = [int(b * sr) for b in beats] + [min(audio.size, int((2 * beats[-1] - beats[-2]) * sr))]
+    energy = []
+    for a, b in zip(bounds[:-1], bounds[1:]):
+        seg = audio[a:max(b, a + 1)]
+        energy.append(float(10 * np.log10(np.mean(seg.astype(np.float64) ** 2) + 1e-10)) if seg.size else -100.0)
+    env = onset_envelope(audio, sr)
+    fps = sr / HOP
+    accent = np.array([env[min(env.size - 1, int(b * fps))] if env.size else 0.0 for b in beats]) + \
+        np.array(energy) / 100.0  # attaque + niveau : le premier temps est le plus appuyé
+    phase = int(np.argmax([accent[p::4].mean() if accent[p::4].size else -1 for p in range(4)]))
+    downbeats = list(range(phase, len(beats), 4))
+    e = np.array(energy)
+    rise = np.full(len(beats), -np.inf)
+    for i in range(window, len(beats) - window + 1):
+        rise[i] = e[i:i + window].mean() - e[i - window:i].mean()
+    # sommets de la montée (et non premier dépassement du seuil : un seul temps fort tire la moyenne)
+    drops = []
+    for i in np.argsort(-rise):
+        if rise[i] < drop_db:
+            break
+        if all(abs(int(i) - d) >= window for d in drops):
+            drops.append(int(i))
+    return MusicStructure(energy, downbeats, sorted(drops))

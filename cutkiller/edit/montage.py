@@ -46,10 +46,21 @@ def photo_to_clip(img: Path, seconds: float, fmt: VideoFormat, zoom: float, out:
     return out
 
 
+def pacing_curve(n_beats: int, base: int, level) -> list[int]:
+    """Temps par clip selon l'énergie de la musique (courbe de rythme) : plans plus courts quand le morceau
+    pousse (tiers le plus fort : base / 2), plus longs quand il respire (tiers le plus calme : base x 2)."""
+    out = []
+    for i in range(n_beats):
+        lv = level(i)
+        out.append(max(1, base // 2) if lv >= 2 / 3 else base * 2 if lv < 1 / 3 else base)
+    return out
+
+
 def build_montage(inputs: list[Path], fmt: VideoFormat, settings: MontageSettings, work: Path,
-                  beats: list[float] | None = None) -> list[Clip]:
+                  beats: list[float] | None = None, beats_per_clip: list[int] | None = None) -> list[Clip]:
     """Un extrait centré par source. Avec une grille de beats, chaque coupe vise un temps ;
-    un clip trop court décale une coupe, la suivante se recale sur la grille."""
+    un clip trop court décale une coupe, la suivante se recale sur la grille.
+    `beats_per_clip` : nombre de temps voulu pour le clip qui démarre à chaque beat (courbe de rythme)."""
     clips: list[Clip] = []
     photos: list[tuple[Path, float, Path]] = []
     F = fmt.fps
@@ -61,7 +72,8 @@ def build_montage(inputs: list[Path], fmt: VideoFormat, settings: MontageSetting
         if beats:
             if bi + 1 >= len(beats):
                 break  # fin de la musique
-            target = min(bi + settings.beats_per_clip, len(beats) - 1)
+            step = beats_per_clip[bi] if beats_per_clip and bi < len(beats_per_clip) else settings.beats_per_clip
+            target = min(bi + step, len(beats) - 1)
             want = beats[target] - t
         else:
             target = None

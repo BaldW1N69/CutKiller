@@ -363,13 +363,13 @@ def _add_transition_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--jl", type=float, default=0.0, help="décalage son/image : >0 L-cut, <0 J-cut (s)")
 
 
-def _joins(a: argparse.Namespace, cut_times: list[float]):
+def _joins(a: argparse.Namespace, cut_times: list[float], strong: list[bool] | None = None):
     from cutkiller.edit.timeline import assign_joins
     from cutkiller.transitions import Picker
 
     picker = Picker(a.transition, seed=a.seed) if getattr(a, "transition", None) else None
     joins = assign_joins(cut_times, picker, duration=a.transition_duration, every=a.transition_every,
-                         min_gap=a.transition_min_gap, audio_fade=a.audio_fade, jl=a.jl)
+                         min_gap=a.transition_min_gap, audio_fade=a.audio_fade, jl=a.jl, strong=strong)
     a._transition_times = [t for t, j in zip(cut_times, joins) if j.transition is not None]
     a._transition_events = [(t, j.transition) for t, j in zip(cut_times, joins) if j.transition is not None]
     return joins
@@ -653,6 +653,98 @@ def cmd_mix(a: argparse.Namespace) -> int:
     return _finish(out, credits)
 
 
+# Finition dans le rendu principal : même qualité d'encodage que les commandes texture/text qu'elle remplace
+# (CRF 18 : le grain et les aplats de texte supportent mal un CRF plus élevé).
+FINISH_CRF = 18
+
+
+def _delivery(a: argparse.Namespace, fmt):
+    """--platform / --draft → (format de sortie, options d'encodage). Sans eux : inchangé."""
+    from cutkiller.transitions.frames import VideoFormat
+
+    enc: dict = {}
+    plat = getattr(a, "platform", None)
+    if plat:
+        from cutkiller import platforms
+
+        p = platforms.get(plat)
+        fps = min(fmt.fps if fmt else 30.0, p.max_fps)
+        fmt = VideoFormat(p.width, p.height, fps)
+        enc.update(platforms.encode_args(p, fps))
+        if not getattr(a, "no_normalize", False) and a.target_lufs == -14.0:
+            a.target_lufs = p.lufs
+        print(f"  Plateforme : {p.label}, {p.width}x{p.height} à {fps:g} i/s, {p.lufs:g} LUFS, "
+              f"image clé toutes les {p.gop_seconds:g} s")
+    if getattr(a, "draft", False):
+        w, h = (fmt.width, fmt.height) if fmt else (1080, 1920)
+        k = 540 / min(w, h) if min(w, h) > 540 else 1.0
+        fmt = VideoFormat(int(w * k) // 2 * 2, int(h * k) // 2 * 2, fmt.fps if fmt else 30.0)
+        enc.update(crf=28, preset="ultrafast")
+        enc.pop("gop", None)
+        print(f"  Brouillon : {fmt.width}x{fmt.height}, encodage ultrafast (vérifier le montage, pas la qualité)")
+    return fmt, enc
+
+
+def _warn_duration(a: argparse.Namespace, duration: float) -> None:
+    if getattr(a, "platform", None):
+        from cutkiller import platforms
+
+        msg = platforms.duration_warning(platforms.get(a.platform), duration)
+        if msg:
+            print(f"  ! {msg}", file=sys.stderr)
+
+
+def _finish_opts(a: argparse.Namespace, width: int, height: int, duration: float, words=None):
+    """--look / --text / --captions → finition appliquée dans l'encodage principal (une seule génération)."""
+    from cutkiller.edit.finish import Finish
+
+    fin = Finish()
+    if getattr(a, "look", None):
+        from cutkiller.edit.texture import LOOKS, TextureSettings
+
+        fin.texture = TextureSettings(**LOOKS[a.look])
+    scripts = []
+    font_family_name, font_file = None, None
+    if getattr(a, "text", None) or words:
+        from cutkiller.edit.text import font_family
+
+        font_family_name, font_file = font_family(getattr(a, "font", None) or "Arial")
+    if getattr(a, "text", None):
+        from cutkiller.edit.text import build_ass, parse_cue
+
+        cues = [parse_cue(t) for t in a.text]
+        scripts.append(build_ass(cues, width, height, duration, size=a.text_size, font=font_family_name))
+    if words:
+        from cutkiller.edit.captions import build_captions_ass
+
+        scripts.append(build_captions_ass(words, width, height, style=a.captions, font=font_family_name))
+    fin.ass = scripts or None
+    fin.font_file = font_file
+    return fin if fin else None
+
+
+def _caption_words(a: argparse.Namespace, rep, segs):
+    """Mots pour --captions : transcription déjà faite (--remove-fillers), --words, <vidéo>.listen.json,
+    sinon transcription maintenant. Recalés sur la vidéo montée."""
+    if not getattr(a, "captions", None):
+        return None
+    from cutkiller.edit.captions import load_words
+    from cutkiller.edit.finish import remap_words
+
+    words = rep.words
+    if not words:
+        report = Path(a.words) if getattr(a, "words", None) else Path(a.input).with_suffix(".listen.json")
+        if report.exists():
+            words = load_words(report)
+        else:
+            from cutkiller.listen.transcribe import transcribe
+
+            words, _ = transcribe(a.input, a.whisper_model, a.language)
+    out = remap_words(words, segs)
+    print(f"  Sous-titres : {len(out)} mots, style {a.captions}")
+    return out
+
+
 def cmd_auto(a: argparse.Namespace) -> int:
     from cutkiller.edit.cutlist import output_cut_points, total_duration
     from cutkiller.media import atomic_output
@@ -665,6 +757,21 @@ def cmd_auto(a: argparse.Namespace) -> int:
     rep, segs = _plan_cut(a)
     print(f"    {rep.media.duration:.1f} s → {total_duration(segs):.1f} s, {len(segs) - 1} coupes")
     joins = _joins(a, output_cut_points(segs))
+    from cutkiller.transitions.frames import VideoFormat
+
+    info = rep.media
+    src_fmt = VideoFormat.from_media(info) if info.has_video else None
+    fmt, enc = _delivery(a, src_fmt)
+    _warn_duration(a, total_duration(segs))
+    timeline = dict(enc)
+    if fmt is not None and fmt != src_fmt:
+        timeline["fmt"] = fmt
+    if info.has_video:
+        w, h = (fmt or src_fmt).width, (fmt or src_fmt).height
+        fin = _finish_opts(a, w, h, total_duration(segs), _caption_words(a, rep, segs))
+        if fin:
+            timeline["finish"] = fin
+            timeline.setdefault("crf", FINISH_CRF)
     print("2/4 Sons…")
     plan, credits = _prepare_mix(a, total_duration(segs), output_cut_points(segs), clicks=False)
     print("3/4 Coupe" + (" + transitions…" if a.transition else "…"))
@@ -672,12 +779,24 @@ def cmd_auto(a: argparse.Namespace) -> int:
     cut = final.with_name(f".{final.stem}.cut.mov")  # .mov : PCM + base de temps exacte (mkv arrondit à la ms)
     try:
         with atomic_output(final) as tmp_final:
-            render_cuts(src, cut, segs, joins=joins, log=print, audio_codec="pcm", **_punch(a, len(segs), joins))
+            render_cuts(src, cut, segs, joins=joins, log=print, audio_codec="pcm", **_punch(a, len(segs), joins),
+                        **timeline)
             print("4/4 Mixage…")
             render_mix(cut, tmp_final, plan)
     finally:
         cut.unlink(missing_ok=True)
     return _finish(final, credits)
+
+
+def _on_strong_beat(t: float, beats: list[float], structure, tol: float) -> bool:
+    """La coupe tombe-t-elle sur un premier temps de mesure ou un drop ?"""
+    import bisect
+
+    k = bisect.bisect_left(beats, t)
+    for j in (k - 1, k):
+        if 0 <= j < len(beats) and abs(beats[j] - t) <= tol:
+            return structure.strong(j)
+    return False
 
 
 def cmd_montage(a: argparse.Namespace) -> int:
@@ -702,28 +821,58 @@ def cmd_montage(a: argparse.Namespace) -> int:
         fmt = VideoFormat.from_media(probe(first_video), a.fps)
     else:
         fmt = VideoFormat(1080, 1920, a.fps or 30.0)
+    if a.size and getattr(a, "platform", None):
+        print("  ! --size prime sur le format de --platform", file=sys.stderr)
+        size_fmt = fmt
+        fmt, enc = _delivery(a, fmt)
+        fmt = VideoFormat(size_fmt.width, size_fmt.height, fmt.fps) if not a.draft else fmt
+    else:
+        fmt, enc = _delivery(a, fmt)
     out = Path(a.output or "montage.mp4")
     credits = Credits()
-    music_path, beats = None, None
+    music_path, beats, structure, bpc = None, None, None, None
     print("1/4 Musique et rythme…")
     if a.music:
         music_path = _resolve_sound(a.music, "music", credits, min_duration=20, target=a.max_duration or 30)
-        info = analyze_beats(load_audio(music_path, ANALYSIS_SR), ANALYSIS_SR)
+        music_audio = load_audio(music_path, ANALYSIS_SR)
+        info = analyze_beats(music_audio, ANALYSIS_SR)
         beats = beat_grid(info.beats, info.confidence, a.music_start)
         if beats:
-            a.music_start = a.music_start + ([b for b in info.beats if b >= a.music_start] or [0])[0]
+            usable = [b for b in info.beats if b >= a.music_start]
+            a.music_start = a.music_start + (usable or [0])[0]
             print(f"    {info.bpm:.0f} BPM, coupe tous les {a.beats_per_clip} temps")
+            if a.pacing == "energy" or a.transition_on == "strong":
+                from cutkiller.listen.beats import music_structure
+
+                structure = music_structure(music_audio, ANALYSIS_SR, usable)
+                d0 = structure.downbeats[0] if structure.downbeats else 0
+                if 0 < d0 < len(usable) - 4:  # démarrer sur un premier temps : les coupes tombent sur les « 1 »
+                    a.music_start += usable[d0] - usable[0]
+                    usable = usable[d0:]
+                    beats = [b - usable[0] for b in usable]
+                    structure = structure.from_beat(d0)
+                print(f"    structure : {len(structure.downbeats)} premiers temps de mesure, "
+                      f"{len(structure.drops)} montée(s) d'énergie (drops)")
+            if a.pacing == "energy":
+                from cutkiller.edit.montage import pacing_curve
+
+                bpc = pacing_curve(len(beats), a.beats_per_clip, structure.level)
+                print(f"    courbe de rythme : {min(bpc)} à {max(bpc)} temps par clip selon l'énergie")
         else:
             print("    rythme incertain : durée fixe par clip")
     settings = MontageSettings(beats_per_clip=a.beats_per_clip, clip_duration=a.clip_duration,
                                max_duration=a.max_duration, photo_duration=a.photo_duration)
     with tempfile.TemporaryDirectory(prefix="cutkiller_montage_") as work:
-        clips = build_montage(inputs, fmt, settings, Path(work), beats)
+        clips = build_montage(inputs, fmt, settings, Path(work), beats, beats_per_clip=bpc)
         if not clips:
             raise ValueError("Aucun clip utilisable.")
         plan = plan_timeline(clips, [Join() for _ in clips[1:]], fmt)
         cut_times = plan.cut_times()
-        joins = _joins(a, cut_times)
+        strong = None
+        if structure is not None and a.transition_on == "strong":
+            strong = [_on_strong_beat(t, beats, structure, 1.5 / fmt.fps) for t in cut_times]
+        joins = _joins(a, cut_times, strong=strong)
+        _warn_duration(a, plan.duration)
         print(f"2/4 Plan : {len(clips)} clips, {plan.duration:.1f} s, {len(a._transition_times)} transitions")
         mixplan, mcredits = _prepare_mix(a, plan.duration, cut_times, music_path=music_path)
         for s_ in mcredits.items:
@@ -732,7 +881,11 @@ def cmd_montage(a: argparse.Namespace) -> int:
             mixplan.music.duck = a.keep_audio and not a.no_duck
         print("3/4 Rendu vidéo…")
         tmp = Path(work) / "timeline.mov"  # son PCM (une seule génération AAC) et base de temps exacte
-        render_timeline(clips, joins, tmp, fmt=fmt, fit=a.fit, audio=a.keep_audio, log=print, audio_codec="pcm")
+        fin = _finish_opts(a, fmt.width, fmt.height, plan.duration)
+        if fin:
+            enc.setdefault("crf", FINISH_CRF)
+        render_timeline(clips, joins, tmp, fmt=fmt, fit=a.fit, audio=a.keep_audio, log=print, audio_codec="pcm",
+                        finish=fin, **enc)
         print("4/4 Mixage…")
         with atomic_output(out) as tmp_out:
             render_mix(tmp, tmp_out, mixplan)
@@ -761,6 +914,27 @@ def _add_mix_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--kit-volume", type=float, default=0.0, help="gain ajouté à tous les sons du kit (dB)")
     p.add_argument("--target-lufs", type=float, default=-14.0, help="loudness finale (-14 YouTube/TikTok)")
     p.add_argument("--no-normalize", action="store_true")
+
+
+def _add_delivery_args(p: argparse.ArgumentParser, captions: bool = False) -> None:
+    from cutkiller.edit.texture import LOOKS
+    from cutkiller.platforms import PLATFORMS
+
+    g = p.add_argument_group("diffusion et finition (appliquées dans le même encodage)")
+    g.add_argument("--platform", choices=list(PLATFORMS),
+                   help="règle format, cadence max, loudness, qualité d'envoi et images clés pour la plateforme")
+    g.add_argument("--draft", action="store_true",
+                   help="brouillon rapide (540p, ultrafast) pour vérifier le montage avant le rendu final")
+    g.add_argument("--look", choices=list(LOOKS), help="finition (comme « cutkiller texture --look »), sans réencodage")
+    g.add_argument("--text", action="append", metavar="TEXTE@DÉBUT-FIN[:position[:couleur[:taille%]]]",
+                   help="texte incrusté dans le même encodage (même syntaxe que « cutkiller text »)")
+    g.add_argument("--text-size", type=float, default=6.0, help="taille du texte en %% de la hauteur")
+    g.add_argument("--font", default="Arial", help="police installée OU fichier .ttf/.otf (texte et sous-titres)")
+    if captions:
+        g.add_argument("--captions", choices=["tiktok", "bold", "karaoke", "minimal"],
+                       help="sous-titres animés recalés sur la vidéo montée (mots : --words, <vidéo>.listen.json "
+                            "ou transcription)")
+        g.add_argument("--words", help="rapport de « cutkiller listen --transcribe » pour --captions")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -801,6 +975,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_cut_args(p)
     _add_mix_args(p)
     _add_transition_args(p)
+    _add_delivery_args(p, captions=True)
     p.set_defaults(func=cmd_auto, snap_to=False)
 
     p = sub.add_parser("montage", help="montage de plusieurs vidéos/photos calé sur le rythme de la musique")
@@ -814,8 +989,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--photo-duration", type=float, default=3.0)
     p.add_argument("--max-duration", type=float, default=None)
     p.add_argument("--keep-audio", action="store_true", help="garder le son des clips (musique baissée dessous)")
+    p.add_argument("--pacing", choices=["fixed", "energy"], default="fixed",
+                   help="energy = courbe de rythme : plans plus courts quand la musique pousse, plus longs "
+                        "quand elle respire (défaut fixed : --beats-per-clip partout)")
+    p.add_argument("--transition-on", choices=["all", "strong"], default="all",
+                   help="strong = transitions seulement sur les temps forts (premier temps de mesure, drop), "
+                        "coupe franche ailleurs")
     _add_mix_args(p)
     _add_transition_args(p)
+    _add_delivery_args(p)
     p.set_defaults(func=cmd_montage)
 
     tp = sub.add_parser("transitions", help="catalogue, aperçus et galerie des transitions").add_subparsers(
