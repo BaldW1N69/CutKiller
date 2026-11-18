@@ -301,10 +301,13 @@ def loudness(path: Path) -> dict:
             "lra_lu": get(r"LRA:\s+(-?[\d.]+) LU")}
 
 
-def quality(dist: Path, ref: Path) -> dict:
+def quality(dist: Path, ref: Path, fps: float) -> dict:
+    # Pair frames by index, not by timestamp: ssim/psnr sync their inputs on timestamps, and two files
+    # with different time bases (1/15360 mp4 vs 1/1000 mkv) get paired off by one frame at times.
+    # (Baseline v1 suffered from this: SSIM 0.984 / PSNR 27 dB were partly misalignment.)
+    idx = f"setpts=N/({fps}*TB)"
     r = _real_run(["ffmpeg", "-nostdin", "-hide_banner", "-i", str(dist), "-i", str(ref), "-lavfi",
-                   "[0:v]setpts=PTS-STARTPTS[d];[1:v]setpts=PTS-STARTPTS[r];[d][r]ssim;"
-                   "[0:v]setpts=PTS-STARTPTS[d2];[1:v]setpts=PTS-STARTPTS[r2];[d2][r2]psnr",
+                   f"[0:v]{idx}[d];[1:v]{idx}[r];[d][r]ssim;[0:v]{idx}[d2];[1:v]{idx}[r2];[d2][r2]psnr",
                    "-f", "null", "-"], capture_output=True, text=True)
     ssim = re.search(r"SSIM .*All:([\d.]+)", r.stderr)
     psnr = re.search(r"PSNR .*average:([\d.inf]+)", r.stderr)
@@ -343,7 +346,8 @@ def bench(runs: int, only: list[str] | None) -> dict:
         ref_target = ref_dir / f"{name}.mkv"
         ref_argv[argv.index("-o") + 1] = str(ref_target)
         run_scenario(ref_argv, lossless=True)
-        res["quality_vs_lossless"] = quality(target, ref_target)
+        num, den = res["output"]["video"]["avg_frame_rate"].split("/")
+        res["quality_vs_lossless"] = quality(target, ref_target, float(num) / float(den))
         ref_target.unlink(missing_ok=True)  # lossless renders are large
         results[name] = res
         print(f"[{name}] {res['wall_s_median']} s, SSIM {res['quality_vs_lossless']['ssim']}", file=sys.stderr)
@@ -352,7 +356,14 @@ def bench(runs: int, only: list[str] | None) -> dict:
 
 def environment() -> dict:
     ver = _real_run(["ffmpeg", "-version"], capture_output=True, text=True).stdout.splitlines()[0]
-    commit = _real_run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=ROOT).stdout.strip()
+    import cutkiller  # the code actually measured (PYTHONPATH may point at another checkout)
+
+    code_dir = Path(cutkiller.__file__).resolve().parent.parent
+    commit = _real_run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
+                       cwd=code_dir).stdout.strip()
+    dirty = _real_run(["git", "status", "--porcelain", "cutkiller"], capture_output=True, text=True,
+                      cwd=code_dir).stdout.strip()
+    commit += "+dirty" if dirty else ""
     return {"commit": commit, "python": platform.python_version(), "ffmpeg": ver, "cpus": os.cpu_count(),
             "platform": platform.platform(), "gpu": shutil.which("nvidia-smi") is not None}
 
