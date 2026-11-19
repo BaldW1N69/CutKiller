@@ -1,0 +1,31 @@
+[project]
+name = "cutkiller-workers"
+version = "0.1.0"
+description = "Workers d'analyse de CutKiller (transcription, alignement, beats, suivi du sujet)"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = [
+    "faster-whisper>=1.2.1",
+    "librosa>=0.11.0",
+    "numpy>=2.4.6",
+    "opencv-python-headless>=4.10",
+    "silero-vad>=6.2.3",
+    "soundfile>=0.14.0",
+    "torch>=2.14.0",
+    "torchaudio>=2.11.0",
+    "transformers>=5.17.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 110
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cpu"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["models: télécharge et exécute les modèles ASR (lent, ~3 Go)"]

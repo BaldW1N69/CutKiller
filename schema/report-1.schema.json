@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "reportVersion": {
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string"
+    },
+    "tool": {
+      "type": "string"
+    },
+    "video": {
+      "type": "string"
+    },
+    "edl": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string"
+    },
+    "fps": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "coverage": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "categories": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "enum": [
+          "montage",
+          "motion",
+          "captions",
+          "audio",
+          "image"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "evaluatedWeight": {
+            "type": "number"
+          },
+          "totalWeight": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "score",
+          "evaluatedWeight",
+          "totalWeight"
+        ],
+        "additionalProperties": false
+      },
+      "required": [
+        "montage",
+        "motion",
+        "captions",
+        "audio",
+        "image"
+      ]
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ruleId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "not-evaluated"
+            ]
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "violations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "frame": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "time": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "measured": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "note": {
+            "type": "string"
+          },
+          "ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "montage",
+              "motion",
+              "captions",
+              "audio",
+              "image"
+            ]
+          },
+          "threshold": {
+            "type": "string"
+          },
+          "measuredOn": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ruleId",
+          "status",
+          "score",
+          "violations",
+          "title",
+          "weight",
+          "category",
+          "threshold",
+          "measuredOn"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "reportVersion",
+    "generatedAt",
+    "tool",
+    "video",
+    "profile",
+    "score",
+    "coverage",
+    "categories",
+    "results"
+  ],
+  "additionalProperties": false
+}

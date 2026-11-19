@@ -1,0 +1,45 @@
+{
+  "name": "neon-80s",
+  "version": "1.0.0",
+  "kind": "look",
+  "description": "Style « néon années 80 », inspiré de Vice City / Miami : couleurs saturées (+35 %), rouges vers le magenta, bleus vers le cyan, jaunes vers l'orange coucher de soleil, ombres violettes, hautes lumières roses, halo néon (bloom) autour des lumières, grain léger. Pour un contenu nocturne, pop, énergique.",
+  "params": {
+    "contrast": 0.12,
+    "pivot": 0.45,
+    "lift": 0.03,
+    "saturation": 0.3,
+    "warmth": 0,
+    "shadowTint": [0.015, -0.03, 0.05],
+    "highlightTint": [0.03, -0.01, 0.02],
+    "hueShifts": [
+      {
+        "hue": 0,
+        "width": 25,
+        "shift": -18
+      },
+      {
+        "hue": 220,
+        "width": 35,
+        "shift": -25
+      },
+      {
+        "hue": 60,
+        "width": 25,
+        "shift": -15
+      },
+      {
+        "hue": 120,
+        "width": 30,
+        "shift": 40
+      }
+    ],
+    "skinProtect": 1,
+    "size": 33,
+    "texture": {
+      "grain": 0.04,
+      "vignette": 0.25,
+      "halation": 0.1,
+      "bloom": 0.3
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "pop-in",
+  "version": "1.0.0",
+  "kind": "motion",
+  "description": "Apparition d'un élément (texte, sticker) : échelle 0 → 1 en 250 ms, ressort à ≈5 % de dépassement.",
+  "params": {
+    "property": "scale",
+    "role": "entry",
+    "durationMs": 250,
+    "from": 0,
+    "to": 1,
+    "ease": { "spring": { "stiffness": 830, "damping": 39.8, "mass": 1 } }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "noir",
+  "version": "1.0.0",
+  "kind": "look",
+  "description": "Style « noir » : noir et blanc contrasté (S +35 %), noirs profonds, grain marqué, vignette lourde. Pour un témoignage grave, un flash-back, un contenu dramatique.",
+  "params": {
+    "contrast": 0.35,
+    "pivot": 0.45,
+    "lift": 0.005,
+    "saturation": -1,
+    "warmth": 0,
+    "shadowTint": [0, 0, 0],
+    "highlightTint": [0, 0, 0],
+    "hueShifts": [],
+    "skinProtect": 1,
+    "size": 33,
+    "texture": {
+      "grain": 0.12,
+      "vignette": 0.55,
+      "halation": 0,
+      "bloom": 0
+    }
+  }
+}

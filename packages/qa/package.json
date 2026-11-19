@@ -1,0 +1,29 @@
+{
+  "name": "@cutkiller/qa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@cutkiller/core": "workspace:*",
+    "@cutkiller/render": "workspace:*",
+    "@cutkiller/media": "workspace:*",
+    "zod": "4.6.5",
+    "@cutkiller/style": "workspace:*",
+    "@cutkiller/analyze": "workspace:*",
+    "@cutkiller/cut": "workspace:*",
+    "@cutkiller/motion": "workspace:*",
+    "@cutkiller/captions": "workspace:*",
+    "canvas": "3.2.3",
+    "@cutkiller/audio": "workspace:*",
+    "@cutkiller/color": "workspace:*"
+  },
+  "devDependencies": {
+    "@cutkiller/fixtures": "workspace:*",
+    "@cutkiller/captions": "workspace:*",
+    "@cutkiller/reframe": "workspace:*"
+  }
+}

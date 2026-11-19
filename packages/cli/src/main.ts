@@ -1,0 +1,190 @@
+#!/usr/bin/env node
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { parseArgs } from "node:util";
+import { edlJsonSchema, profileJsonSchema } from "@cutkiller/core";
+import { ffmpegVersion, probeSource } from "@cutkiller/media";
+import {
+  captionLabels,
+  compareFingerprints,
+  fingerprint,
+  fingerprintMarkdown,
+  formatLabels,
+  type Report,
+  reportJsonSchema,
+} from "@cutkiller/qa";
+import { listLooks, loadProfile, PresetRegistry, withLook } from "@cutkiller/style";
+import { calibrate, calibrationMarkdown } from "./calibrate";
+import { check, doRender, plan, readEdl } from "./pipeline";
+
+const USAGE = `cutkiller <commande> [options]
+
+  probe <fichiers…>                         métadonnées des rushes
+  plan <entrées…> -p <profil> -o edl.json   analyse + planification → EDL éditable
+  validate <edl.json>                       vérifie une EDL (schéma + invariants)
+  render <edl.json> -o out.mp4 [--draft]    rend une EDL
+  check <vidéo> [--edl edl.json] -p <profil> [--json r.json] [--md r.md] [--min-score 90] [--truth labels.txt]
+  annotate <edl.json> -o labels.txt        mots surlignés à corriger à l'oreille (pistes d'étiquettes Audacity)
+  auto <entrées…> -p <profil> -o <dossier> [--broll b.mp4]… [--draft] [--min-score 90]
+  looks                                     liste les styles d'image (--look)
+  reference <réf.mp4> [--against rendu.mp4] [--md r.md] [--json r.json]
+                                            empreinte de style d'une vidéo (rythme, image, son), comparée à un rendu
+  calibrate -o <dossier> [--only a,b]       calibre la QA : un défaut injecté par règle sur un montage propre
+  schema --out <dossier>                    exporte les JSON Schemas (EDL, profil, rapport QA)
+
+Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), ou chemin vers un .yaml.
+--draft : encodage rapide (preset veryfast) pour itérer.
+--fast  : sans analyse de la parole ni des beats (assemblage brut).
+--look  : style d'image (presets/look/) : film-print, bleach-grit (façon Fight Club), neon-80s (façon Vice City),
+          teal-orange, noir, clean ; « cutkiller looks » les décrit. Le style apporte sa texture (grain, halo…).
+--broll : plan d'illustration (répétable) : plans de coupe sur la parole, ou montage sur la musique s'il n'y a pas de parole
+          (profils cinematic). Une vidéo sans parole est aussi traitée comme B-roll.`;
+
+function gate(report: Report, minScore: string | undefined): void {
+  if (minScore === undefined) return;
+  if (report.score < Number(minScore)) {
+    console.error(`✖ score ${report.score} < ${minScore}`);
+    process.exitCode = 1;
+  }
+}
+
+async function main(argv: string[]): Promise<void> {
+  const [command, ...rest] = argv;
+  const { values, positionals } = parseArgs({
+    args: rest,
+    allowPositionals: true,
+    options: {
+      profile: { type: "string", short: "p" },
+      out: { type: "string", short: "o" },
+      edl: { type: "string" },
+      json: { type: "string" },
+      md: { type: "string" },
+      "min-score": { type: "string" },
+      draft: { type: "boolean", default: false },
+      fast: { type: "boolean", default: false },
+      "keep-stems": { type: "boolean", default: false },
+      only: { type: "string" },
+      against: { type: "string" },
+      truth: { type: "string" },
+      broll: { type: "string", multiple: true },
+      look: { type: "string" },
+    },
+  });
+  /** The profile named by -p, with the image style of --look if any. */
+  const profileOf = async () => {
+    const profile = await loadProfile(need(values.profile, "profile"));
+    return values.look ? withLook(profile, await PresetRegistry.load(), values.look) : profile;
+  };
+  if (values.look === "list" || command === "looks") {
+    for (const l of listLooks(await PresetRegistry.load()))
+      console.log(`${l.ref.padEnd(16)} ${l.description}`);
+    return;
+  }
+  const need = (v: string | undefined, name: string): string => {
+    if (!v) throw new Error(`option --${name} requise\n\n${USAGE}`);
+    return v;
+  };
+
+  switch (command) {
+    case "probe":
+      for (const p of positionals) console.log(JSON.stringify(await probeSource(p), null, 2));
+      return;
+    case "validate":
+      await readEdl(need(positionals[0], "edl"));
+      console.log("✔ EDL valide");
+      return;
+    case "plan": {
+      const out = need(values.out, "out");
+      const edl = await plan(positionals, await profileOf(), out, !values.fast, values.broll ?? []);
+      console.log(`✔ ${out} : ${edl.video[0]?.clips.length ?? 0} clip(s)`);
+      return;
+    }
+    case "render": {
+      const edlPath = need(positionals[0], "edl");
+      await doRender(
+        await readEdl(edlPath),
+        edlPath,
+        need(values.out, "out"),
+        values.draft,
+        values["keep-stems"],
+      );
+      return;
+    }
+    case "check": {
+      const video = need(positionals[0], "vidéo");
+      const report = await check(video, await profileOf(), values.edl, values);
+      gate(report, values["min-score"]);
+      return;
+    }
+    case "auto": {
+      const dir = need(values.out, "out");
+      const profile = await profileOf();
+      const edlPath = join(dir, "edit.edl.json");
+      const video = join(dir, "final.mp4");
+      const edl = await plan(positionals, profile, edlPath, !values.fast, values.broll ?? []);
+      await doRender(edl, edlPath, video, values.draft, true);
+      const report = await check(video, profile, edlPath, {
+        json: join(dir, "quality.json"),
+        md: join(dir, "quality.md"),
+      });
+      gate(report, values["min-score"]);
+      return;
+    }
+    case "annotate": {
+      const edl = await readEdl(need(positionals[0], "edl"));
+      const out = need(values.out, "out");
+      await writeFile(out, formatLabels(captionLabels(edl)));
+      console.log(
+        `✔ ${out} : ${edl.captions.reduce((n, c) => n + c.words.length, 0)} mot(s). Audacity : Fichier → Importer → Étiquettes, sur l'audio du rendu ; placez chaque étiquette sur le début réel du mot, ajoutez « euh » sur chaque hésitation entendue, exportez, puis check --truth.`,
+      );
+      return;
+    }
+    case "reference": {
+      const ref = await fingerprint(need(positionals[0], "vidéo de référence"));
+      const ours = values.against ? await fingerprint(values.against) : undefined;
+      const md = fingerprintMarkdown(ref, ours);
+      if (values.md) await writeFile(values.md, md);
+      if (values.json)
+        await writeFile(
+          values.json,
+          `${JSON.stringify({ reference: ref, ours, comparison: ours ? compareFingerprints(ref, ours) : undefined }, null, 2)}\n`,
+        );
+      console.log(md);
+      return;
+    }
+    case "calibrate": {
+      const dir = need(values.out, "out");
+      const result = await calibrate(dir, {
+        ...(values.only ? { only: values.only.split(",") } : {}),
+        log: (m) => console.error(m),
+      });
+      console.log(calibrationMarkdown(result));
+      const { detected, defects, controls, controlsOk } = result.summary;
+      if (detected < defects || controlsOk < controls) process.exitCode = 1;
+      return;
+    }
+    case "schema": {
+      const dir = need(values.out, "out");
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, "edl-1.schema.json"), `${JSON.stringify(edlJsonSchema(), null, 2)}\n`);
+      await writeFile(
+        join(dir, "profile-1.schema.json"),
+        `${JSON.stringify(profileJsonSchema(), null, 2)}\n`,
+      );
+      await writeFile(join(dir, "report-1.schema.json"), `${JSON.stringify(reportJsonSchema(), null, 2)}\n`);
+      console.log(`✔ schémas écrits dans ${dir}`);
+      return;
+    }
+    case "version":
+      console.log(`cutkiller 0.1.0 — ${(await ffmpegVersion()).raw}`);
+      return;
+    default:
+      console.log(USAGE);
+      if (command && command !== "help") process.exitCode = 2;
+  }
+}
+
+main(process.argv.slice(2)).catch((err: Error) => {
+  console.error(`✖ ${err.message}`);
+  process.exitCode = 1;
+});

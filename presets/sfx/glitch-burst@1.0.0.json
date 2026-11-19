@@ -1,0 +1,7 @@
+{
+  "name": "glitch-burst",
+  "version": "1.0.0",
+  "kind": "sfx",
+  "description": "Rafales numériques (bruit échantillonné-bloqué et carrés réduits à 4 bits) pour une coupe glitch, la plus forte sur la coupe (300 ms, impact à 120 ms).",
+  "params": { "type": "glitch", "durationMs": 300, "hitMs": 120, "bursts": 7, "bits": 4, "seed": 7 }
+}

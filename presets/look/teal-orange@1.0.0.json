@@ -1,0 +1,35 @@
+{
+  "name": "teal-orange",
+  "version": "1.0.0",
+  "kind": "look",
+  "description": "Style « teal & orange » des blockbusters : peaux et lumières chaudes sur des fonds et ombres sarcelle, verts et bleus ramenés vers le sarcelle, contraste soutenu. Peau protégée.",
+  "params": {
+    "contrast": 0.18,
+    "pivot": 0.43,
+    "lift": 0.015,
+    "saturation": 0.1,
+    "warmth": 0.02,
+    "shadowTint": [-0.045, 0.015, 0.04],
+    "highlightTint": [0.045, 0.015, -0.045],
+    "hueShifts": [
+      {
+        "hue": 120,
+        "width": 35,
+        "shift": 45
+      },
+      {
+        "hue": 220,
+        "width": 35,
+        "shift": -30
+      }
+    ],
+    "skinProtect": 1,
+    "size": 33,
+    "texture": {
+      "grain": 0.06,
+      "vignette": 0.35,
+      "halation": 0.25,
+      "bloom": 0
+    }
+  }
+}

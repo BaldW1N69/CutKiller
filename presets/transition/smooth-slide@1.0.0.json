@@ -1,0 +1,7 @@
+{
+  "name": "smooth-slide",
+  "version": "1.0.0",
+  "kind": "transition",
+  "description": "Le plan entrant glisse par-dessus le plan sortant et se pose en douceur (ease-out cubique, 400 ms).",
+  "params": { "type": "slide", "durationMs": 400, "direction": "left", "ease": "ease-out-cubic" }
+}

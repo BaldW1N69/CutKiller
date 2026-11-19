@@ -1,0 +1,18 @@
+{
+  "name": "whoosh-soft",
+  "version": "1.0.0",
+  "kind": "sfx",
+  "description": "Souffle discret pour une transition en format long : bruit filtré plus grave et plus doux (500 ms, impact à 250 ms).",
+  "params": {
+    "type": "whoosh",
+    "durationMs": 500,
+    "hitMs": 250,
+    "lowHz": 200,
+    "highHz": 1800,
+    "q": 0.9,
+    "rise": 2.5,
+    "fallMs": 90,
+    "pan": 0.4,
+    "seed": 23
+  }
+}

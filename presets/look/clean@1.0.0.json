@@ -1,0 +1,7 @@
+{
+  "name": "clean",
+  "version": "1.0.0",
+  "kind": "look",
+  "description": "Look neutre et propre : légère courbe en S (contraste +8 %), noirs à peine relevés, saturation +6 %, peau préservée (pas de virage de teinte).",
+  "params": { "contrast": 0.08, "pivot": 0.45, "lift": 0.01, "saturation": 0.06, "warmth": 0, "size": 33 }
+}
