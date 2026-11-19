@@ -13,6 +13,10 @@ Deux modes :
 |---|---|---|
 | `cut` | découpe des rushes existants au rythme de la musique | ffmpeg (rapide) ou Remotion (effets + titre) |
 | `motion` | génère un motion design (aquarelle, titre, accents) synchronisé sur les temps | Remotion |
+| `reel` | rushes 16:9 → Reel 9:16 éditorial (panneau vidéo, zooms par recadrage, typo, carton de fin) | Remotion |
+
+Exemple de plan `reel` : `projects/skynet/plan.json` (médias non versionnés dans `projects/*/media/`).
+`cutkiller music -o bed.wav --bpm 120 --drop 4 --end 8` génère une musique libre de droits calée sur une grille exacte.
 
 ## Installation
 

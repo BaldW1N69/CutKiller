@@ -54,8 +54,10 @@ def demo_track(path: str | Path, bpm: float = 128, bars: int = 16, intro_bars: i
             add(_noise(SR, 0.05, 80, [0.08, 0.1, 0.14][phase], True, rng), t + beat / 2)
             if phase == 2:  # bass on 8ths
                 tt = np.arange(int(beat / 2 * SR)) / SR
-                add(0.18 * np.sign(np.sin(2 * np.pi * 55 * tt)) * np.exp(-tt * 4), t)
-                add(0.18 * np.sign(np.sin(2 * np.pi * 55 * tt)) * np.exp(-tt * 4), t + beat / 2)
+                rel = np.minimum(1.0, (tt[-1] - tt) / 0.01)  # 10 ms release: no click at note-off
+                note = 0.18 * np.sign(np.sin(2 * np.pi * 55 * tt)) * np.exp(-tt * 4) * rel
+                add(note, t)
+                add(note, t + beat / 2)
     y /= np.abs(y).max() + 1e-9
     y *= 0.9
     path = Path(path)

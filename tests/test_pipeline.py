@@ -104,3 +104,16 @@ def test_ffmpeg_render_is_frame_exact(media, a128, vids, tmp_path):
         capture_output=True, text=True, check=True).stdout)["streams"][0]
     assert int(info["nb_read_frames"]) == p["durationInFrames"]
     assert (info["width"], info["height"]) == (1920, 1080)
+
+
+def test_tempo_outside_tracker_estimate(tmp_path):
+    """Regression: the DP tracker read this 120 BPM bed as ~117.5; the grid search must recover 120."""
+    from cutkiller.music import minimal_tech
+    import numpy as np
+
+    a = analyze_audio(minimal_tech(tmp_path / "bed.wav", bpm=120))
+    assert abs(a["bpm"] - 120) < 0.1
+    bt = np.array([b["t"] for b in a["beats"]])
+    assert np.abs(bt - np.round(bt / 0.5) * 0.5).max() < 0.03
+    assert bt[0] < 0.03  # quiet pad/tick intro is kept (not trimmed)
+    # bar phase is not asserted: every kick in this bed is equally loud, so it is genuinely ambiguous

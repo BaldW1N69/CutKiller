@@ -101,12 +101,14 @@ def _stage_plan(plan: dict, props: Path) -> tuple[str, Path]:
         staged["audio"]["src"] = _stage(plan["audio"]["src"], public)
     for c in staged.get("clips", []):
         c["src"] = _stage(c["src"], public)
+    if "video" in staged:
+        staged["video"]["src"] = _stage(plan["video"]["src"], public)
     props.write_text(json.dumps(staged))
-    return ("BeatCut" if plan["mode"] == "cut" else "MotionDesign"), props
+    return {"cut": "BeatCut", "motion": "MotionDesign", "reel": "EditorialReel"}[plan["mode"]], props
 
 
 def render_remotion(plan: dict, out: str | Path, concurrency: int | None = None, browser: str | None = None,
-                    quiet: bool = False) -> Path:
+                    quiet: bool = False, crf: int | None = None) -> Path:
     out = Path(out).resolve()
     comp, props = _stage_plan(plan, out.with_suffix(".props.json"))
     cmd = ["npx", "remotion", "render", "src/index.ts", comp, str(out), f"--props={props}", *_browser(browser)]
@@ -114,6 +116,8 @@ def render_remotion(plan: dict, out: str | Path, concurrency: int | None = None,
         cmd.append(f"--concurrency={concurrency}")
     if quiet:
         cmd.append("--log=error")
+    if crf is not None:
+        cmd.append(f"--crf={crf}")
     subprocess.run(cmd, check=True, cwd=STUDIO)
     props.unlink(missing_ok=True)
     return out
@@ -122,7 +126,10 @@ def render_remotion(plan: dict, out: str | Path, concurrency: int | None = None,
 def key_frames(plan: dict) -> list[int]:
     """Frames worth eyeballing before a full render."""
     last = plan["durationInFrames"] - 1
-    if plan["mode"] == "motion":
+    if plan["mode"] == "reel":
+        fr = [plan["shots"][0]["from"] + 5, plan["shots"][3]["from"] + 5, plan["heroFrame"] - 20,
+              plan["heroFrame"] + 12, plan["scaleFrame"] + 20, plan["endFrame"] + 20]
+    elif plan["mode"] == "motion":
         h, s, b = plan["heroFrame"], plan["scaleFrame"], plan["beatFrames"]
         fr = [max(0, int(h - b)), h, int(h + b), s, int(s + b * 1.5), last]
     else:

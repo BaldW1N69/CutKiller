@@ -41,7 +41,7 @@ def _cached(kind: str, path: str, extra: str, fn):
 
 def _audio(path: str, bpm: float | None, meter: int, grid: str = "auto") -> dict:
     from .audio import analyze_audio
-    return _cached("audio", path, f"{bpm}|{meter}|{grid}|v3", lambda: analyze_audio(path, bpm, meter, grid))
+    return _cached("audio", path, f"{bpm}|{meter}|{grid}|v7", lambda: analyze_audio(path, bpm, meter, grid))
 
 
 def _videos(paths: list[str]) -> list[dict]:
@@ -58,7 +58,7 @@ def _write(obj, out: str | None):
         print(s)
 
 
-def _render(plan: dict, out: str, engine: str, punch: bool, concurrency: int | None):
+def _render(plan: dict, out: str, engine: str, punch: bool, concurrency: int | None, crf: int | None = None):
     from .render import render_ffmpeg, render_remotion
     t = time.time()
     if engine == "auto":
@@ -66,7 +66,7 @@ def _render(plan: dict, out: str, engine: str, punch: bool, concurrency: int | N
     if engine == "ffmpeg":
         render_ffmpeg(plan, out, punch=punch)
     else:
-        render_remotion(plan, out, concurrency=concurrency)
+        render_remotion(plan, out, concurrency=concurrency, crf=crf)
     print(f"rendered {out} with {engine} in {time.time() - t:.1f}s", file=sys.stderr)
 
 
@@ -116,6 +116,7 @@ def _add_render_opts(p):
     p.add_argument("--engine", choices=["auto", "ffmpeg", "remotion"], default="auto")
     p.add_argument("--no-punch", action="store_true", help="ffmpeg engine: disable zoom punch on downbeats")
     p.add_argument("--concurrency", type=int)
+    p.add_argument("--crf", type=int, help="remotion engine: quality (lower = better, e.g. 15 for an upload master)")
 
 
 def _add_motion_opts(p):
@@ -164,6 +165,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("audio"); p.add_argument("-o", "--out", required=True); p.add_argument("--plan-out")
     _add_audio_opts(p); _add_motion_opts(p); p.add_argument("--concurrency", type=int)
 
+    p = sub.add_parser("music", help="generate a royalty-free minimal electronic bed on an exact grid")
+    p.add_argument("-o", "--out", required=True); p.add_argument("--bpm", type=float, default=120)
+    p.add_argument("--build", type=int, default=1, help="bar where kicks start")
+    p.add_argument("--drop", type=int, default=4, help="bar of the drop")
+    p.add_argument("--end", type=int, default=8, help="bar of the final impact")
+
     p = sub.add_parser("demo", help="generate synthetic demo music + footage into demo/")
     p.add_argument("--bpm", type=float, default=128)
 
@@ -196,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         fr = [int(x) for x in a.frames.split(",")] if a.frames else None
         print(f"wrote {preview(json.loads(Path(a.plan).read_text()), a.out, fr)}", file=sys.stderr)
     elif a.cmd == "render":
-        _render(json.loads(Path(a.plan).read_text()), a.out, a.engine, not a.no_punch, a.concurrency)
+        _render(json.loads(Path(a.plan).read_text()), a.out, a.engine, not a.no_punch, a.concurrency, a.crf)
     elif a.cmd == "cut":
         audio = _audio(a.audio, a.bpm, a.meter, a.grid)
         plan = plan_cut(audio, _videos(a.videos), audio_src=str(Path(a.audio).resolve()), **_cut_kwargs(a))
@@ -211,6 +218,10 @@ def main(argv: list[str] | None = None) -> int:
         if a.plan_out:
             _write(plan, a.plan_out)
         _render(plan, a.out, "remotion", False, a.concurrency)
+    elif a.cmd == "music":
+        from .music import minimal_tech
+        print(f"wrote {minimal_tech(a.out, a.bpm, a.build, a.drop, a.end)} "
+              f"(drop at {a.drop * 240 / a.bpm:.2f}s, impact at {a.end * 240 / a.bpm:.2f}s)", file=sys.stderr)
     elif a.cmd == "demo":
         from .synth import demo_track, demo_video
         Path("demo").mkdir(exist_ok=True)

@@ -114,15 +114,22 @@ def _octave_fix(bpm: float, beat_times: np.ndarray, env_low: np.ndarray, sr: int
 
 def _fit_grid(bpm: float, env: np.ndarray, sr: int, duration: float) -> tuple[float, float]:
     """Constant-tempo grid (period, phase) maximising onset energy over the whole track."""
-    p0 = 60.0 / bpm
     t_env = np.arange(len(env)) * HOP_FINE / sr
-    best = (p0, 0.0, -1.0)
-    for p in np.linspace(p0 * 0.985, p0 * 1.015, 61):
-        grid = np.arange(0, duration - p, p)
-        for ph in np.arange(0, p, 0.004):
-            v = np.interp(grid + ph, t_env, env).mean()
-            if v > best[2]:
-                best = (p, ph, v)
+
+    def search(periods, best):
+        for p in periods:
+            grid = np.arange(0, duration - p, p)
+            for ph in np.arange(0, p, 0.004):
+                v = np.interp(grid + ph, t_env, env).mean()
+                if v > best[2]:
+                    best = (p, ph, v)
+        return best
+
+    # coarse (+-4%: the DP tracker's tempo is quantised and can be off by >1%), then fine
+    p0 = 60.0 / bpm
+    best = search(np.linspace(p0 * 0.96, p0 * 1.04, 81), (p0, 0.0, -1.0))
+    pc = best[0]
+    best = search(np.linspace(pc * 0.999, pc * 1.001, 41), best)
     return best[0], best[1]
 
 
@@ -192,9 +199,13 @@ def analyze_audio(path: str | Path, bpm_hint: float | None = None, beats_per_bar
     # Most produced music has a steady tempo: a global grid fills the beats the DP tracker
     # trims (quiet intros/outros) and never flips phase. If the grid drifts (live playing),
     # fall back to a windowed tracker that follows tempo but cannot jump to the off-beat.
-    active = np.nonzero(librosa.feature.rms(y=y, hop_length=HOP)[0] > 0.02 * np.abs(y).max())[0]
+    active = np.nonzero(librosa.feature.rms(y=y, hop_length=HOP)[0] > 0.0056 * np.abs(y).max())[0]  # -45 dB: keep quiet intros
     t_first = librosa.frames_to_time(active[0], sr=sr, hop_length=HOP) if len(active) else 0.0
     t_last = librosa.frames_to_time(active[-1], sr=sr, hop_length=HOP) if len(active) else duration
+    # the grid ends at the last real attack, not at the end of a reverb/decay tail
+    strong = np.nonzero(env_fit > 0.25 * env_fit.max())[0]
+    if len(strong):
+        t_last = min(t_last, strong[-1] * HOP_FINE / sr + 0.1)
     drift = None
     if grid == "dynamic":
         mode = "dynamic"

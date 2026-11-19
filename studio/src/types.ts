@@ -43,3 +43,28 @@ export type MotionPlan = Base & {
   scaleFrame: number;
   beats: MotionBeat[];
 };
+
+export type ReelShot = {
+  from: number;
+  dur: number;
+  inSec: number;
+  cx?: number; // focus point in source pixels
+  cy?: number;
+  zoom?: number; // 1 = full frame
+  push?: number; // zoom added over the shot
+  tag?: string;
+};
+
+export type ReelPlan = Base & {
+  mode: "reel";
+  beatFrames: number;
+  video: { src: string; width: number; height: number };
+  brand: { name: string; accent: string; tagline: string };
+  shots: ReelShot[];
+  captions: { from: number; dur: number; text: string }[];
+  tags: { from: number; text: string }[];
+  beats: number[];
+  heroFrame: number;
+  scaleFrame: number;
+  endFrame: number;
+};

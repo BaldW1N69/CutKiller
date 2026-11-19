@@ -1,10 +1,11 @@
 import { CalculateMetadataFunction, Composition } from "remotion";
 import { BeatCut } from "./BeatCut";
+import { EditorialReel } from "./EditorialReel";
 import { MotionDesign } from "./MotionDesign";
-import type { CutPlan, MotionPlan } from "./types";
+import type { CutPlan, MotionPlan, ReelPlan } from "./types";
 
 // Duration, size and fps come from the plan JSON passed with --props.
-const fromPlan: CalculateMetadataFunction<CutPlan | MotionPlan> = ({ props }) => ({
+const fromPlan: CalculateMetadataFunction<CutPlan | MotionPlan | ReelPlan> = ({ props }) => ({
   durationInFrames: Math.max(1, props.durationInFrames),
   fps: props.fps,
   width: props.width,
@@ -39,6 +40,27 @@ const motionDefaults: MotionPlan = {
   heroFrame: demoBeats[4].frame,
   scaleFrame: demoBeats[8].frame,
   beats: demoBeats,
+};
+
+const reelDefaults: ReelPlan = {
+  version: 1,
+  mode: "reel",
+  fps,
+  width: 1080,
+  height: 1920,
+  durationInFrames: 240,
+  bpm: 120,
+  beatFrames: 15,
+  audio: { src: "", startSec: 0 },
+  video: { src: "https://remotion.media/video.mp4", width: 1920, height: 1080 },
+  brand: { name: "BRAND", accent: "#FF3B30", tagline: "THE TEAM" },
+  shots: [{ from: 0, dur: 240, inSec: 0 }],
+  captions: [{ from: 10, dur: 100, text: "hello world" }],
+  tags: [{ from: 0, text: "01" }],
+  beats: Array.from({ length: 16 }, (_, i) => i * 15),
+  heroFrame: 120,
+  scaleFrame: 180,
+  endFrame: 220,
 };
 
 const cutDefaults: CutPlan = {
@@ -77,6 +99,16 @@ export const RemotionRoot: React.FC = () => (
       height={1080}
       defaultProps={motionDefaults}
       calculateMetadata={fromPlan as CalculateMetadataFunction<MotionPlan>}
+    />
+    <Composition
+      id="EditorialReel"
+      component={EditorialReel}
+      durationInFrames={240}
+      fps={fps}
+      width={1080}
+      height={1920}
+      defaultProps={reelDefaults}
+      calculateMetadata={fromPlan as CalculateMetadataFunction<ReelPlan>}
     />
   </>
 );
