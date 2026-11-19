@@ -106,3 +106,14 @@ Des témoignages de Wikimania Paris 2026 sous CC BY 4.0 (Wikimedia France) avaie
 | CrisperWhisper | CC BY-NC 4.0 | Usage non commercial uniquement |
 | aubio | GPL-3.0 | Évitable : librosa couvre le besoin |
 | Toute API, SDK ou asset CapCut / ByteDance | propriétaire | Interdit par les contraintes du projet |
+
+## 5. Multilingue et image Docker (consolidation, 2026-11-19)
+
+| Élément | Usage | Licence | Mode | Vérifiée |
+|---|---|---|---|---|
+| `jonatasgrosman/wav2vec2-large-xlsr-53-{english,spanish,german,italian,portuguese,dutch}` | alignement forcé par langue | Apache-2.0 (fiche du modèle) | téléchargé au premier usage, non redistribué | 🔎 |
+| num2words 0.5 | nombres → mots pour l'aligneur (hors français) | LGPL-2.1 | dépendance Python importée, non modifiée | 🔎 |
+| espeak-ng (voix de test anglaises) | fixtures de test uniquement | GPL-3.0 | outil de test, rien n'est livré | ✅ |
+| Image Docker `ghcr.io/baldw1n69/cutkiller` | distribution | contient FFmpeg (GPL-2.0+), Node.js (MIT), Python (PSF) et les paquets Debian bookworm, sous leurs licences | les sources de chaque paquet Debian sont disponibles via `apt-get source` / snapshot.debian.org | 🔎 |
+
+Les modèles de parole (Whisper, aligneurs) ne sont **pas** inclus dans l'image : ils sont téléchargés dans `/models` au premier usage.
