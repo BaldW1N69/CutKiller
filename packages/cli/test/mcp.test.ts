@@ -33,6 +33,7 @@ describe("MCP server (stdio, real client)", () => {
         "doctor",
         "export_timeline",
         "list_styles",
+        "make_shorts",
         "plan_edit",
         "quality_check",
         "read_edl",

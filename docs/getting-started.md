@@ -48,6 +48,16 @@ cutkiller check out/final.mp4 --edl out/edit.edl.json -p short --md out/quality.
 
 Some failures describe the input, not the edit — e.g. `image.sharpness` on a 640×360 source: the report says so instead of hiding it.
 
+## One long video → many Shorts
+
+```sh
+cutkiller shorts podcast.mp4 music.mp3 -p short -o shorts --count 5 --min 15 --max 60
+```
+
+CutKiller splits the transcript into sentences, finds the passages that open on their strongest line (a question, a number, a bold claim) and hold one complete idea, then edits, renders and scores each clip. `shorts/shorts.md` ranks them by hook and quality score.
+
+With `--ai`, Claude chooses the clips instead (it can move the hook to the front and drop digressions). It needs Anthropic credentials where CutKiller runs (`ANTHROPIC_API_KEY`); without them, or if the request fails, CutKiller uses the offline planner and says so.
+
 ## Options
 
 | Option | |

@@ -88,7 +88,10 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
 async function cached<T>(dir: string, key: string, compute: () => Promise<T>): Promise<T> {
   const file = join(dir, `${key}.json`);
   if (existsSync(file)) return JSON.parse(await readFile(file, "utf8")) as T;
+  const t0 = performance.now();
   const value = await compute();
+  if (process.env.CUTKILLER_TIMINGS !== "0")
+    console.error(`ℹ [timing] ${key.split(".").slice(1).join(".")} ${((performance.now() - t0) / 1000).toFixed(1)} s`);
   await mkdir(dir, { recursive: true });
   await writeFile(file, JSON.stringify(value));
   return value;

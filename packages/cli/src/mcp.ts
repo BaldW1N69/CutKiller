@@ -244,6 +244,47 @@ export function createServer(): McpServer {
   );
 
   server.registerTool(
+    "make_shorts",
+    {
+      title: "Long video → ranked Shorts",
+      description:
+        "Finds the passages of a long recording that make the best standalone Shorts (strongest opening line, complete idea, requested duration), then edits, renders and scores each one. Returns them ranked with their hook and quality score. ai=true lets Claude choose the clips (needs Anthropic credentials where CutKiller runs; otherwise the offline planner is used).",
+      inputSchema: {
+        inputs: z.array(z.string()).min(1).describe("The long recording(s), plus an optional music file"),
+        outDir: z.string(),
+        count: z.number().int().min(1).max(20).default(5),
+        minS: z.number().positive().default(15),
+        maxS: z.number().positive().default(60),
+        ai: z.boolean().default(false),
+        draft: z.boolean().default(true),
+        lang: z.string().optional(),
+        ...common,
+      },
+    },
+    async ({ inputs, outDir, count, minS, maxS, ai, draft, lang, profile, look }) => {
+      const { makeShorts } = await import("./shorts");
+      const results = await makeShorts(inputs, await profileOf(profile, look), {
+        dir: outDir,
+        count,
+        minS,
+        maxS,
+        ai,
+        draft,
+        ...(lang ? { language: lang } : {}),
+      });
+      return text(
+        [
+          ...results.map(
+            (r) =>
+              `${r.rank}. ${r.plan.title} — ${r.plan.durationS} s — hook ${r.plan.scores.hook}/10 — quality ${r.report.score}/100 — ${r.video}\n   « ${r.plan.hook} »`,
+          ),
+          `Ranking: ${outDir}/shorts.md`,
+        ].join("\n"),
+      );
+    },
+  );
+
+  server.registerTool(
     "export_timeline",
     {
       title: "Export to Premiere / DaVinci / Final Cut",

@@ -33,6 +33,12 @@ export function printDiagnostics(diagnostics: Diagnostic[]): void {
     console.error(`${icon[d.level]} [${d.code}] ${d.message}${d.path ? ` — ${d.path}` : ""}`);
 }
 
+/** Wall time of a stage, on stderr: where the minutes go (CUTKILLER_TIMINGS=0 to hide). */
+function timing(stage: string, since: number): void {
+  if (process.env.CUTKILLER_TIMINGS === "0") return;
+  console.error(`ℹ [timing] ${stage} ${((performance.now() - since) / 1000).toFixed(1)} s`);
+}
+
 export async function readEdl(path: string): Promise<Edl> {
   const result = parseEdl(JSON.parse(await readFile(path, "utf8")));
   printDiagnostics(result.diagnostics);
@@ -53,12 +59,14 @@ export async function plan(
   ranges?: readonly Range[],
 ): Promise<Edl> {
   const all = [...inputs, ...broll.filter((b) => !inputs.includes(b))];
+  const t0 = performance.now();
   const analysis = await analyzeSources(all, {
     deep,
     log: (m) => console.error(`… ${m}`),
     broll: new Set(broll.map((b) => resolve(b))),
     ...(language ? { language } : {}),
   });
+  timing("analysis", t0);
   const spoken = dominantLanguage(analysis.transcripts);
   if (spoken) {
     if (!lexicon(spoken).contextualFillers.length)
@@ -106,6 +114,7 @@ export async function plan(
             ),
       );
   }
+  const tPlan = performance.now();
   const full = assembleEdl(analysis, profile, { edlDir: dirname(resolve(edlPath)) });
   const assembled = ranges && ranges.length > 0 ? applySelection(full, ranges) : full;
   const { edl, diagnostics } = runPasses(assembled, PASSES, {
@@ -114,6 +123,7 @@ export async function plan(
     presets: await PresetRegistry.load(),
   });
   printDiagnostics(diagnostics);
+  timing("planning", tPlan);
   await mkdir(dirname(resolve(edlPath)), { recursive: true });
   await writeFile(
     edlPath,
@@ -135,6 +145,7 @@ export async function doRender(edl: Edl, edlPath: string, out: string, draft: bo
     ? { ...edl, output: { ...edl.output, video: { ...edl.output.video, preset: "veryfast" as const } } }
     : edl;
   let last = -1;
+  const t0 = performance.now();
   const log = await render(target, {
     baseDir: dirname(resolve(edlPath)),
     outPath: out,
@@ -157,6 +168,7 @@ export async function doRender(edl: Edl, edlPath: string, out: string, draft: bo
   if (edl.captions.length > 0)
     await writeFile(`${out.replace(/\.[^./]+$/, "")}.srt`, toSrt(edl.captions, edl.output.fps));
   for (const w of log.warnings) console.error(`⚠ ${w}`);
+  timing("render", t0);
   return log;
 }
 
@@ -168,6 +180,7 @@ export async function check(
 ) {
   const edl = edlPath ? await readEdl(edlPath) : undefined;
   const analysis = edlPath ? await readAnalysis(edlPath) : undefined;
+  const t0 = performance.now();
   const report = await qualityCheck({
     video,
     profile,
@@ -175,6 +188,7 @@ export async function check(
     ...(analysis ? { analysis } : {}),
     ...(opts.truth ? { truth: parseLabels(await readFile(opts.truth, "utf8")) } : {}),
   });
+  timing("quality check", t0);
   const md = reportMarkdown(report);
   if (opts.json) await writeFile(opts.json, `${JSON.stringify(report, null, 2)}\n`);
   if (opts.md) await writeFile(opts.md, md);

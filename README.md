@@ -42,6 +42,7 @@ Other AI video tools generate clips or cut silences. CutKiller edits **your real
 | **Sound** | Voice at -14 LUFS, true peak ≤ -1 dBTP after AAC encoding, music ducked under speech, SFX synced to the frame |
 | **Image** | Skin matched shot to shot, six looks (film-print, bleach-grit, neon-80s, teal-orange, noir, clean), grain, letterbox |
 | **B-roll** | Cutaways placed over speech, framed for vertical, or a music-driven montage when there is no speech |
+| **Shorts** | `cutkiller shorts`: a long recording becomes N Shorts that open on their strongest line, ranked by hook and quality score — offline, or chosen by Claude with `--ai` |
 | **Proof** | `quality.md` / `quality.json`: every rule's threshold, measurement, violations with timecodes, a score out of 100 |
 | **Control** | Everything goes through an [EDL in JSON](docs/EDL.md) you (or an AI agent) can edit by hand and re-render |
 | **Languages** | Auto-detected: English, French, Spanish, German, Italian, Portuguese, Dutch (other languages: transcription and universal fillers) |
@@ -83,6 +84,9 @@ cutkiller auto interview.mp4 music.wav --broll street.mp4 --broll hands.mp4 -p c
 cutkiller plan rushes/*.mp4 -p long -o out/edit.edl.json      # analysis + planning → editable EDL
 cutkiller render out/edit.edl.json -o out/final.mp4 --draft   # fast encode to iterate
 cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --md out/quality.md
+
+# One long video → the 5 best Shorts, each edited, scored and ranked (--ai: Claude picks the clips)
+cutkiller shorts podcast.mp4 music.mp3 -p short -o shorts --count 5 [--ai]
 
 # Compare your render with a reference video (rhythm, image, sound)
 cutkiller reference reference.mp4 --against out/final.mp4
