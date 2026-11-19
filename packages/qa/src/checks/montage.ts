@@ -127,10 +127,11 @@ export async function checkFillers(
   profile: StyleProfile,
   fps: number,
   transcriptOverride?: Transcript,
+  language = "fr",
 ): Promise<CheckResult> {
   const transcript =
     transcriptOverride ??
-    (await runWorker<Transcript>("transcribe", { path: voiceTrack(video), language: "fr", align: false }));
+    (await runWorker<Transcript>("transcribe", { path: voiceTrack(video), language, align: false }));
   if (transcript.words.length === 0) return notEvaluated("montage.fillers", "aucune parole dans le rendu");
   const tokens = classifyWords(transcript.words, profile);
   const violations = tokens

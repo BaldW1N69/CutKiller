@@ -13,7 +13,7 @@ import { faceGradingFixtures, facePanFixture, talkingHeadFixture } from "./face"
 import { generateSpeech, type SpeechTruth } from "./speech";
 
 export { FACE_PAN, facePanX, TALKING_HEAD, talkingHeadX } from "./face";
-export { SCRIPT, type SpeechTruth, type TruthWord } from "./speech";
+export { SCRIPT, SCRIPT_EN, type SpeechTruth, type TruthWord } from "./speech";
 
 export interface Fixtures {
   dir: string;
@@ -31,6 +31,9 @@ export interface Fixtures {
   speechWav: string;
   speechVideo: string;
   speechTruth: SpeechTruth;
+  /** Same structure in English (« um », « uh », « so »). */
+  speechEnVideo: string;
+  speechEnTruth: SpeechTruth;
   /** Real face (public-domain portrait) gliding from 30 % to 70 % of a 16:9 frame: see FACE_PAN / facePanX. */
   facePan: string;
   /** Same face, still: as shot, and a stop darker with a blue cast. */
@@ -47,6 +50,8 @@ const SPECS: Record<
     | "speechWav"
     | "speechVideo"
     | "speechTruth"
+    | "speechEnVideo"
+    | "speechEnTruth"
     | "avOffset"
     | "facePan"
     | "faceNeutral"
@@ -177,6 +182,9 @@ export async function generateFixtures(dir = resolve(".cache/fixtures")): Promis
   result.speechWav = speech.wav;
   result.speechVideo = speech.video;
   result.speechTruth = speech.truth;
+  const speechEn = await generateSpeech(dir, "en");
+  result.speechEnVideo = speechEn.video;
+  result.speechEnTruth = speechEn.truth;
   result.facePan = await facePanFixture(dir);
   const faces = await faceGradingFixtures(dir);
   result.faceNeutral = faces.neutral;

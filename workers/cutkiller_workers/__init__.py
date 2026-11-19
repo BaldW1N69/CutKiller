@@ -47,7 +47,12 @@ def _align(request: dict[str, Any]) -> Any:
         {"text": w["text"], "start": float(w["start"]), "end": float(w["end"])} for w in request["words"]
     ]
     floor = noise_floor_db(load_mono(request["floorPath"], RATE)) if request.get("floorPath") else None
-    return {"words": align_words(request["path"], words, floor_db=floor) if words else [], "floorDb": floor}
+    return {
+        "words": align_words(request["path"], words, floor_db=floor, language=request.get("language", "fr"))
+        if words
+        else [],
+        "floorDb": floor,
+    }
 
 
 def _subjects(request: dict[str, Any]) -> Any:

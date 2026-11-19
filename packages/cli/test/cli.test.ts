@@ -47,6 +47,42 @@ describe("cutkiller CLI (bout en bout)", () => {
     expect(cli("validate", join(dir, "edit.edl.json")).status).toBe(0);
   }, 600_000);
 
+  it("auto in English: language detected, « um »/« uh » and silences cut, report ≥ 90", async () => {
+    const fx = await generateFixtures();
+    const dir = await mkdtemp(join(tmpdir(), "ck-cli-en-"));
+    const run = cli(
+      "auto",
+      fx.speechEnVideo,
+      fx.music,
+      "-p",
+      "long",
+      "-o",
+      dir,
+      "--draft",
+      "--min-score",
+      "90",
+    );
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stderr).toMatch(/\[language\] en/);
+    const analysis = JSON.parse(await readFile(join(dir, "edit.analysis.json"), "utf8"));
+    expect(Object.values(analysis.transcripts).map((t) => (t as { language: string }).language)).toEqual([
+      "en",
+    ]);
+    const edl = JSON.parse(await readFile(join(dir, "edit.edl.json"), "utf8"));
+    const notes = edl.video[0].clips.map((c: { why: { note?: string } }) => c.why.note ?? "").join(" ");
+    expect(notes).toMatch(/um/i);
+    expect(notes).toMatch(/uh/i);
+    const report = JSON.parse(await readFile(join(dir, "quality.json"), "utf8"));
+    const byId = Object.fromEntries(
+      report.results.map((r: { ruleId: string; status: string }) => [r.ruleId, r.status]),
+    );
+    expect(byId).toMatchObject({
+      "montage.silences": "pass",
+      "captions.sync": "pass",
+      "audio.loudness": "pass",
+    });
+  }, 900_000);
+
   it("auto sur de la parole : hésitations et silences coupés, rapport qualité ≥ 90", async () => {
     const fx = await generateFixtures();
     const dir = await mkdtemp(join(tmpdir(), "ck-cli-"));

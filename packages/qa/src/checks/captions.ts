@@ -8,7 +8,7 @@ import {
   safeRect,
   timelineWords,
 } from "@cutkiller/captions";
-import type { Analysis, Edl, StyleProfile } from "@cutkiller/core";
+import { type Analysis, dominantLanguage, type Edl, type StyleProfile } from "@cutkiller/core";
 import type { PresetRegistry } from "@cutkiller/style";
 import { type CanvasRenderingContext2D, createCanvas } from "canvas";
 import { streamFrames } from "../decode";
@@ -57,6 +57,7 @@ export async function checkCaptionSync(
       await runWorker<{ words: AlignedWord[] }>("align", {
         path: voiceTrack(video),
         ...(rush ? { floorPath: resolve(baseDir, rush) } : {}),
+        language: dominantLanguage(analysis?.transcripts) ?? "fr",
         words: words.map((w) => ({ text: w.text, start: w.fromFrame / fps, end: w.toFrame / fps })),
       })
     ).words;

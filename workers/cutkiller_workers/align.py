@@ -1,4 +1,4 @@
-"""Alignement forcé CTC (wav2vec2 français, Apache-2.0) des mots transcrits.
+"""Alignement forcé CTC (wav2vec2 XLSR par langue, Apache-2.0) des mots transcrits.
 
 Les timestamps de Whisper dérivent de ±100-250 ms ; l'alignement forcé sur les
 caractères ramène l'erreur autour d'une trame CTC (20 ms). Les mots sans aucun
@@ -16,10 +16,10 @@ from typing import Any
 
 import numpy as np
 
+from . import languages
 from .audio import load_mono
-from .numbers import spell_numbers
 
-MODEL_FR = "jonatasgrosman/wav2vec2-large-xlsr-53-french"
+MODEL_FR = languages.LANGUAGES["fr"].aligner
 RATE = 16_000
 FRAME_S = 320 / RATE  # wav2vec2 stride: 20 ms per emission frame
 MAX_WINDOW_S = 25.0
@@ -42,12 +42,16 @@ def _model(name: str):
     return processor, model
 
 
-def normalize(word: str, vocab: dict[str, int]) -> str:
+def normalize(word: str, vocab: dict[str, int], language: str | None = "fr") -> str:
     """Lower-case, spell numbers out, keep only characters the acoustic model knows.
 
     Spaces inside a spelled number (« quatorze heures ») come back as "|", the
-    model's word delimiter."""
-    text = unicodedata.normalize("NFC", spell_numbers(word).lower()).replace("’", "'").replace("-", " ")
+    model's word delimiter. Models with an upper-case vocabulary get upper case."""
+    text = unicodedata.normalize("NFC", languages.spell_numbers(word, language).lower())
+    text = text.replace("’", "'").replace("-", " ")
+    upper = "a" not in vocab and "A" in vocab
+    if upper:
+        text = text.upper()
     kept = "".join(ch for ch in text if ch == " " or (ch in vocab and ch != "|"))
     return "|".join(part for part in kept.split(" ") if part)
 
@@ -76,10 +80,12 @@ def noise_floor_db(audio: np.ndarray, rate: int = RATE) -> float:
 def align_words(
     path: str | None,
     words: list[dict[str, Any]],
-    model_name: str = MODEL_FR,
+    model_name: str | None = None,
     audio: np.ndarray | None = None,
     floor_db: float | None = None,
+    language: str | None = "fr",
 ) -> list[dict[str, Any]]:
+    model_name = model_name or languages.get(language).aligner or MODEL_FR
     import torch
     import torchaudio.functional as F
 
@@ -100,7 +106,7 @@ def align_words(
         targets: list[int] = []
         owner: list[int] = []  # word index of each target token (-1 for delimiters)
         for k in range(a, b):
-            chars = normalize(words[k]["text"], vocab)
+            chars = normalize(words[k]["text"], vocab, language)
             if not chars:
                 continue
             if targets:

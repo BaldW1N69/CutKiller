@@ -11,6 +11,7 @@ export { runWorker, workersDir } from "./worker";
 export interface AnalyzeOptions {
   /** Run speech/beat analyzers (off: probe only). */
   deep?: boolean;
+  /** Spoken language (ISO 639-1), or "auto" to let Whisper detect it per rush. */
   language?: string;
   whisperModel?: string;
   cacheDir?: string;
@@ -20,7 +21,7 @@ export interface AnalyzeOptions {
 }
 
 /** Bump when an analyzer's output changes, to invalidate cached results. */
-const ANALYZER_VERSION = { transcribe: "8", vad: "2", beats: "3", prosody: "1", subjects: "3" } as const;
+const ANALYZER_VERSION = { transcribe: "9", vad: "2", beats: "3", prosody: "1", subjects: "3" } as const;
 
 /**
  * Stage 1 of the pipeline. Every input is probed; with `deep`, rushes with speech
@@ -31,7 +32,7 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
   const analysis: Analysis = { sources: {} };
   const cacheDir = opts.cacheDir ?? resolve(".cache/analysis");
   const model = opts.whisperModel ?? process.env.CUTKILLER_WHISPER_MODEL ?? "large-v3-turbo";
-  const language = opts.language ?? "fr";
+  const language = opts.language ?? process.env.CUTKILLER_LANGUAGE ?? "auto";
   for (const path of paths) {
     const probe = await probeSource(resolve(path));
     if (opts.broll?.has(resolve(path)) && probe.hasVideo) probe.role = "broll";

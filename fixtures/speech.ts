@@ -1,5 +1,5 @@
 /**
- * Synthetic French speech with word-level ground truth: each token is spoken by
+ * Synthetic speech (French, English) with word-level ground truth: each token is spoken by
  * espeak-ng on its own, trimmed to its audible part and laid out with controlled
  * gaps, so every word boundary, pause and hesitation is known to the sample.
  * espeak-ng (GPL-3.0) is a test-time tool only; nothing it produces is shipped.
@@ -64,14 +64,57 @@ export const SCRIPT = [
   "rythme",
 ];
 
-const FILLERS = new Set(["euh", "heu", "hum", "bah", "ben"]);
+/** English script: same structure (two hesitations, a contextual filler, long pauses). */
+export const SCRIPT_EN = [
+  "Hello",
+  "everyone",
+  "pause:250",
+  "today",
+  "pause:120",
+  "um",
+  "pause:150",
+  "I",
+  "will",
+  "show",
+  "you",
+  "how",
+  "to",
+  "edit",
+  "a",
+  "video",
+  "pause:900",
+  "uh",
+  "pause:500",
+  "so",
+  "let's",
+  "go",
+  "pause:700",
+  "first",
+  "step",
+  "pause:200",
+  "we",
+  "cut",
+  "the",
+  "silences",
+  "pause:400",
+  "and",
+  "we",
+  "keep",
+  "the",
+  "rhythm",
+];
+
+export type SpeechLanguage = "fr" | "en";
+const SCRIPTS: Record<SpeechLanguage, string[]> = { fr: SCRIPT, en: SCRIPT_EN };
+const VOICES: Record<SpeechLanguage, string> = { fr: "fr", en: "en-us" };
+const FILLERS = new Set(["euh", "heu", "hum", "bah", "ben", "um", "uh"]);
 const WORD_GAP_MS = 60;
 const LEAD_S = 0.8;
 const TAIL_S = 0.8;
 
-async function speak(text: string, dir: string, i: number): Promise<Float32Array> {
+async function speak(text: string, dir: string, i: number, voice: string): Promise<Float32Array> {
   const wav = join(dir, `w${i}.wav`);
-  const res = spawnSync("espeak-ng", ["-v", "fr", "-s", "165", "-w", wav, text]);
+  const res = spawnSync("espeak-ng", ["-v", voice, "-s", "165", "-w", wav, text]);
   if (res.status !== 0) throw new Error(`espeak-ng a échoué : ${res.stderr}`);
   const pcm = await decodeMono(wav, RATE);
   // Trim to the audible part: first/last sample above -40 dBFS.
@@ -85,21 +128,22 @@ async function speak(text: string, dir: string, i: number): Promise<Float32Array
 
 export async function generateSpeech(
   dir: string,
+  language: SpeechLanguage = "fr",
 ): Promise<{ wav: string; video: string; truth: SpeechTruth }> {
-  const wav = join(dir, "speech-fr.wav");
-  const video = join(dir, "speech-fr.mp4");
-  const truthPath = join(dir, "speech-fr.truth.json");
+  const wav = join(dir, `speech-${language}.wav`);
+  const video = join(dir, `speech-${language}.mp4`);
+  const truthPath = join(dir, `speech-${language}.truth.json`);
   if (existsSync(wav) && existsSync(video) && existsSync(truthPath)) {
     return { wav, video, truth: JSON.parse(await readFile(truthPath, "utf8")) as SpeechTruth };
   }
-  const tmp = join(dir, "speech-parts");
+  const tmp = join(dir, `speech-parts-${language}`);
   await mkdir(tmp, { recursive: true });
   const chunks: Float32Array[] = [];
   const words: TruthWord[] = [];
   let cursor = Math.round(LEAD_S * RATE);
   chunks.push(new Float32Array(cursor));
   let pendingGap = 0;
-  for (const [i, token] of SCRIPT.entries()) {
+  for (const [i, token] of SCRIPTS[language].entries()) {
     if (token.startsWith("pause:")) {
       pendingGap = Math.round((Number(token.slice(6)) / 1000) * RATE);
       continue;
@@ -110,7 +154,7 @@ export async function generateSpeech(
       cursor += gap;
     }
     pendingGap = 0;
-    const pcm = await speak(token, tmp, i);
+    const pcm = await speak(token, tmp, i, VOICES[language]);
     words.push({
       text: token,
       start: cursor / RATE,

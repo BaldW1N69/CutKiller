@@ -1,4 +1,10 @@
-import type { Analysis, Edl, StyleProfile } from "@cutkiller/core";
+import {
+  type Analysis,
+  dominantLanguage,
+  type Edl,
+  localizeProfile,
+  type StyleProfile,
+} from "@cutkiller/core";
 import { PresetRegistry } from "@cutkiller/style";
 import { checkCutClicks, checkDucking, checkLoudness, checkSfxSync } from "./checks/audio";
 import {
@@ -92,7 +98,9 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
   if (edl) {
     const errors = edlErrors(edl);
     if (errors.length > 0) throw new Error(`EDL invalide : ${errors.map((e) => e.message).join("; ")}`);
-    const { profile, analysis, video } = input;
+    const { analysis, video } = input;
+    const language = dominantLanguage(analysis?.transcripts) ?? "fr";
+    const profile = localizeProfile(input.profile, language);
     await run(() => checkNoLinear(edl));
     await run(() => checkJlCuts(edl, profile));
     await run(() => checkCutClicks(video, edl, profile));
@@ -121,7 +129,7 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
       await run(() => checkSilences(video, edl, profile, analysis));
       if (truth) await run(() => checkFillersTruth(truth, profile, edl.output.fps));
       else if (input.transcribeOutput !== false)
-        await run(() => checkFillers(video, profile, edl.output.fps));
+        await run(() => checkFillers(video, profile, edl.output.fps, undefined, language));
     }
   }
   return buildReport(

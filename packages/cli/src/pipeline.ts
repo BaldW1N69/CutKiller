@@ -8,7 +8,10 @@ import { colorPass } from "@cutkiller/color";
 import {
   type Analysis,
   type Diagnostic,
+  dominantLanguage,
   type Edl,
+  lexicon,
+  localizeProfile,
   parseEdl,
   runPasses,
   type StyleProfile,
@@ -42,13 +45,25 @@ export async function plan(
   deep: boolean,
   /** Inputs that are B-roll (cutaways, montage material), also listed in `inputs` or not. */
   broll: readonly string[] = [],
+  /** Spoken language (ISO 639-1) or "auto". */
+  language?: string,
 ): Promise<Edl> {
   const all = [...inputs, ...broll.filter((b) => !inputs.includes(b))];
   const analysis = await analyzeSources(all, {
     deep,
     log: (m) => console.error(`… ${m}`),
     broll: new Set(broll.map((b) => resolve(b))),
+    ...(language ? { language } : {}),
   });
+  const spoken = dominantLanguage(analysis.transcripts);
+  if (spoken) {
+    if (!lexicon(spoken).contextualFillers.length)
+      console.error(
+        `⚠ [language] ${spoken} : no hesitation list for this language yet, only universal fillers are cut`,
+      );
+    else console.error(`ℹ [language] ${spoken}`);
+    profile = localizeProfile(profile, spoken);
+  }
   await mkdir(dirname(resolve(edlPath)), { recursive: true });
   await writeFile(analysisPath(edlPath), `${JSON.stringify(analysis)}\n`);
   for (const [id, probe] of Object.entries(analysis.sources)) {
