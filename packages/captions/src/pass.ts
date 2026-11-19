@@ -1,4 +1,4 @@
-import { type Diagnostic, type Edl, EdlSchema, edlDurationFrames, type Pass } from "@cutkiller/core";
+import { type Diagnostic, type Edl, EdlSchema, edlDurationFrames, type Pass, tr } from "@cutkiller/core";
 import { buildCaptions } from "./chunk";
 import { profileSafeArea } from "./layout";
 import { captionStyle } from "./style";
@@ -31,7 +31,10 @@ export const captionsPass: Pass = {
     diagnostics.push({
       level: "info",
       code: "captions.summary",
-      message: `${captions.length} sous-titre(s), ${words.length} mot(s), style ${preset.name}@${preset.version}`,
+      message: tr(
+        `${captions.length} caption screen(s), ${words.length} word(s), style ${preset.name}@${preset.version}`,
+        `${captions.length} sous-titre(s), ${words.length} mot(s), style ${preset.name}@${preset.version}`,
+      ),
     });
     const output = {
       ...edl.output,

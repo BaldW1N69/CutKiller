@@ -8,7 +8,7 @@ Raw footage in → a publish-ready YouTube video, Short, TikTok or Reel out — 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fbaldw1n69%2Fcutkiller-2496ED?logo=docker&logoColor=white)](https://github.com/BaldW1N69/CutKiller/pkgs/container/cutkiller)
 
-[Français](README.fr.md) · [Roadmap](ROADMAP.md) · [Benchmark vs auto-editor](docs/BENCHMARK.md) · [EDL reference](docs/EDL.md) · [Architecture](docs/AUDIT.md)
+[**Documentation**](https://baldw1n69.github.io/CutKiller/) · [Français](README.fr.md) · [Roadmap](ROADMAP.md) · [Benchmark vs auto-editor](docs/BENCHMARK.md) · [EDL reference](docs/EDL.md) · [Architecture](docs/AUDIT.md)
 
 ```sh
 docker run --rm -v "$PWD:/work" -v cutkiller-models:/models \
@@ -20,10 +20,10 @@ docker run --rm -v "$PWD:/work" -v cutkiller-models:/models \
 
 ```
 ℹ [language] fr
-ℹ [cut.summary] 1 hésitation(s) et 0 mot(s) de faux départ retirés, 6.3 s coupées, 23 plan(s)
-ℹ [reframe.summary] 23 plan(s) recadré(s) sur le visage
-ℹ [captions.summary] 72 sous-titre(s), 145 mot(s), style karaoke-pop@1.0.0
-ℹ [audio.summary] 1 zone(s) de ducking, 5 SFX, cible -14 LUFS
+ℹ [cut.summary] 1 hesitation(s) and 0 false-start word(s) removed, 6.3 s cut, 23 shot(s)
+ℹ [reframe.summary] 23 shot(s) reframed on the face, 0 camera move(s)
+ℹ [captions.summary] 72 caption screen(s), 145 word(s), style karaoke-pop@1.0.0
+ℹ [audio.summary] 1 ducking zone(s), 5 SFX, target -14 LUFS
 # Quality check — 97.8/100
 ```
 
@@ -97,6 +97,7 @@ cutkiller reference reference.mp4 --against out/final.mp4
 | `--draft` | Fast x264 preset for iterations |
 | `--fast` | No speech or beat analysis (assembly and zoom cuts only) |
 | `--min-score 90` | Exit code 1 if the quality score is lower (CI-friendly) |
+| `CUTKILLER_LANG=fr` | Messages and reports in French (English by default) |
 
 ## How it works
 
@@ -122,6 +123,7 @@ rushes ─► analyze ─► plan passes (pure EDL → EDL) ─► render ─►
 pnpm check && pnpm typecheck && pnpm test     # lint, types, unit + FFmpeg integration + end-to-end
 (cd workers && uv run pytest && uv run ruff check .)
 pnpm fixtures                                  # synthetic test media (needs espeak-ng)
+pnpm docs                                      # regenerates docs/rules.md from the rule table
 ```
 
 Test media are generated on the fly (FFmpeg test patterns, espeak-ng voices in French and English with word-level ground truth). No media is committed except OFL fonts.

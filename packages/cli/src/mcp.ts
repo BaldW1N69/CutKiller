@@ -18,6 +18,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { doctor, doctorReport } from "./doctor";
+import { fetchMusic } from "./music";
 import { check, doRender, plan } from "./pipeline";
 
 const VERSION = "1.0.0";
@@ -100,6 +101,12 @@ export function createServer(): McpServer {
         inputs: z.array(z.string()).min(1).describe("Rushes and music files (paths)"),
         outDir: z.string().describe("Output folder: edit.edl.json, final.mp4, final.srt, quality.md"),
         broll: z.array(z.string()).default([]).describe("Cutaway footage"),
+        music: z
+          .string()
+          .optional()
+          .describe(
+            'Free music to find on Openverse, e.g. "lofi chill" (CC0 / CC BY; credit written to credits.txt)',
+          ),
         lang: z.string().optional().describe("Spoken language (ISO 639-1); detected when omitted"),
         draft: z
           .boolean()
@@ -109,8 +116,9 @@ export function createServer(): McpServer {
         ...common,
       },
     },
-    async ({ inputs, outDir, broll, lang, draft, fast, profile, look }) => {
+    async ({ inputs, outDir, broll, music, lang, draft, fast, profile, look }) => {
       const p = await profileOf(profile, look);
+      if (music) inputs = [...inputs, (await fetchMusic(music, outDir, { minDurationS: 60 })).path];
       const edlPath = join(outDir, "edit.edl.json");
       const video = join(outDir, "final.mp4");
       const edl = await plan(inputs, p, edlPath, !fast, broll, lang);

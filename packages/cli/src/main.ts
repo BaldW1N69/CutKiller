@@ -2,7 +2,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname as dirOf, join, resolve as resolvePath } from "node:path";
 import { parseArgs } from "node:util";
-import { edlJsonSchema, profileJsonSchema } from "@cutkiller/core";
+import { edlJsonSchema, profileJsonSchema, tr } from "@cutkiller/core";
 import { toFcp7Xml, toOtio } from "@cutkiller/interchange";
 import { ffmpegVersion, probeSource } from "@cutkiller/media";
 import {
@@ -17,9 +17,10 @@ import {
 import { listLooks, loadProfile, PresetRegistry, withLook } from "@cutkiller/style";
 import { calibrate, calibrationMarkdown } from "./calibrate";
 import { doctor, doctorReport } from "./doctor";
+import { fetchMusic } from "./music";
 import { check, doRender, plan, readEdl } from "./pipeline";
 
-const USAGE = `cutkiller <commande> [options]
+const USAGE_FR = `cutkiller <commande> [options]
 
   mcp                                       serveur MCP (stdio) pour Claude, Cursor, Codex…
   doctor                                    vérifie l'installation (FFmpeg, workers, modèles, GPU)
@@ -38,6 +39,7 @@ const USAGE = `cutkiller <commande> [options]
   schema --out <dossier>                    exporte les JSON Schemas (EDL, profil, rapport QA)
 
 Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), ou chemin vers un .yaml.
+--music : « <recherche> » ajoute une musique libre trouvée sur Openverse (CC0 / CC BY), crédit dans credits.txt.
 --draft : encodage rapide (preset veryfast) pour itérer.
 --lang  : langue parlée (fr, en, es, de, it, pt, nl…) ; par défaut détectée automatiquement.
 --fast  : sans analyse de la parole ni des beats (assemblage brut).
@@ -45,6 +47,36 @@ Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), o
           teal-orange, noir, clean ; « cutkiller looks » les décrit. Le style apporte sa texture (grain, halo…).
 --broll : plan d'illustration (répétable) : plans de coupe sur la parole, ou montage sur la musique s'il n'y a pas de parole
           (profils cinematic). Une vidéo sans parole est aussi traitée comme B-roll.`;
+const USAGE_EN = `cutkiller <command> [options]
+
+  auto <inputs…> -p <profile> -o <dir> [--broll b.mp4]… [--draft] [--min-score 90]
+                                            analysis + edit + render + quality report, in one go
+  plan <inputs…> -p <profile> -o edl.json   analysis + planning → editable EDL
+  render <edl.json> -o out.mp4 [--draft]    renders an EDL
+  check <video> [--edl edl.json] -p <profile> [--json r.json] [--md r.md] [--min-score 90] [--truth labels.txt]
+                                            26-rule quality check
+  export <edl.json> -o edit.otio|edit.xml   timeline for DaVinci Resolve (.otio/.xml), Premiere Pro and Final Cut (.xml)
+  music <query> [-o <dir>]                  downloads free music (CC0 / CC BY, Openverse) and writes its credit
+  validate <edl.json>                       checks an EDL (schema + invariants)
+  doctor                                    checks the installation (FFmpeg, workers, models, GPU)
+  mcp                                       MCP server (stdio) for Claude, Cursor, Codex…
+  looks                                     lists image styles (--look)
+  probe <files…>                            rush metadata
+  reference <ref.mp4> [--against render.mp4] [--md r.md] [--json r.json]
+                                            style fingerprint of a video (rhythm, image, sound), compared with a render
+  annotate <edl.json> -o labels.txt        words to check by ear (Audacity label tracks)
+  calibrate -o <dir> [--only a,b]           calibrates the QA: one defect injected per rule into a clean edit
+  schema --out <dir>                        exports the JSON Schemas (EDL, profile, QA report)
+
+Profiles: short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), or a path to a .yaml.
+--lang  : spoken language (en, fr, es, de, it, pt, nl…); detected by default.
+--music : "<query>" adds free music found on Openverse (CC0 / CC BY), credit in credits.txt.
+--draft : fast encode (veryfast preset) to iterate.
+--fast  : no speech or beat analysis (raw assembly).
+--look  : image style (presets/look/): film-print, bleach-grit, neon-80s, teal-orange, noir, clean; "cutkiller looks" describes them.
+--broll : cutaway footage (repeatable): over the speech, or a montage on the music when there is no speech.
+Messages in French: CUTKILLER_LANG=fr.`;
+const usage = () => tr(USAGE_EN, USAGE_FR);
 
 function gate(report: Report, minScore: string | undefined): void {
   if (minScore === undefined) return;
@@ -52,6 +84,13 @@ function gate(report: Report, minScore: string | undefined): void {
     console.error(`✖ score ${report.score} < ${minScore}`);
     process.exitCode = 1;
   }
+}
+
+/** Inputs plus, with --music "<query>", a free track found on Openverse (credit in <dir>/credits.txt). */
+async function withMusic(inputs: string[], query: string | undefined, dir: string): Promise<string[]> {
+  if (!query) return inputs;
+  const { path } = await fetchMusic(query, dir, { minDurationS: 60, log: (m) => console.error(m) });
+  return [...inputs, path];
 }
 
 async function main(argv: string[]): Promise<void> {
@@ -75,6 +114,7 @@ async function main(argv: string[]): Promise<void> {
       broll: { type: "string", multiple: true },
       look: { type: "string" },
       lang: { type: "string" },
+      music: { type: "string" },
     },
   });
   /** The profile named by -p, with the image style of --look if any. */
@@ -88,7 +128,10 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
   const need = (v: string | undefined, name: string): string => {
-    if (!v) throw new Error(`option --${name} requise\n\n${USAGE}`);
+    if (!v)
+      throw new Error(
+        tr(`option --${name} required\n\n${usage()}`, `option --${name} requise\n\n${usage()}`),
+      );
     return v;
   };
 
@@ -98,18 +141,12 @@ async function main(argv: string[]): Promise<void> {
       return;
     case "validate":
       await readEdl(need(positionals[0], "edl"));
-      console.log("✔ EDL valide");
+      console.log(tr("✔ valid EDL", "✔ EDL valide"));
       return;
     case "plan": {
       const out = need(values.out, "out");
-      const edl = await plan(
-        positionals,
-        await profileOf(),
-        out,
-        !values.fast,
-        values.broll ?? [],
-        values.lang,
-      );
+      const inputs = await withMusic(positionals, values.music, dirOf(resolvePath(out)));
+      const edl = await plan(inputs, await profileOf(), out, !values.fast, values.broll ?? [], values.lang);
       console.log(`✔ ${out} : ${edl.video[0]?.clips.length ?? 0} clip(s)`);
       return;
     }
@@ -125,7 +162,7 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
     case "check": {
-      const video = need(positionals[0], "vidéo");
+      const video = need(positionals[0], "video");
       const report = await check(video, await profileOf(), values.edl, values);
       gate(report, values["min-score"]);
       return;
@@ -135,7 +172,8 @@ async function main(argv: string[]): Promise<void> {
       const profile = await profileOf();
       const edlPath = join(dir, "edit.edl.json");
       const video = join(dir, "final.mp4");
-      const edl = await plan(positionals, profile, edlPath, !values.fast, values.broll ?? [], values.lang);
+      const inputs = await withMusic(positionals, values.music, dir);
+      const edl = await plan(inputs, profile, edlPath, !values.fast, values.broll ?? [], values.lang);
       await doRender(edl, edlPath, video, values.draft, true);
       const report = await check(video, profile, edlPath, {
         json: join(dir, "quality.json"),
@@ -154,7 +192,7 @@ async function main(argv: string[]): Promise<void> {
       return;
     }
     case "reference": {
-      const ref = await fingerprint(need(positionals[0], "vidéo de référence"));
+      const ref = await fingerprint(need(positionals[0], "reference video"));
       const ours = values.against ? await fingerprint(values.against) : undefined;
       const md = fingerprintMarkdown(ref, ours);
       if (values.md) await writeFile(values.md, md);
@@ -186,12 +224,25 @@ async function main(argv: string[]): Promise<void> {
         `${JSON.stringify(profileJsonSchema(), null, 2)}\n`,
       );
       await writeFile(join(dir, "report-1.schema.json"), `${JSON.stringify(reportJsonSchema(), null, 2)}\n`);
-      console.log(`✔ schémas écrits dans ${dir}`);
+      console.log(tr(`✔ schemas written to ${dir}`, `✔ schémas écrits dans ${dir}`));
       return;
     }
     case "mcp": {
       const { serveMcp } = await import("./mcp");
       await serveMcp();
+      return;
+    }
+    case "music": {
+      const query = need(positionals.join(" ") || undefined, "query");
+      const { path, track } = await fetchMusic(query, values.out ?? ".", { log: (m) => console.error(m) });
+      console.log(`✔ ${path}\n${track.attribution}`);
+      return;
+    }
+    case "docs": {
+      const { writeRulesReference } = await import("./docs");
+      const out = values.out ?? "docs/rules.md";
+      await writeRulesReference(out);
+      console.log(`✔ ${out}`);
       return;
     }
     case "export": {
@@ -202,11 +253,17 @@ async function main(argv: string[]): Promise<void> {
       const xml = /\.xml$/i.test(out);
       if (!xml && !/\.otio$/i.test(out))
         throw new Error(
-          "export : -o doit finir par .otio (DaVinci Resolve, Avid…) ou .xml (Premiere Pro, Final Cut Pro 7, Resolve)",
+          tr(
+            "export: -o must end with .otio (DaVinci Resolve, Avid…) or .xml (Premiere Pro, Final Cut Pro 7, Resolve)",
+            "export : -o doit finir par .otio (DaVinci Resolve, Avid…) ou .xml (Premiere Pro, Final Cut Pro 7, Resolve)",
+          ),
         );
       await writeFile(out, xml ? toFcp7Xml(edl, opts) : toOtio(edl, opts));
       console.log(
-        `✔ ${out} : ${edl.video.reduce((n, t) => n + t.clips.length, 0)} plan(s) — sous-titres : le .srt écrit à côté du rendu`,
+        tr(
+          `✔ ${out}: ${edl.video.reduce((n, t) => n + t.clips.length, 0)} shot(s) — captions: use the .srt written next to the render`,
+          `✔ ${out} : ${edl.video.reduce((n, t) => n + t.clips.length, 0)} plan(s) — sous-titres : le .srt écrit à côté du rendu`,
+        ),
       );
       return;
     }
@@ -220,7 +277,7 @@ async function main(argv: string[]): Promise<void> {
       console.log(`cutkiller 0.1.0 — ${(await ffmpegVersion()).raw}`);
       return;
     default:
-      console.log(USAGE);
+      console.log(usage());
       if (command && command !== "help") process.exitCode = 2;
   }
 }

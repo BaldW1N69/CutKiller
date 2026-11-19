@@ -15,6 +15,7 @@ import {
   parseEdl,
   runPasses,
   type StyleProfile,
+  tr,
 } from "@cutkiller/core";
 import { assembleEdl, brollPass, cutPass, outputFps } from "@cutkiller/cut";
 import { motionPass } from "@cutkiller/motion";
@@ -34,7 +35,7 @@ export function printDiagnostics(diagnostics: Diagnostic[]): void {
 export async function readEdl(path: string): Promise<Edl> {
   const result = parseEdl(JSON.parse(await readFile(path, "utf8")));
   printDiagnostics(result.diagnostics);
-  if (!result.ok) throw new Error(`EDL invalide : ${path}`);
+  if (!result.ok) throw new Error(tr(`invalid EDL: ${path}`, `EDL invalide : ${path}`));
   return result.edl;
 }
 
@@ -73,18 +74,33 @@ export async function plan(
     const up = Math.max(W / probe.width, H / probe.height);
     if (up > profile.export.maxUpscale)
       console.error(
-        `⚠ [source.resolution] ${id} (${probe.width}×${probe.height}) sera agrandi ×${up.toFixed(1)} en ${W}×${H} : image molle (limite ×${profile.export.maxUpscale}, règle image.sharpness). Une source ≥ ${Math.ceil(W / profile.export.maxUpscale)}×${Math.ceil(H / profile.export.maxUpscale)} est nécessaire.`,
+        tr(
+          `⚠ [source.resolution] ${id} (${probe.width}×${probe.height}) will be enlarged ×${up.toFixed(1)} to ${W}×${H}: soft picture (limit ×${profile.export.maxUpscale}, rule image.sharpness). A source ≥ ${Math.ceil(W / profile.export.maxUpscale)}×${Math.ceil(H / profile.export.maxUpscale)} is needed.`,
+          `⚠ [source.resolution] ${id} (${probe.width}×${probe.height}) sera agrandi ×${up.toFixed(1)} en ${W}×${H} : image molle (limite ×${profile.export.maxUpscale}, règle image.sharpness). Une source ≥ ${Math.ceil(W / profile.export.maxUpscale)}×${Math.ceil(H / profile.export.maxUpscale)} est nécessaire.`,
+        ),
       );
   }
   const fps = outputFps(analysis, profile);
-  if (fps !== profile.format.fps) console.error(`ℹ [output.fps] sortie à ${fps} fps, la cadence des rushes`);
+  if (fps !== profile.format.fps)
+    console.error(
+      tr(
+        `ℹ [output.fps] output at ${fps} fps, the rushes' frame rate`,
+        `ℹ [output.fps] sortie à ${fps} fps, la cadence des rushes`,
+      ),
+    );
   for (const [id, probe] of Object.entries(analysis.sources)) {
     const ratio = probe.fps ? fps / probe.fps : 1;
     if (probe.fps && Math.abs(ratio - Math.round(ratio)) > 0.01)
       console.error(
         probe.fps < fps
-          ? `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${fps} fps répète des images (saccade de pulldown)`
-          : `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${fps} fps saute des images à intervalles irréguliers (mouvement moins fluide)`,
+          ? tr(
+              `⚠ [source.fps] ${id} is at ${probe.fps.toFixed(3)} fps: converting to ${fps} fps repeats frames (pulldown judder)`,
+              `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${fps} fps répète des images (saccade de pulldown)`,
+            )
+          : tr(
+              `⚠ [source.fps] ${id} is at ${probe.fps.toFixed(3)} fps: converting to ${fps} fps drops frames at irregular intervals (less fluid motion)`,
+              `⚠ [source.fps] ${id} est à ${probe.fps.toFixed(3)} fps : la conversion en ${fps} fps saute des images à intervalles irréguliers (mouvement moins fluide)`,
+            ),
       );
   }
   const assembled = assembleEdl(analysis, profile, { edlDir: dirname(resolve(edlPath)) });
@@ -123,11 +139,16 @@ export async function doRender(edl: Edl, edlPath: string, out: string, draft: bo
       const pct = Math.floor((100 * f) / total);
       if (pct >= last + 10) {
         last = pct;
-        process.stderr.write(`\rrendu ${pct} %`);
+        process.stderr.write(tr(`\rrender ${pct} %`, `\rrendu ${pct} %`));
       }
     },
   });
-  process.stderr.write(`\rrendu 100 % — ${log.frames} frames à ${log.renderFps.toFixed(1)} fps\n`);
+  process.stderr.write(
+    tr(
+      `\rrender 100 % — ${log.frames} frames at ${log.renderFps.toFixed(1)} fps\n`,
+      `\rrendu 100 % — ${log.frames} frames à ${log.renderFps.toFixed(1)} fps\n`,
+    ),
+  );
   // Sidecar subtitles (same cues as the burnt-in captions) for the platforms' own subtitle track.
   if (edl.captions.length > 0)
     await writeFile(`${out.replace(/\.[^./]+$/, "")}.srt`, toSrt(edl.captions, edl.output.fps));

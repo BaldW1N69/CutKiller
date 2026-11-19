@@ -7,6 +7,7 @@ import {
   framesToSeconds,
   mainAudioSpans,
   type StyleProfile,
+  tr,
   type VoiceActivity,
 } from "@cutkiller/core";
 import { decodeMono, measureLoudness, readWavF32 } from "@cutkiller/media";
@@ -64,7 +65,12 @@ export async function checkCutClicks(video: string, edl: Edl, profile: StyleProf
   const violations: Violation[] = [];
   const fade = edl.output.audio.cutFadeMs;
   if (fade < minFade || fade > maxFade)
-    violations.push({ message: `fondus de coupe de ${fade} ms (attendu ${minFade}–${maxFade} ms)` });
+    violations.push({
+      message: tr(
+        `cut fades of ${fade} ms (expected ${minFade}–${maxFade} ms)`,
+        `fondus de coupe de ${fade} ms (attendu ${minFade}–${maxFade} ms)`,
+      ),
+    });
   // Dialogue edits are judged on the dialogue stem when it exists: on the mix, a
   // music hit that a beat-snapped cut lands on would read as a click.
   const voice = `${video}.voice.wav`;
@@ -95,7 +101,10 @@ export async function checkLoudness(video: string, profile: StyleProfile): Promi
   const violations: Violation[] = [];
   if (Math.abs(l.integrated - a.integratedLufs) > a.lufsTolerance + 1e-9)
     violations.push({
-      message: `${l.integrated.toFixed(1)} LUFS (cible ${a.integratedLufs} ±${a.lufsTolerance})`,
+      message: tr(
+        `${l.integrated.toFixed(1)} LUFS (target ${a.integratedLufs} ±${a.lufsTolerance})`,
+        `${l.integrated.toFixed(1)} LUFS (cible ${a.integratedLufs} ±${a.lufsTolerance})`,
+      ),
     });
   if (l.truePeak > a.truePeakDbtp + 1e-9)
     violations.push({ message: `true peak ${l.truePeak.toFixed(1)} dBTP (max ${a.truePeakDbtp})` });
@@ -141,11 +150,17 @@ export async function checkDucking(
   vadOverride?: VoiceActivity,
 ): Promise<CheckResult> {
   const hasMusic = edl.audio.some((t) => t.clips.some((c) => c.source !== undefined));
-  if (!hasMusic) return notEvaluated("audio.ducking", "pas de musique");
+  if (!hasMusic) return notEvaluated("audio.ducking", tr("no music", "pas de musique"));
   const ducked = `${video}.music.wav`;
   const dryPath = `${video}.music-dry.wav`;
   if (!existsSync(ducked) || !existsSync(dryPath))
-    return notEvaluated("audio.ducking", "stems musique absents (rendu sans --keep-stems)");
+    return notEvaluated(
+      "audio.ducking",
+      tr(
+        "music stems missing (rendered without --keep-stems)",
+        "stems musique absents (rendu sans --keep-stems)",
+      ),
+    );
   const vad = vadOverride ?? (await runWorker<VoiceActivity>("vad", { path: resolve(`${video}.voice.wav`) }));
   const wet = await readWavF32(ducked);
   const dry = await readWavF32(dryPath);
@@ -173,7 +188,10 @@ export async function checkDucking(
     depths.push(depth);
     if (depth < lo - 0.5 || depth > hi + 0.5)
       violations.push({
-        message: `musique à ${depth.toFixed(1)} dB sous la parole (attendu ${lo}–${hi} dB)`,
+        message: tr(
+          `music at ${depth.toFixed(1)} dB under speech (expected ${lo}–${hi} dB)`,
+          `musique à ${depth.toFixed(1)} dB sous la parole (attendu ${lo}–${hi} dB)`,
+        ),
         frame: Math.round(s.start * fps),
       });
   }
@@ -190,7 +208,10 @@ export async function checkDucking(
   }
   if (steep > 0)
     violations.push({
-      message: `${steep} variation(s) brusque(s) du gain (jusqu'à ${worst.toFixed(1)} dB en 10 ms)`,
+      message: tr(
+        `${steep} abrupt gain change(s) (up to ${worst.toFixed(1)} dB in 10 ms)`,
+        `${steep} variation(s) brusque(s) du gain (jusqu'à ${worst.toFixed(1)} dB en 10 ms)`,
+      ),
     });
   const up = (k: number) => gain(k) > lo / 3;
   let pumps = 0;
@@ -206,9 +227,14 @@ export async function checkDucking(
     k = j;
   }
   if (pumps > 0)
-    violations.push({ message: `${pumps} remontée(s) de la musique de moins de 300 ms (pompage)` });
+    violations.push({
+      message: tr(
+        `${pumps} music swell(s) shorter than 300 ms (pumping)`,
+        `${pumps} remontée(s) de la musique de moins de 300 ms (pompage)`,
+      ),
+    });
   if (items === 1 && depths.length === 0)
-    return notEvaluated("audio.ducking", "aucune parole sous la musique");
+    return notEvaluated("audio.ducking", tr("no speech under the music", "aucune parole sous la musique"));
   depths.sort((a, b) => a - b);
   return graded("audio.ducking", items, violations, {
     speech: depths.length,
@@ -231,7 +257,13 @@ export async function checkSfxSync(video: string, edl: Edl, profile: StyleProfil
   if (clips.length === 0) return notEvaluated("audio.sfx-sync", "aucun effet sonore");
   const path = `${video}.sfx.wav`;
   if (!existsSync(path))
-    return notEvaluated("audio.sfx-sync", "stem des effets absent (rendu sans --keep-stems)");
+    return notEvaluated(
+      "audio.sfx-sync",
+      tr(
+        "SFX stem missing (rendered without --keep-stems)",
+        "stem des effets absent (rendu sans --keep-stems)",
+      ),
+    );
   const { samples, rate } = await readWavF32(path);
   const tol = profile.audio.sfxToleranceFrames;
   const violations: Violation[] = [];
@@ -242,7 +274,13 @@ export async function checkSfxSync(video: string, edl: Edl, profile: StyleProfil
     if (kind === "transition") expected = edl.transitions.find((t) => t.id === id)?.atFrame;
     else if (kind === "keyframes") expected = edl.keyframes.find((k) => k.target === id)?.keys[0]?.frame;
     if (expected === undefined) {
-      violations.push({ message: `${c.id} : événement « ${c.syncTo} » introuvable`, frame: c.at });
+      violations.push({
+        message: tr(
+          `${c.id}: event « ${c.syncTo} » not found`,
+          `${c.id} : événement « ${c.syncTo} » introuvable`,
+        ),
+        frame: c.at,
+      });
       continue;
     }
     const from = Math.round(framesToSeconds(c.at, fps) * rate);
@@ -252,7 +290,10 @@ export async function checkSfxSync(video: string, edl: Edl, profile: StyleProfil
     errors.push(Math.abs(err));
     if (Math.abs(err) > tol + 1e-9)
       violations.push({
-        message: `${c.id} (${c.asset}) : impact à ${err > 0 ? "+" : ""}${err.toFixed(1)} frame(s) de ${c.syncTo}`,
+        message: tr(
+          `${c.id} (${c.asset}): impact at ${err > 0 ? "+" : ""}${err.toFixed(1)} frame(s) from ${c.syncTo}`,
+          `${c.id} (${c.asset}) : impact à ${err > 0 ? "+" : ""}${err.toFixed(1)} frame(s) de ${c.syncTo}`,
+        ),
         frame: expected,
       });
   }

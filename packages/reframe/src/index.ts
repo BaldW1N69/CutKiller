@@ -8,6 +8,7 @@ import {
   EdlSchema,
   NAMED_EASES,
   type Pass,
+  tr,
   type VideoClip,
 } from "@cutkiller/core";
 import { planCamera, subjectTrack } from "./plan";
@@ -99,7 +100,10 @@ export const reframePass: Pass = {
     diagnostics.push({
       level: "info",
       code: "reframe.summary",
-      message: `${reframed} plan(s) recadré(s) sur le visage, ${Math.round(moves)} mouvement(s) de caméra`,
+      message: tr(
+        `${reframed} shot(s) reframed on the face, ${Math.round(moves)} camera move(s)`,
+        `${reframed} plan(s) recadré(s) sur le visage, ${Math.round(moves)} mouvement(s) de caméra`,
+      ),
     });
     return { edl: EdlSchema.parse({ ...edl, video }), diagnostics };
   },

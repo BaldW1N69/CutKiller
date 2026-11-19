@@ -2,7 +2,15 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, open, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { Analysis, BeatGrid, Prosody, Subjects, Transcript, VoiceActivity } from "@cutkiller/core";
+import {
+  type Analysis,
+  type BeatGrid,
+  type Prosody,
+  type Subjects,
+  type Transcript,
+  tr,
+  type VoiceActivity,
+} from "@cutkiller/core";
 import { probeSource } from "@cutkiller/media";
 import { runWorker } from "./worker";
 
@@ -41,7 +49,7 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
     if (!opts.deep) continue;
     const key = await contentKey(probe.path);
     if (probe.hasVideo) {
-      opts.log?.(`visages et couleurs de ${id}…`);
+      opts.log?.(tr(`faces and colour of ${id}…`, `visages et couleurs de ${id}…`));
       const subjects = await cached<Subjects>(cacheDir, `${key}.subjects-${ANALYZER_VERSION.subjects}`, () =>
         runWorker("subjects", { path: probe.path }),
       );
@@ -49,7 +57,7 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
     }
     if (!probe.hasAudio || probe.role === "broll") continue;
     if (probe.hasVideo && !probe.still) {
-      opts.log?.(`transcription de ${id}…`);
+      opts.log?.(tr(`transcribing ${id}…`, `transcription de ${id}…`));
       const transcript = await cached<Transcript>(
         cacheDir,
         `${key}.transcribe-${ANALYZER_VERSION.transcribe}-${model}-${language}`,
@@ -67,7 +75,7 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
       analysis.prosody = { ...analysis.prosody, [id]: prosody };
       analysis.vad = { ...analysis.vad, [id]: vad };
     } else if (!probe.hasVideo) {
-      opts.log?.(`beats de ${id}…`);
+      opts.log?.(tr(`beats of ${id}…`, `beats de ${id}…`));
       const beats = await cached<BeatGrid>(cacheDir, `${key}.beats-${ANALYZER_VERSION.beats}`, () =>
         runWorker("beats", { path: probe.path }),
       );

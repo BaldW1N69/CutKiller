@@ -10,6 +10,7 @@ import {
   type KeyframeTrack,
   type StyleProfile,
   sortedClips,
+  tr,
   trackClip,
   trackProperty,
   type VideoClip,
@@ -55,10 +56,16 @@ function overshootViolation(
   if (overshoot <= NO_OVERSHOOT) return undefined;
   if (role === "entry" || role === "micro") {
     if (overshoot < lo || overshoot > hi)
-      return `dépassement de ${pct(overshoot)} (attendu 0 ou ${pct(lo)}–${pct(hi)})`;
+      return tr(
+        `overshoot of ${pct(overshoot)} (expected 0 or ${pct(lo)}–${pct(hi)})`,
+        `dépassement de ${pct(overshoot)} (attendu 0 ou ${pct(lo)}–${pct(hi)})`,
+      );
     return undefined;
   }
-  return `dépassement de ${pct(overshoot)} sur une animation « ${role ?? "sans rôle"} » (aucun autorisé)`;
+  return tr(
+    `overshoot of ${pct(overshoot)} on a « ${role ?? "no role"} » animation (none allowed)`,
+    `dépassement de ${pct(overshoot)} sur une animation « ${role ?? "sans rôle"} » (aucun autorisé)`,
+  );
 }
 
 /** Entries decelerate (ease-out), exits accelerate (ease-in). */
@@ -68,8 +75,10 @@ function shapeViolation(
   durationS: number,
 ): string | undefined {
   const shape = easeShape(ease, durationS);
-  if (role === "entry" && shape !== "decelerating") return "une entrée doit décélérer (ease-out)";
-  if (role === "exit" && shape !== "accelerating") return "une sortie doit accélérer (ease-in)";
+  if (role === "entry" && shape !== "decelerating")
+    return tr("an entrance must decelerate (ease-out)", "une entrée doit décélérer (ease-out)");
+  if (role === "exit" && shape !== "accelerating")
+    return tr("an exit must accelerate (ease-in)", "une sortie doit accélérer (ease-in)");
   return undefined;
 }
 
@@ -80,30 +89,46 @@ function checkPresetDefinition(preset: Preset, profile: StyleProfile, fps: numbe
   const tol = frameTolerance(fps);
   if (preset.kind === "motion") {
     const p = MotionParamsSchema.safeParse(preset.params);
-    if (!p.success) return [`${id} : paramètres invalides`];
+    if (!p.success) return [tr(`${id}: invalid parameters`, `${id} : paramètres invalides`)];
     const { role, durationMs, ease, property } = p.data;
     if (
       (role === "micro" || role === "entry" || role === "exit") &&
       (durationMs < mLo - tol || durationMs > mHi + tol)
     )
-      problems.push(`${id} : ${durationMs} ms (attendu ${mLo}–${mHi} ms)`);
-    if (property !== "rotation" && isLinearEase(ease)) problems.push(`${id} : courbe linéaire`);
+      problems.push(
+        tr(
+          `${id}: ${durationMs} ms (expected ${mLo}–${mHi} ms)`,
+          `${id} : ${durationMs} ms (attendu ${mLo}–${mHi} ms)`,
+        ),
+      );
+    if (property !== "rotation" && isLinearEase(ease))
+      problems.push(tr(`${id}: linear curve`, `${id} : courbe linéaire`));
     const o = overshootViolation(role, easeOvershoot(ease, durationMs / 1000), profile);
     if (o) problems.push(`${id} : ${o}`);
     const sh = shapeViolation(role, ease, durationMs / 1000);
     if (sh) problems.push(`${id} : ${sh}`);
   } else if (preset.kind === "transition") {
     const p = TransitionParamsSchema.safeParse(preset.params);
-    if (!p.success) return [`${id} : paramètres invalides`];
+    if (!p.success) return [tr(`${id}: invalid parameters`, `${id} : paramètres invalides`)];
     const params: TransitionParams = p.data;
     const [tLo, tHi] = transitionRange(params, profile);
     if (params.durationMs < tLo - tol || params.durationMs > tHi + tol)
-      problems.push(`${id} : ${params.durationMs} ms (attendu ${tLo}–${tHi} ms)`);
+      problems.push(
+        tr(
+          `${id}: ${params.durationMs} ms (expected ${tLo}–${tHi} ms)`,
+          `${id} : ${params.durationMs} ms (attendu ${tLo}–${tHi} ms)`,
+        ),
+      );
     if (params.type !== "glitch") {
-      if (isLinearEase(params.ease)) problems.push(`${id} : courbe linéaire`);
+      if (isLinearEase(params.ease)) problems.push(tr(`${id}: linear curve`, `${id} : courbe linéaire`));
       const o = easeOvershoot(params.ease, params.durationMs / 1000);
       if (o > NO_OVERSHOOT)
-        problems.push(`${id} : dépassement de ${(o * 100).toFixed(1)} % sur une transition`);
+        problems.push(
+          tr(
+            `${id}: overshoot of ${(o * 100).toFixed(1)} % on a transition`,
+            `${id} : dépassement de ${(o * 100).toFixed(1)} % sur une transition`,
+          ),
+        );
       if (params.type === "slide") {
         const sh = shapeViolation("entry", params.ease, params.durationMs / 1000);
         if (sh) problems.push(`${id} : ${sh}`);
@@ -146,7 +171,13 @@ export function checkPresets(edl: Edl, registry: PresetRegistry, profile: StyleP
     try {
       const params = TransitionParamsSchema.parse(registry.resolve(t.preset).params);
       if (Math.abs(framesToSeconds(t.durationFrames, fps) * 1000 - params.durationMs) > 1000 / fps)
-        violations.push({ message: `${t.id} : durée différente de ${t.preset}`, frame: t.atFrame });
+        violations.push({
+          message: tr(
+            `${t.id}: duration differs from ${t.preset}`,
+            `${t.id} : durée différente de ${t.preset}`,
+          ),
+          frame: t.atFrame,
+        });
     } catch (e) {
       violations.push({ message: `${t.id} : ${(e as Error).message}`, frame: t.atFrame });
     }
@@ -160,7 +191,12 @@ export function checkPresets(edl: Edl, registry: PresetRegistry, profile: StyleP
         const entry = registry.resolve(style.entry);
         const params = MotionParamsSchema.safeParse(entry.params);
         if (entry.kind !== "motion" || !params.success || params.data.role !== "entry")
-          violations.push({ message: `${ref} : ${style.entry} n'est pas une animation d'entrée` });
+          violations.push({
+            message: tr(
+              `${ref}: ${style.entry} is not an entrance animation`,
+              `${ref} : ${style.entry} n'est pas une animation d'entrée`,
+            ),
+          });
       }
     } catch (e) {
       violations.push({ message: `${ref} : ${(e as Error).message}` });
@@ -228,7 +264,13 @@ export function checkOvershoot(edl: Edl, registry: PresetRegistry, profile: Styl
     items++;
     const o = easeOvershoot(t.params.ease, framesToSeconds(t.durationFrames, fps));
     if (o > NO_OVERSHOOT)
-      violations.push({ message: `${t.id} : dépassement de ${(o * 100).toFixed(1)} %`, frame: t.atFrame });
+      violations.push({
+        message: tr(
+          `${t.id}: overshoot of ${(o * 100).toFixed(1)} %`,
+          `${t.id} : dépassement de ${(o * 100).toFixed(1)} %`,
+        ),
+        frame: t.atFrame,
+      });
   }
   if (items === 0) return notEvaluated("motion.overshoot", "aucune animation");
   return graded("motion.overshoot", items, violations, { animations: items });
@@ -246,9 +288,14 @@ export function checkMotionBlur(
   profile: StyleProfile,
 ): CheckResult {
   const logPath = `${video}.render-log.json`;
-  if (!existsSync(logPath)) return notEvaluated("motion.blur", "journal de rendu absent");
+  if (!existsSync(logPath))
+    return notEvaluated("motion.blur", tr("render log missing", "journal de rendu absent"));
   const log = JSON.parse(readFileSync(logPath, "utf8")) as { motion?: MotionLog; frames: number };
-  if (!log.motion) return notEvaluated("motion.blur", "journal de rendu sans données de mouvement");
+  if (!log.motion)
+    return notEvaluated(
+      "motion.blur",
+      tr("render log without motion data", "journal de rendu sans données de mouvement"),
+    );
   const rendered = new Map(log.motion.frames.map(([f, , n]) => [f, n]));
   const timeline = new MotionTimeline(edl, resolveTransitions(edl, registry));
   const captions = new CaptionTimeline(edl, registry);
@@ -260,9 +307,16 @@ export function checkMotionBlur(
     if (v <= threshold) continue;
     fast++;
     if ((rendered.get(f) ?? 1) < 2)
-      violations.push({ message: `${v.toFixed(0)} px/frame sans flou`, frame: f });
+      violations.push({
+        message: tr(`${v.toFixed(0)} px/frame without blur`, `${v.toFixed(0)} px/frame sans flou`),
+        frame: f,
+      });
   }
-  if (fast === 0) return notEvaluated("motion.blur", `aucun mouvement au-delà de ${threshold} px/frame`);
+  if (fast === 0)
+    return notEvaluated(
+      "motion.blur",
+      tr(`no motion above ${threshold} px/frame`, `aucun mouvement au-delà de ${threshold} px/frame`),
+    );
   return graded("motion.blur", fast, violations, { fastFrames: fast, thresholdPxPerFrame: threshold });
 }
 
@@ -298,12 +352,27 @@ export function checkPunchIns(edl: Edl, profile: StyleProfile): CheckResult {
   events.forEach((e, k) => {
     const pct = Math.round(e.level * 100);
     if (e.level < lo - 1e-6 || e.level > hi + 1e-6)
-      violations.push({ message: `${e.label} : punch-in à ${pct} %`, frame: e.frame });
+      violations.push({
+        message: tr(`${e.label}: punch-in at ${pct} %`, `${e.label} : punch-in à ${pct} %`),
+        frame: e.frame,
+      });
     const prev = events[k - 1];
     if (prev && Math.abs(prev.level - e.level) < 1e-6)
-      violations.push({ message: `${e.label} : deux punch-ins de suite à ${pct} %`, frame: e.frame });
+      violations.push({
+        message: tr(
+          `${e.label}: two punch-ins in a row at ${pct} %`,
+          `${e.label} : deux punch-ins de suite à ${pct} %`,
+        ),
+        frame: e.frame,
+      });
     if (e.track && !(e.track.why?.kind === "emphasis" && (e.track.why.wordIds?.length ?? 0) > 0))
-      violations.push({ message: `${e.label} : punch-in animé sans mot d'emphase`, frame: e.frame });
+      violations.push({
+        message: tr(
+          `${e.label}: animated punch-in without an emphasised word`,
+          `${e.label} : punch-in animé sans mot d'emphase`,
+        ),
+        frame: e.frame,
+      });
   });
   return graded("montage.punch-ins", events.length, violations, {
     punchIns: events.length,

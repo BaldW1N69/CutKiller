@@ -11,6 +11,7 @@ import {
   type StyleProfile,
   type Subjects,
   sortedClips,
+  tr,
   type VideoClip,
 } from "@cutkiller/core";
 import { clipAt } from "../decode";
@@ -88,7 +89,7 @@ function runs(bad: { frame: number; clip: string; kind: string; message: string 
   const flush = () => {
     if (last)
       out.push({
-        message: `${last.message}${count > 1 ? ` (${count} échantillons)` : ""}`,
+        message: `${last.message}${count > 1 ? tr(` (${count} samples)`, ` (${count} échantillons)`) : ""}`,
         frame: last.frame,
       });
   };
@@ -141,7 +142,13 @@ export async function checkReframe(
   const fps = edl.output.fps;
   const reframed = sortedClips(edl.video[0]?.clips ?? []).filter((c) => c.reframe);
   if (reframed.length === 0)
-    return notEvaluated("image.reframe", "aucun plan recadré : les rushes ont déjà le format de sortie");
+    return notEvaluated(
+      "image.reframe",
+      tr(
+        "no reframed shot: the rushes already have the output aspect",
+        "aucun plan recadré : les rushes ont déjà le format de sortie",
+      ),
+    );
   const violations: Violation[] = [];
   let badClips = 0;
   let peakAccel = 0;
@@ -163,7 +170,10 @@ export async function checkReframe(
     if (worst > cfg.maxAccelPx) {
       badClips++;
       violations.push({
-        message: `à-coup de la caméra virtuelle : ${worst.toFixed(1)} px/frame² (max ${cfg.maxAccelPx})`,
+        message: tr(
+          `virtual camera jerk: ${worst.toFixed(1)} px/frame² (max ${cfg.maxAccelPx})`,
+          `à-coup de la caméra virtuelle : ${worst.toFixed(1)} px/frame² (max ${cfg.maxAccelPx})`,
+        ),
         frame: at,
       });
     }
@@ -183,7 +193,7 @@ export async function checkReframe(
           frame: s.frame,
           clip: s.clip.id,
           kind: "lost",
-          message: "visage du rush absent du cadre",
+          message: tr("the rush's face is out of frame", "visage du rush absent du cadre"),
         });
       }
       continue;
@@ -201,14 +211,20 @@ export async function checkReframe(
         frame: s.frame,
         clip: s.clip.id,
         kind: "cut",
-        message: `visage coupé par le cadre (${Math.round(inside * 100)} % dans l'image)`,
+        message: tr(
+          `face cut by the frame (${Math.round(inside * 100)} % in frame)`,
+          `visage coupé par le cadre (${Math.round(inside * 100)} % dans l'image)`,
+        ),
       });
     else if (offset > cfg.maxFaceOffset)
       bad.push({
         frame: s.frame,
         clip: s.clip.id,
         kind: "off",
-        message: `visage décentré (${Math.round(offset * 100)} % de la largeur)`,
+        message: tr(
+          `face off-centre (${Math.round(offset * 100)} % of the width)`,
+          `visage décentré (${Math.round(offset * 100)} % de la largeur)`,
+        ),
       });
   }
   violations.push(...runs(bad, fps));
@@ -236,7 +252,12 @@ export async function checkColor(video: string, edl: Edl, profile: StyleProfile)
   const violations: Violation[] = [];
   const looks = new Set(main.map((c) => c.color?.look ?? "aucun"));
   if (looks.size > 1)
-    violations.push({ message: `looks différents d'un plan à l'autre : ${[...looks].join(", ")}` });
+    violations.push({
+      message: tr(
+        `different looks from shot to shot: ${[...looks].join(", ")}`,
+        `looks différents d'un plan à l'autre : ${[...looks].join(", ")}`,
+      ),
+    });
 
   const subjects = await renderSubjects(video);
   const skins = new Map<string, Rgb[]>();
@@ -252,10 +273,19 @@ export async function checkColor(video: string, edl: Edl, profile: StyleProfile)
   const measured: Record<string, unknown> = { looks: [...looks], shots: shots.length };
   if (shots.length < 2) {
     if (!main.some((c) => c.color))
-      return notEvaluated("image.color", "ni étalonnage, ni deux plans avec un visage à comparer");
+      return notEvaluated(
+        "image.color",
+        tr(
+          "no grading and no two shots with a face to compare",
+          "ni étalonnage, ni deux plans avec un visage à comparer",
+        ),
+      );
     return {
       ...ratio("image.color", 1, violations.length, violations, measured),
-      note: "moins de deux plans avec un visage : seul le look est vérifié",
+      note: tr(
+        "fewer than two shots with a face: only the look is checked",
+        "moins de deux plans avec un visage : seul le look est vérifié",
+      ),
     };
   }
   // Reference skin: the speech shots together; B-roll shots (other people, other
@@ -281,7 +311,10 @@ export async function checkColor(video: string, edl: Edl, profile: StyleProfile)
     if (dL > cfg.maxSkinDeltaL || dAb > cfg.maxSkinDeltaAb) {
       bad++;
       violations.push({
-        message: `peau de « ${s.clip.id} » loin de la référence : ΔL* ${dL.toFixed(1)}, Δa*b* ${dAb.toFixed(1)}`,
+        message: tr(
+          `skin of « ${s.clip.id} » far from the reference: ΔL* ${dL.toFixed(1)}, Δa*b* ${dAb.toFixed(1)}`,
+          `peau de « ${s.clip.id} » loin de la référence : ΔL* ${dL.toFixed(1)}, Δa*b* ${dAb.toFixed(1)}`,
+        ),
         frame: s.clip.at,
       });
     }

@@ -23,7 +23,7 @@ Same input, same machine, measured on 2026-11-19. Reproduce with the commands be
 
 - **auto-editor is ~90× faster** and is the right tool when all you need is dead air removed from a long recording. CutKiller is not trying to beat it on speed.
 - **CutKiller does the rest of the edit** (format, captions, sound, rhythm) and tells you what is still wrong, with timecodes. On a 640×360 source it refuses to call the result sharp: the score reflects the input, not marketing.
-- Speed is CutKiller's main weakness today: Whisper `large-v3-turbo` and the aligner on CPU. Planned: smaller model by default on CPU, GPU path, parallel analysis ([roadmap](../ROADMAP.md)).
+- Speed is CutKiller's main weakness today: Whisper `large-v3-turbo` and the aligner on CPU. Planned: smaller model by default on CPU, GPU path, parallel analysis ([roadmap](https://github.com/BaldW1N69/CutKiller/blob/main/ROADMAP.md)).
 
 ## Reproduce
 

@@ -4,7 +4,7 @@
  * yet is reported "non évaluée" and excluded from the score; the report shows the
  * evaluated weight as coverage.
  */
-import type { StyleProfile } from "@cutkiller/core";
+import { type StyleProfile, tr } from "@cutkiller/core";
 
 export type Category = "montage" | "motion" | "captions" | "audio" | "image";
 
@@ -19,7 +19,8 @@ export type MeasuredOn = "rendu" | "rendu + EDL" | "EDL" | "journal de rendu" | 
 export interface Rule {
   id: string;
   category: Category;
-  title: string;
+  titleEn: string;
+  titleFr: string;
   weight: number;
   phase: number;
   measuredOn: MeasuredOn;
@@ -29,7 +30,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "montage.silences",
     category: "montage",
-    title: "Silences > 350 ms supprimés, marges 80–120 ms",
+    titleFr: "Silences > 350 ms supprimés, marges 80–120 ms",
+    titleEn: "Silences > 350 ms removed, 80–120 ms margins",
     weight: 4,
     phase: 2,
     measuredOn: "rendu + EDL",
@@ -37,7 +39,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "montage.fillers",
     category: "montage",
-    title: "Hésitations et respirations fortes supprimées",
+    titleFr: "Hésitations et respirations fortes supprimées",
+    titleEn: "Hesitations and loud breaths removed",
     weight: 4,
     phase: 2,
     measuredOn: "rendu",
@@ -45,7 +48,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "montage.beat-cuts",
     category: "montage",
-    title: "Coupes libres calées sur les beats (±1 frame)",
+    titleFr: "Coupes libres calées sur les beats (±1 frame)",
+    titleEn: "Free cuts on the beat (±1 frame)",
     weight: 3,
     phase: 2,
     measuredOn: "EDL",
@@ -53,7 +57,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "montage.jl-cuts",
     category: "montage",
-    title: "J/L cuts de 4 à 12 frames",
+    titleFr: "J/L cuts de 4 à 12 frames",
+    titleEn: "J/L cuts of 4 to 12 frames",
     weight: 2,
     phase: 1,
     measuredOn: "EDL",
@@ -61,7 +66,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "montage.static-shots",
     category: "montage",
-    title: "Aucun plan statique trop long",
+    titleFr: "Aucun plan statique trop long",
+    titleEn: "No static shot too long",
     weight: 4,
     phase: 2,
     measuredOn: "EDL",
@@ -69,7 +75,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "montage.punch-ins",
     category: "montage",
-    title: "Punch-ins 105–115 %, jamais deux fois au même niveau",
+    titleFr: "Punch-ins 105–115 %, jamais deux fois au même niveau",
+    titleEn: "Punch-ins 105–115 %, never twice at the same level",
     weight: 3,
     phase: 2,
     measuredOn: "EDL",
@@ -77,7 +84,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "motion.no-linear",
     category: "motion",
-    title: "Aucune interpolation linéaire (position, échelle, opacité)",
+    titleFr: "Aucune interpolation linéaire (position, échelle, opacité)",
+    titleEn: "No linear interpolation (position, scale, opacity)",
     weight: 6,
     phase: 1,
     measuredOn: "presets + EDL",
@@ -85,7 +93,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "motion.durations",
     category: "motion",
-    title: "Micro-animations 150–300 ms, transitions 200–500 ms",
+    titleFr: "Micro-animations 150–300 ms, transitions 200–500 ms",
+    titleEn: "Micro-animations 150–300 ms, transitions 200–500 ms",
     weight: 4,
     phase: 3,
     measuredOn: "presets + EDL",
@@ -93,7 +102,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "motion.blur",
     category: "motion",
-    title: "Motion blur au-delà du seuil de vitesse",
+    titleFr: "Motion blur au-delà du seuil de vitesse",
+    titleEn: "Motion blur above the speed threshold",
     weight: 4,
     phase: 3,
     measuredOn: "journal de rendu",
@@ -101,7 +111,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "motion.overshoot",
     category: "motion",
-    title: "Overshoot des pop-ins entre 3 et 8 %",
+    titleFr: "Overshoot des pop-ins entre 3 et 8 %",
+    titleEn: "Pop-in overshoot between 3 and 8 %",
     weight: 2,
     phase: 3,
     measuredOn: "presets + EDL",
@@ -109,7 +120,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "motion.presets",
     category: "motion",
-    title: "Presets nommés, versionnés et conformes",
+    titleFr: "Presets nommés, versionnés et conformes",
+    titleEn: "Named, versioned and compliant presets",
     weight: 4,
     phase: 3,
     measuredOn: "presets + EDL",
@@ -117,7 +129,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "captions.sync",
     category: "captions",
-    title: "Sous-titres synchronisés au mot",
+    titleFr: "Sous-titres synchronisés au mot",
+    titleEn: "Captions synced to the word",
     weight: 7,
     phase: 4,
     measuredOn: "rendu",
@@ -125,7 +138,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "captions.density",
     category: "captions",
-    title: "Mots par écran / lignes / caractères",
+    titleFr: "Mots par écran / lignes / caractères",
+    titleEn: "Words per screen / lines / characters",
     weight: 4,
     phase: 4,
     measuredOn: "EDL",
@@ -133,7 +147,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "captions.safe-zones",
     category: "captions",
-    title: "Safe zones des plateformes respectées",
+    titleFr: "Safe zones des plateformes respectées",
+    titleEn: "Platform safe zones respected",
     weight: 5,
     phase: 4,
     measuredOn: "EDL",
@@ -141,7 +156,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "captions.contrast",
     category: "captions",
-    title: "Contraste WCAG ≥ 4,5:1",
+    titleFr: "Contraste WCAG ≥ 4,5:1",
+    titleEn: "WCAG contrast ≥ 4.5:1",
     weight: 4,
     phase: 4,
     measuredOn: "rendu + EDL",
@@ -149,7 +165,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "audio.loudness",
     category: "audio",
-    title: "-14 LUFS ±1, true peak ≤ -1 dBTP",
+    titleFr: "-14 LUFS ±1, true peak ≤ -1 dBTP",
+    titleEn: "-14 LUFS ±1, true peak ≤ -1 dBTP",
     weight: 7,
     phase: 5,
     measuredOn: "rendu",
@@ -157,7 +174,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "audio.ducking",
     category: "audio",
-    title: "Ducking de la musique -12 à -18 dB, sans pompage",
+    titleFr: "Ducking de la musique -12 à -18 dB, sans pompage",
+    titleEn: "Music ducked -12 to -18 dB, no pumping",
     weight: 5,
     phase: 5,
     measuredOn: "rendu",
@@ -165,7 +183,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "audio.sfx-sync",
     category: "audio",
-    title: "SFX synchronisés (±1 frame)",
+    titleFr: "SFX synchronisés (±1 frame)",
+    titleEn: "SFX in sync (±1 frame)",
     weight: 4,
     phase: 5,
     measuredOn: "rendu + EDL",
@@ -173,7 +192,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "audio.cut-clicks",
     category: "audio",
-    title: "Aucun clic aux coupes (fondus 5–10 ms)",
+    titleFr: "Aucun clic aux coupes (fondus 5–10 ms)",
+    titleEn: "No clicks at cuts (5–10 ms fades)",
     weight: 4,
     phase: 1,
     measuredOn: "rendu + EDL",
@@ -181,7 +201,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "image.reframe",
     category: "image",
-    title: "Recadrage 9:16 qui suit le sujet sans saccade",
+    titleFr: "Recadrage 9:16 qui suit le sujet sans saccade",
+    titleEn: "9:16 reframing follows the subject smoothly",
     weight: 5,
     phase: 6,
     measuredOn: "rendu + EDL",
@@ -189,7 +210,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "image.color",
     category: "image",
-    title: "Étalonnage cohérent entre plans",
+    titleFr: "Étalonnage cohérent entre plans",
+    titleEn: "Consistent grading between shots",
     weight: 5,
     phase: 6,
     measuredOn: "rendu",
@@ -197,7 +219,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "image.sharpness",
     category: "image",
-    title: "Netteté : aucune image agrandie au-delà de la limite",
+    titleFr: "Netteté : aucune image agrandie au-delà de la limite",
+    titleEn: "Sharpness: no picture enlarged beyond the limit",
     weight: 2,
     phase: 8,
     measuredOn: "EDL",
@@ -205,7 +228,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "image.export-format",
     category: "image",
-    title: "H.264/H.265, 30 ou 60 fps constants, bonne résolution",
+    titleFr: "H.264/H.265, 30 ou 60 fps constants, bonne résolution",
+    titleEn: "H.264/H.265, constant 30 or 60 fps, right resolution",
     weight: 2,
     phase: 1,
     measuredOn: "rendu",
@@ -213,7 +237,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "image.bitrate",
     category: "image",
-    title: "Débit vidéo au-dessus du minimum",
+    titleFr: "Débit vidéo au-dessus du minimum",
+    titleEn: "Video bitrate above the minimum",
     weight: 2,
     phase: 1,
     measuredOn: "rendu",
@@ -221,7 +246,8 @@ export const RULES: readonly Rule[] = [
   {
     id: "image.black-frames",
     category: "image",
-    title: "Aucune frame noire non prévue",
+    titleFr: "Aucune frame noire non prévue",
+    titleEn: "No unplanned black frames",
     weight: 2,
     phase: 1,
     measuredOn: "rendu",
@@ -229,12 +255,27 @@ export const RULES: readonly Rule[] = [
   {
     id: "image.duplicate-frames",
     category: "image",
-    title: "Aucune frame dupliquée non prévue",
+    titleFr: "Aucune frame dupliquée non prévue",
+    titleEn: "No unplanned duplicate frames",
     weight: 2,
     phase: 1,
     measuredOn: "rendu",
   },
 ];
+
+/** Rule title in the current locale. */
+export const ruleTitle = (r: Rule): string => tr(r.titleEn, r.titleFr);
+
+const MEASURED_ON_EN: Record<MeasuredOn, string> = {
+  rendu: "render",
+  "rendu + EDL": "render + EDL",
+  EDL: "EDL",
+  "journal de rendu": "render log",
+  "presets + EDL": "presets + EDL",
+};
+
+/** Where a check measures, in the current locale. */
+export const measuredOnLabel = (m: MeasuredOn): string => tr(MEASURED_ON_EN[m], m);
 
 export const RULES_BY_ID = new Map(RULES.map((r) => [r.id, r]));
 
@@ -246,59 +287,110 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
   const m = p.montage;
   switch (id) {
     case "montage.silences":
-      return `pause ≤ ${m.maxSilenceMs} ms ; marges ${range(m.wordMarginMs, " ms")}`;
+      return tr(
+        `pause ≤ ${m.maxSilenceMs} ms; margins ${range(m.wordMarginMs, " ms")}`,
+        `pause ≤ ${m.maxSilenceMs} ms ; marges ${range(m.wordMarginMs, " ms")}`,
+      );
     case "montage.fillers":
-      return "aucune hésitation ni répétition audible";
+      return tr("no audible hesitation or repetition", "aucune hésitation ni répétition audible");
     case "montage.beat-cuts":
-      return `coupe libre à ±${m.beatToleranceFrames} frame d'un beat`;
+      return tr(
+        `free cut within ±${m.beatToleranceFrames} frame of a beat`,
+        `coupe libre à ±${m.beatToleranceFrames} frame d'un beat`,
+      );
     case "montage.jl-cuts":
       return `${range(m.jlCutFrames, " frames")}`;
     case "montage.static-shots":
-      return `plan statique ≤ ${m.maxStaticShotS} s`;
+      return tr(`static shot ≤ ${m.maxStaticShotS} s`, `plan statique ≤ ${m.maxStaticShotS} s`);
     case "montage.punch-ins":
-      return `${range(m.punchInScale.map((v) => Math.round(v * 100)) as [number, number], " %")}, jamais 2× le même niveau`;
+      return tr(
+        `${range(m.punchInScale.map((v) => Math.round(v * 100)) as [number, number], " %")}, never twice the same level`,
+        `${range(m.punchInScale.map((v) => Math.round(v * 100)) as [number, number], " %")}, jamais 2× le même niveau`,
+      );
     case "motion.no-linear":
-      return "aucun segment linéaire (position, échelle, opacité)";
+      return tr(
+        "no linear segment (position, scale, opacity)",
+        "aucun segment linéaire (position, échelle, opacité)",
+      );
     case "motion.durations":
-      return `micro ${range(p.motion.microDurationMs, " ms")} ; transitions ${range(p.motion.transitionDurationMs, " ms")} ; fondus ${range(p.motion.dissolveDurationMs, " ms")}`;
+      return tr(
+        `micro ${range(p.motion.microDurationMs, " ms")}; transitions ${range(p.motion.transitionDurationMs, " ms")}; dissolves ${range(p.motion.dissolveDurationMs, " ms")}`,
+        `micro ${range(p.motion.microDurationMs, " ms")} ; transitions ${range(p.motion.transitionDurationMs, " ms")} ; fondus ${range(p.motion.dissolveDurationMs, " ms")}`,
+      );
     case "motion.blur":
-      return `flou au-delà de ${p.motion.motionBlurThresholdPxPerFrame} px/frame`;
+      return tr(
+        `blur above ${p.motion.motionBlurThresholdPxPerFrame} px/frame`,
+        `flou au-delà de ${p.motion.motionBlurThresholdPxPerFrame} px/frame`,
+      );
     case "motion.overshoot":
-      return `rebond ${pct(p.motion.overshoot[0])}–${pct(p.motion.overshoot[1])} (entrées, micro)`;
+      return tr(
+        `overshoot ${pct(p.motion.overshoot[0])}–${pct(p.motion.overshoot[1])} (entrances, micro)`,
+        `rebond ${pct(p.motion.overshoot[0])}–${pct(p.motion.overshoot[1])} (entrées, micro)`,
+      );
     case "motion.presets":
-      return "nommés, versionnés, conformes aux règles";
+      return tr("named, versioned, compliant", "nommés, versionnés, conformes aux règles");
     case "captions.sync":
-      return `écart p95 ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`;
+      return tr(
+        `p95 offset ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
+        `écart p95 ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
+      );
     case "captions.density":
       return p.captions.wordsPerScreen
-        ? `${range(p.captions.wordsPerScreen, " mots")} par écran`
-        : `≤ ${p.captions.maxLines} lignes × ${p.captions.maxCharsPerLine} car.`;
+        ? tr(
+            `${range(p.captions.wordsPerScreen, " words")} per screen`,
+            `${range(p.captions.wordsPerScreen, " mots")} par écran`,
+          )
+        : tr(
+            `≤ ${p.captions.maxLines} lines × ${p.captions.maxCharsPerLine} chars`,
+            `≤ ${p.captions.maxLines} lignes × ${p.captions.maxCharsPerLine} car.`,
+          );
     case "captions.safe-zones":
-      return `dans ${Object.keys(p.captions.safeZones).join(" ∩ ")}`;
+      return tr(
+        `inside ${Object.keys(p.captions.safeZones).join(" ∩ ")}`,
+        `dans ${Object.keys(p.captions.safeZones).join(" ∩ ")}`,
+      );
     case "captions.contrast":
       return `≥ ${p.captions.minContrast}:1`;
     case "audio.loudness":
       return `${p.audio.integratedLufs} ±${p.audio.lufsTolerance} LUFS ; TP ≤ ${p.audio.truePeakDbtp} dBTP`;
     case "audio.ducking":
-      return `musique ${p.audio.duckingDb[1]} à ${p.audio.duckingDb[0]} dB sous la voix, sans pompage`;
+      return tr(
+        `music ${p.audio.duckingDb[1]} to ${p.audio.duckingDb[0]} dB under the voice, no pumping`,
+        `musique ${p.audio.duckingDb[1]} à ${p.audio.duckingDb[0]} dB sous la voix, sans pompage`,
+      );
     case "audio.sfx-sync":
-      return `impact à ±${p.audio.sfxToleranceFrames} frame`;
+      return tr(
+        `impact within ±${p.audio.sfxToleranceFrames} frame`,
+        `impact à ±${p.audio.sfxToleranceFrames} frame`,
+      );
     case "audio.cut-clicks":
-      return `fondus ${range(p.audio.cutFadeMs, " ms")}, aucun clic`;
+      return tr(
+        `fades ${range(p.audio.cutFadeMs, " ms")}, no click`,
+        `fondus ${range(p.audio.cutFadeMs, " ms")}, aucun clic`,
+      );
     case "image.reframe":
-      return `visage ≥ ${pct(p.reframe.minFaceInFrame)} dans l'image, centre ≤ ${pct(p.reframe.maxFaceOffset)} ; accélération ≤ ${p.reframe.maxAccelPx} px/frame²`;
+      return tr(
+        `face ≥ ${pct(p.reframe.minFaceInFrame)} in frame, centre ≤ ${pct(p.reframe.maxFaceOffset)}; acceleration ≤ ${p.reframe.maxAccelPx} px/frame²`,
+        `visage ≥ ${pct(p.reframe.minFaceInFrame)} dans l'image, centre ≤ ${pct(p.reframe.maxFaceOffset)} ; accélération ≤ ${p.reframe.maxAccelPx} px/frame²`,
+      );
     case "image.color":
-      return `peau ΔL* ≤ ${p.color.maxSkinDeltaL}, Δa*b* ≤ ${p.color.maxSkinDeltaAb} ; un seul look`;
+      return tr(
+        `skin ΔL* ≤ ${p.color.maxSkinDeltaL}, Δa*b* ≤ ${p.color.maxSkinDeltaAb}; one look`,
+        `peau ΔL* ≤ ${p.color.maxSkinDeltaL}, Δa*b* ≤ ${p.color.maxSkinDeltaAb} ; un seul look`,
+      );
     case "image.sharpness":
-      return `agrandissement ≤ ×${p.export.maxUpscale}`;
+      return tr(`enlargement ≤ ×${p.export.maxUpscale}`, `agrandissement ≤ ×${p.export.maxUpscale}`);
     case "image.export-format":
-      return `H.264/H.265, ${p.export.allowedFps.join(" ou ")} fps CFR`;
+      return tr(
+        `H.264/H.265, ${p.export.allowedFps.join(" or ")} fps CFR`,
+        `H.264/H.265, ${p.export.allowedFps.join(" ou ")} fps CFR`,
+      );
     case "image.bitrate":
       return `≥ ${p.export.minBitrateMbps["30"]} Mbps (≤ 30 fps), ${p.export.minBitrateMbps["60"]} (60 fps)`;
     case "image.black-frames":
-      return "aucune frame noire non prévue";
+      return tr("no unplanned black frame", "aucune frame noire non prévue");
     case "image.duplicate-frames":
-      return "aucune image figée quand la source bouge";
+      return tr("no frozen picture while the source moves", "aucune image figée quand la source bouge");
     default:
       return "";
   }

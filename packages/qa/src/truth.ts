@@ -6,7 +6,7 @@
  * word onsets, import them over the rendered audio, drag each label onto the
  * real onset (add a label « euh » on any hesitation left), export, check.
  */
-import type { Edl, StyleProfile } from "@cutkiller/core";
+import { type Edl, type StyleProfile, tr } from "@cutkiller/core";
 import { type CheckResult, graded, notEvaluated, type Violation } from "./report";
 
 export interface Label {
@@ -24,7 +24,9 @@ export function parseLabels(text: string): Label[] {
     const start = Number((a ?? "").replace(",", "."));
     const end = Number((b ?? "").replace(",", "."));
     if (!Number.isFinite(start) || !Number.isFinite(end))
-      throw new Error(`ligne d'annotation illisible : « ${line} »`);
+      throw new Error(
+        tr(`unreadable annotation line: « ${line} »`, `ligne d'annotation illisible : « ${line} »`),
+      );
     out.push({ start, end, text: rest.join("\t").trim() });
   }
   return out.sort((x, y) => x.start - y.start);
@@ -80,14 +82,24 @@ export function checkCaptionSyncTruth(edl: Edl, profile: StyleProfile, labels: L
     errors.push(Math.abs(err));
     if (Math.abs(err) > max)
       violations.push({
-        message: `« ${w.text} » surligné ${err > 0 ? "en retard" : "en avance"} de ${Math.abs(err).toFixed(1)} frame(s) (annotation)`,
+        message: tr(
+          `« ${w.text} » highlighted ${Math.abs(err).toFixed(1)} frame(s) ${err > 0 ? "late" : "early"} (annotation)`,
+          `« ${w.text} » surligné ${err > 0 ? "en retard" : "en avance"} de ${Math.abs(err).toFixed(1)} frame(s) (annotation)`,
+        ),
         frame: w.fromFrame,
       });
   }
-  if (errors.length === 0) return notEvaluated("captions.sync", "aucun mot annoté reconnu");
+  if (errors.length === 0)
+    return notEvaluated("captions.sync", tr("no annotated word recognised", "aucun mot annoté reconnu"));
   const sorted = [...errors].sort((a, b) => a - b);
   const p = sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] as number;
-  if (p > p95) violations.push({ message: `p95 de ${p.toFixed(2)} frame(s) > ${p95} (annotation)` });
+  if (p > p95)
+    violations.push({
+      message: tr(
+        `p95 of ${p.toFixed(2)} frame(s) > ${p95} (annotation)`,
+        `p95 de ${p.toFixed(2)} frame(s) > ${p95} (annotation)`,
+      ),
+    });
   const result = graded("captions.sync", errors.length, violations, {
     source: "annotation humaine",
     words: words.length,
@@ -96,7 +108,12 @@ export function checkCaptionSyncTruth(edl: Edl, profile: StyleProfile, labels: L
     p95Frames: Math.round(p * 100) / 100,
     maxFrames: Math.round((sorted.at(-1) as number) * 100) / 100,
   });
-  return unmatched > 0 ? { ...result, note: `${unmatched} mot(s) sans annotation` } : result;
+  return unmatched > 0
+    ? {
+        ...result,
+        note: tr(`${unmatched} word(s) without annotation`, `${unmatched} mot(s) sans annotation`),
+      }
+    : result;
 }
 
 const isFillerLabel = (l: Label, profile: StyleProfile) =>
@@ -110,7 +127,7 @@ export function checkFillersTruth(labels: Label[], profile: StyleProfile, fps: n
     "montage.fillers",
     Math.max(1, words + left.length),
     left.map((l) => ({
-      message: `« ${l.text} » encore audible (annotation)`,
+      message: tr(`« ${l.text} » still audible (annotation)`, `« ${l.text} » encore audible (annotation)`),
       frame: Math.round(l.start * fps),
     })),
     { source: "annotation humaine", annotated: words + left.length, left: left.length },

@@ -1,4 +1,4 @@
-import type { StyleProfile } from "@cutkiller/core";
+import { type StyleProfile, tr } from "@cutkiller/core";
 import type { Token } from "./words";
 
 /** Silence kept between a kept word and removed material, so neither bleeds into the cut. */
@@ -187,9 +187,17 @@ export function planClips(input: PlanInput): { clips: PlannedClip[]; framingInde
       if (j === 0) {
         const notes = [
           ...run.removedBefore.map((t) => `« ${t.word.text} » (${t.removed})`),
-          ...(run.silenceBeforeS > 0 ? [`silence de ${Math.round(run.silenceBeforeS * 1000)} ms`] : []),
+          ...(run.silenceBeforeS > 0
+            ? [
+                tr(
+                  `silence of ${Math.round(run.silenceBeforeS * 1000)} ms`,
+                  `silence de ${Math.round(run.silenceBeforeS * 1000)} ms`,
+                ),
+              ]
+            : []),
         ];
-        if (notes.length > 0) clip.note = `coupé avant : ${notes.join(", ")}`;
+        if (notes.length > 0)
+          clip.note = tr(`cut before: ${notes.join(", ")}`, `coupé avant : ${notes.join(", ")}`);
       }
       clips.push(clip);
     }

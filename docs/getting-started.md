@@ -1,0 +1,60 @@
+# Getting started
+
+## 1. Install
+
+=== "Docker (nothing else to install)"
+
+    ```sh
+    docker run --rm ghcr.io/baldw1n69/cutkiller doctor
+    ```
+
+    Mount your project folder on `/work` and a named volume on `/models` (speech models are downloaded once, on first use).
+
+=== "From source"
+
+    Requirements: Node 22+, pnpm 10 (`corepack enable`), FFmpeg 6+, [uv](https://docs.astral.sh/uv/).
+
+    ```sh
+    git clone https://github.com/BaldW1N69/CutKiller && cd CutKiller
+    pnpm install && (cd workers && uv sync)
+    pnpm cutkiller doctor
+    ```
+
+`doctor` checks FFmpeg, the Python workers, the compositor, the models, GPU and memory, and prints the command that fixes each problem.
+
+## 2. First edit
+
+```sh
+cutkiller auto interview.mp4 music.mp3 -p short -o out --draft
+```
+
+| Profile | For |
+|---|---|
+| `short` | TikTok, Reels, Shorts (9:16, punchy) |
+| `cinematic-short` | 9:16, calmer: longer shots, dissolves, film look |
+| `long` | YouTube (16:9) |
+| `cinematic` | 16:9 with letterbox and film look |
+
+`out/` then holds `final.mp4`, `final.srt`, the editable `edit.edl.json` and the report `quality.md`. `--draft` encodes fast; drop it for the final render.
+
+## 3. Read the report, fix, render again
+
+Every failed rule lists timecodes. Most fixes are a small change in `edit.edl.json` (move a clip's `in`/`out` past a word that slipped through), then:
+
+```sh
+cutkiller render out/edit.edl.json -o out/final.mp4
+cutkiller check out/final.mp4 --edl out/edit.edl.json -p short --md out/quality.md
+```
+
+Some failures describe the input, not the edit — e.g. `image.sharpness` on a 640×360 source: the report says so instead of hiding it.
+
+## Options
+
+| Option | |
+|---|---|
+| `--lang en` | Force the spoken language (default: detected per rush) |
+| `--look neon-80s` | Image style; `cutkiller looks` lists them |
+| `--broll street.mp4` | Cutaways (repeatable) |
+| `--min-score 90` | Exit code 1 below that score (CI-friendly) |
+| `CUTKILLER_LANG=fr` | Messages and reports in French |
+| `CUTKILLER_WHISPER_MODEL=small` | Lighter, faster transcription model |

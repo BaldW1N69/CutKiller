@@ -52,6 +52,8 @@ jobs:
         run: pnpm typecheck
       - name: JSON Schemas à jour
         run: pnpm schema && git diff --exit-code schema
+      - name: Référence des règles à jour (docs/rules.md)
+        run: pnpm docs && git diff --exit-code docs/rules.md
 
       - name: Tests (unitaires + intégration FFmpeg + bout en bout)
         run: pnpm test

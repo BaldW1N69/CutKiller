@@ -3,6 +3,7 @@ export * from "./animation";
 export * from "./ease";
 export * from "./edl";
 export * from "./framing";
+export * from "./i18n";
 export * from "./lexicon";
 export * from "./pass";
 export * from "./profile";

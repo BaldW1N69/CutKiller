@@ -840,7 +840,7 @@ const VERDICT = {
 } as const;
 
 export function calibrationMarkdown(c: Calibration): string {
-  const title = new Map(RULES.map((r) => [r.id, r.title]));
+  const title = new Map(RULES.map((r) => [r.id, r.titleFr]));
   const s = c.summary;
   const lines = [
     "# Calibration du quality-check",

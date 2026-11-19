@@ -9,6 +9,7 @@ import {
   type StyleProfile,
   sortedClips,
   type Transcript,
+  tr,
   type VideoClip,
   type VoiceActivity,
 } from "@cutkiller/core";
@@ -87,7 +88,7 @@ export async function checkSilences(
     const gap = (vad.speech[k] as { start: number }).start - (vad.speech[k - 1] as { end: number }).end;
     if (gap > max + SILENCE_TOLERANCE_S)
       violations.push({
-        message: `silence de ${Math.round(gap * 1000)} ms`,
+        message: tr(`silence of ${Math.round(gap * 1000)} ms`, `silence de ${Math.round(gap * 1000)} ms`),
         frame: Math.round((vad.speech[k - 1] as { end: number }).end * fps),
       });
   }
@@ -101,7 +102,10 @@ export async function checkSilences(
       const head = (m.first.start - span.sourceIn) * 1000;
       if ((head < lo - tol && m.headRoom * 1000 >= lo) || head > hi + tol)
         violations.push({
-          message: `marge avant « ${m.first.text} » de ${Math.round(head)} ms`,
+          message: tr(
+            `margin before « ${m.first.text} » of ${Math.round(head)} ms`,
+            `marge avant « ${m.first.text} » de ${Math.round(head)} ms`,
+          ),
           frame: span.startFrame,
         });
     }
@@ -110,7 +114,10 @@ export async function checkSilences(
       const tail = (span.sourceOut - m.last.end) * 1000;
       if ((tail < lo - tol && m.tailRoom * 1000 >= lo) || tail > hi + tol)
         violations.push({
-          message: `marge après « ${m.last.text} » de ${Math.round(tail)} ms`,
+          message: tr(
+            `margin after « ${m.last.text} » of ${Math.round(tail)} ms`,
+            `marge après « ${m.last.text} » de ${Math.round(tail)} ms`,
+          ),
           frame: span.endFrame,
         });
     }
@@ -132,7 +139,8 @@ export async function checkFillers(
   const transcript =
     transcriptOverride ??
     (await runWorker<Transcript>("transcribe", { path: voiceTrack(video), language, align: false }));
-  if (transcript.words.length === 0) return notEvaluated("montage.fillers", "aucune parole dans le rendu");
+  if (transcript.words.length === 0)
+    return notEvaluated("montage.fillers", tr("no speech in the render", "aucune parole dans le rendu"));
   const tokens = classifyWords(transcript.words, profile);
   const violations = tokens
     .filter((t) => t.removed)
@@ -149,7 +157,7 @@ export async function checkFillers(
  */
 export function checkBeatCuts(edl: Edl, profile: StyleProfile, analysis: Analysis | undefined): CheckResult {
   const beats = timelineBeats(edl, analysis ?? {});
-  if (beats.length === 0) return notEvaluated("montage.beat-cuts", "pas de musique");
+  if (beats.length === 0) return notEvaluated("montage.beat-cuts", tr("no music", "pas de musique"));
   const fps = edl.output.fps;
   const tol = profile.montage.beatToleranceFrames;
   const [lo, hi] = profile.montage.wordMarginMs.map((ms) => ms / 1000) as [number, number];
@@ -194,11 +202,18 @@ export function checkBeatCuts(edl: Edl, profile: StyleProfile, analysis: Analysi
     const nearest = Math.min(...beats.map((b) => Math.abs(b - cut)));
     if (nearest > tol + 1e-6)
       violations.push({
-        message: `coupe à ${nearest.toFixed(1)} frame(s) du beat le plus proche`,
+        message: tr(
+          `cut ${nearest.toFixed(1)} frame(s) from the nearest beat`,
+          `coupe à ${nearest.toFixed(1)} frame(s) du beat le plus proche`,
+        ),
         frame: cut,
       });
   }
-  if (free === 0) return notEvaluated("montage.beat-cuts", "aucune coupe libre (aucun beat à portée)");
+  if (free === 0)
+    return notEvaluated(
+      "montage.beat-cuts",
+      tr("no free cut (no beat in reach)", "aucune coupe libre (aucun beat à portée)"),
+    );
   return graded("montage.beat-cuts", free, violations, { cuts: clips.length - 1, freeCuts: free });
 }
 
@@ -233,7 +248,10 @@ export function checkStaticShots(edl: Edl, profile: StyleProfile): CheckResult {
     const len = (points[k] as number) - (points[k - 1] as number);
     if (len > max)
       violations.push({
-        message: `plan statique de ${(len / fps).toFixed(1)} s`,
+        message: tr(
+          `static shot of ${(len / fps).toFixed(1)} s`,
+          `plan statique de ${(len / fps).toFixed(1)} s`,
+        ),
         frame: points[k - 1] as number,
       });
   }

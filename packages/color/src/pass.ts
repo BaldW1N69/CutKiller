@@ -4,6 +4,7 @@ import {
   EdlSchema,
   type Pass,
   type Subjects,
+  tr,
   type VideoClip,
 } from "@cutkiller/core";
 
@@ -203,7 +204,10 @@ export const colorPass: Pass = {
     diagnostics.push({
       level: "info",
       code: "color.summary",
-      message: `${corrected} plan(s) corrigé(s) sur la peau de référence (${bySource.size} source(s), ${matched} plan(s) raccordé(s) isolément${lift > 0 ? `, relevée de ${lift.toFixed(2)} EV` : ""}), look ${look ?? "aucun"}${sceneContrast.size > 0 ? `, contraste adapté sur ${sceneContrast.size} scène(s)` : ""}`,
+      message: tr(
+        `${corrected} shot(s) matched to the reference skin (${bySource.size} source(s), ${matched} shot(s) matched on their own${lift > 0 ? `, lifted ${lift.toFixed(2)} EV` : ""}), look ${look ?? "none"}${sceneContrast.size > 0 ? `, contrast adapted on ${sceneContrast.size} scene(s)` : ""}`,
+        `${corrected} plan(s) corrigé(s) sur la peau de référence (${bySource.size} source(s), ${matched} plan(s) raccordé(s) isolément${lift > 0 ? `, relevée de ${lift.toFixed(2)} EV` : ""}), look ${look ?? "aucun"}${sceneContrast.size > 0 ? `, contraste adapté sur ${sceneContrast.size} scène(s)` : ""}`,
+      ),
     });
     return { edl: EdlSchema.parse({ ...edl, video }), diagnostics };
   },

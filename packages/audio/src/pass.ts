@@ -8,6 +8,7 @@ import {
   edlDurationFrames,
   type Pass,
   type PassContext,
+  tr,
 } from "@cutkiller/core";
 import { TransitionParamsSchema } from "@cutkiller/motion";
 import { SfxParamsSchema, sfxTiming } from "./sfx";
@@ -150,7 +151,10 @@ export const audioPass: Pass = {
     diagnostics.push({
       level: "info",
       code: "audio.summary",
-      message: `${ducks} zone(s) de ducking, ${sfxTracks.reduce((s, t) => s + t.clips.length, 0)} SFX, cible ${a.integratedLufs} LUFS`,
+      message: tr(
+        `${ducks} ducking zone(s), ${sfxTracks.reduce((s, t) => s + t.clips.length, 0)} SFX, target ${a.integratedLufs} LUFS`,
+        `${ducks} zone(s) de ducking, ${sfxTracks.reduce((s, t) => s + t.clips.length, 0)} SFX, cible ${a.integratedLufs} LUFS`,
+      ),
     });
     return { edl: EdlSchema.parse({ ...edl, output, audio: kept }), diagnostics };
   },

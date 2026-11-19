@@ -7,6 +7,7 @@ import {
   edlDurationFrames,
   maxAnimatedScale,
   type StyleProfile,
+  tr,
   type VideoClip,
 } from "@cutkiller/core";
 import { ffmpeg, ffprobe, isVariableFrameRate, parseRate } from "@cutkiller/media";
@@ -29,7 +30,7 @@ const CODECS = new Set(["h264", "hevc"]);
 export async function checkExportFormat(ctx: VideoContext): Promise<CheckResult[]> {
   const info = await ffprobe(ctx.video);
   const v = info.streams.find((s) => s.codec_type === "video");
-  if (!v) return [graded("image.export-format", 1, [{ message: "aucun flux vidéo" }])];
+  if (!v) return [graded("image.export-format", 1, [{ message: tr("no video stream", "aucun flux vidéo") }])];
   const fps = parseRate(v.avg_frame_rate) ?? 0;
   const rFps = parseRate(v.r_frame_rate) ?? 0;
   const violations: Violation[] = [];
@@ -41,11 +42,22 @@ export async function checkExportFormat(ctx: VideoContext): Promise<CheckResult[
       message: `${fps.toFixed(3)} fps (attendu ${ctx.profile.export.allowedFps.join(" ou ")})`,
     });
   const vfr = Math.abs(fps - rFps) > 1e-3 || (await isVariableFrameRate(ctx.video, 36_000));
-  if (vfr) violations.push({ message: "cadence variable (VFR) : l'export doit être en CFR" });
+  if (vfr)
+    violations.push({
+      message: tr(
+        "variable frame rate (VFR): the export must be CFR",
+        "cadence variable (VFR) : l'export doit être en CFR",
+      ),
+    });
   if (ctx.edl) {
     const { width, height } = ctx.edl.output;
     if (v.width !== width || v.height !== height)
-      violations.push({ message: `résolution ${v.width}x${v.height} (EDL : ${width}x${height})` });
+      violations.push({
+        message: tr(
+          `resolution ${v.width}x${v.height} (EDL: ${width}x${height})`,
+          `résolution ${v.width}x${v.height} (EDL : ${width}x${height})`,
+        ),
+      });
     const expected = edlDurationFrames(ctx.edl);
     const frames = Number(v.nb_frames);
     if (Number.isFinite(frames) && frames !== expected)
@@ -165,7 +177,10 @@ export async function checkDuplicateFrames(ctx: VideoContext): Promise<CheckResu
   return graded(
     "image.duplicate-frames",
     diffs.length,
-    runs(unexpected).map(([a, b]) => ({ message: `${b - a + 1} frame(s) dupliquée(s)`, frame: a })),
+    runs(unexpected).map(([a, b]) => ({
+      message: tr(`${b - a + 1} duplicated frame(s)`, `${b - a + 1} frame(s) dupliquée(s)`),
+      frame: a,
+    })),
     {
       duplicates: dups.length,
       unexpected: unexpected.length,
@@ -296,7 +311,10 @@ export function checkSharpness(edl: Edl, profile: StyleProfile): CheckResult {
       soft += frames;
       const src = edl.sources[clip.source];
       violations.push({
-        message: `${clip.id} : image agrandie ×${up.toFixed(2)} (source ${src?.width}×${src?.height} → ${edl.output.width}×${edl.output.height}), max ×${max}`,
+        message: tr(
+          `${clip.id}: picture enlarged ×${up.toFixed(2)} (source ${src?.width}×${src?.height} → ${edl.output.width}×${edl.output.height}), max ×${max}`,
+          `${clip.id} : image agrandie ×${up.toFixed(2)} (source ${src?.width}×${src?.height} → ${edl.output.width}×${edl.output.height}), max ×${max}`,
+        ),
         frame: clip.at,
       });
     }

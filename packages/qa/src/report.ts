@@ -1,6 +1,7 @@
 import type { StyleProfile } from "@cutkiller/core";
+import { tr } from "@cutkiller/core";
 import { z } from "zod";
-import { type Category, RULES, type Rule, ruleThreshold } from "./rules";
+import { type Category, measuredOnLabel, RULES, type Rule, ruleThreshold, ruleTitle } from "./rules";
 
 /** Version of the report format (JSON schema `schema/report-1.schema.json`). */
 export const REPORT_VERSION = "1.0.0";
@@ -120,17 +121,17 @@ export function buildReport(
   const byRule = new Map(results.map((r) => [r.ruleId, r]));
   const fps = opts.fps;
   const full = RULES.map((rule: Rule) => {
-    const r = byRule.get(rule.id) ?? notEvaluated(rule.id, "aucun contrôle exécuté");
+    const r = byRule.get(rule.id) ?? notEvaluated(rule.id, tr("no check run", "aucun contrôle exécuté"));
     return {
       ...r,
       violations: r.violations.map((v) =>
         v.frame !== undefined && fps ? { ...v, time: timecode(v.frame, fps) } : v,
       ),
-      title: rule.title,
+      title: ruleTitle(rule),
       weight: rule.weight,
       category: rule.category,
       threshold: opts.profile ? ruleThreshold(rule.id, opts.profile) : "",
-      measuredOn: rule.measuredOn,
+      measuredOn: measuredOnLabel(rule.measuredOn),
     };
   });
   const evaluated = full.filter((r) => r.status !== "not-evaluated");
@@ -165,13 +166,14 @@ export function buildReport(
 }
 
 const ICON = { pass: "✅", fail: "❌", "not-evaluated": "⏳" } as const;
-const CATEGORY_TITLE = {
-  montage: "Montage",
-  motion: "Motion",
-  captions: "Sous-titres",
-  audio: "Audio",
-  image: "Image",
-};
+const categoryTitle = (c: Category) =>
+  ({
+    montage: tr("Editing", "Montage"),
+    motion: "Motion",
+    captions: tr("Captions", "Sous-titres"),
+    audio: "Audio",
+    image: "Image",
+  })[c];
 
 /** A few measured values, compact (numbers rounded). */
 function measuredSummary(m: Record<string, unknown> | undefined): string {
@@ -198,19 +200,27 @@ export function reportMarkdown(report: Report): string {
   const lines = [
     `# Quality check — ${report.score}/100`,
     "",
-    `- Vidéo : \`${report.video}\``,
+    tr(`- Video: \`${report.video}\``, `- Vidéo : \`${report.video}\``),
     ...(report.edl ? [`- EDL : \`${report.edl}\``] : []),
-    `- Profil : ${report.profile}`,
-    `- Couverture : ${report.coverage} % du poids total des règles évalué`,
-    ...(report.seconds !== undefined ? [`- Durée du contrôle : ${report.seconds} s`] : []),
+    tr(`- Profile: ${report.profile}`, `- Profil : ${report.profile}`),
+    tr(
+      `- Coverage: ${report.coverage} % of the total rule weight evaluated`,
+      `- Couverture : ${report.coverage} % du poids total des règles évalué`,
+    ),
+    ...(report.seconds !== undefined
+      ? [tr(`- Check time: ${report.seconds} s`, `- Durée du contrôle : ${report.seconds} s`)]
+      : []),
     "",
-    "| Catégorie | Score | Poids évalué |",
+    tr("| Category | Score | Weight evaluated |", "| Catégorie | Score | Poids évalué |"),
     "|---|---|---|",
     ...(Object.entries(report.categories) as [Category, Report["categories"][Category]][]).map(
-      ([cat, c]) => `| ${CATEGORY_TITLE[cat]} | ${c.score ?? "—"} | ${c.evaluatedWeight}/${c.totalWeight} |`,
+      ([cat, c]) => `| ${categoryTitle(cat)} | ${c.score ?? "—"} | ${c.evaluatedWeight}/${c.totalWeight} |`,
     ),
     "",
-    "| Règle | Poids | Statut | Score | Seuil | Mesuré sur | Mesure | Détail |",
+    tr(
+      "| Rule | Weight | Status | Score | Threshold | Measured on | Measure | Detail |",
+      "| Règle | Poids | Statut | Score | Seuil | Mesuré sur | Mesure | Détail |",
+    ),
     "|---|---|---|---|---|---|---|---|",
   ];
   for (const r of report.results) {
@@ -229,17 +239,18 @@ export function reportMarkdown(report: Report): string {
   }
   const failing = report.results.filter((r) => r.status === "fail");
   if (failing.length > 0) {
-    lines.push("", "## Écarts à corriger", "");
+    lines.push("", tr("## To fix", "## Écarts à corriger"), "");
     for (const r of failing) {
-      lines.push(`### ${r.title}`, "", `Seuil : ${r.threshold}`, "");
+      lines.push(`### ${r.title}`, "", tr(`Threshold: ${r.threshold}`, `Seuil : ${r.threshold}`), "");
       for (const v of r.violations) lines.push(`- ${where(v) ? `${where(v)} — ` : ""}${v.message}`);
       lines.push("");
     }
   }
   const skipped = report.results.filter((r) => r.status === "not-evaluated");
   if (skipped.length > 0) {
-    lines.push("", "## Non évaluées", "");
-    for (const r of skipped) lines.push(`- ${r.title} : ${r.note ?? "—"}`);
+    lines.push("", tr("## Not evaluated", "## Non évaluées"), "");
+    for (const r of skipped)
+      lines.push(tr(`- ${r.title}: ${r.note ?? "—"}`, `- ${r.title} : ${r.note ?? "—"}`));
   }
   return `${lines.join("\n")}\n`;
 }

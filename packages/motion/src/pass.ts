@@ -9,6 +9,7 @@ import {
   type PresetResolver,
   secondsToFrames,
   sortedClips,
+  tr,
   type VideoClip,
 } from "@cutkiller/core";
 import { emphasisScores } from "./emphasis";
@@ -153,7 +154,10 @@ export const motionPass: Pass = {
     diagnostics.push({
       level: "info",
       code: "motion.summary",
-      message: `${punches} punch-in(s) sur l'emphase, ${placed} transition(s)`,
+      message: tr(
+        `${punches} punch-in(s) on emphasis, ${placed} transition(s)`,
+        `${punches} punch-in(s) sur l'emphase, ${placed} transition(s)`,
+      ),
     });
     return { edl: EdlSchema.parse({ ...edl, keyframes, transitions }), diagnostics };
   },

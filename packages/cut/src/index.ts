@@ -7,6 +7,7 @@ import {
   type Pass,
   type PassContext,
   sortedClips,
+  tr,
 } from "@cutkiller/core";
 import { timelineBeats } from "./beats";
 import { planClips, zoomSplits } from "./plan";
@@ -128,12 +129,18 @@ export const cutPass: Pass = {
       diagnostics.push({
         level: "warning",
         code: "cut.hallucination",
-        message: `${hallucinated} mot(s) transcrit(s) sans voix détectée ignorés (hallucinations de l'ASR)`,
+        message: tr(
+          `${hallucinated} transcribed word(s) with no voice detected ignored (ASR hallucinations)`,
+          `${hallucinated} mot(s) transcrit(s) sans voix détectée ignorés (hallucinations de l'ASR)`,
+        ),
       });
     diagnostics.push({
       level: "info",
       code: "cut.summary",
-      message: `${removedFillers} hésitation(s) et ${removedRepeats} mot(s) de faux départ retirés, ${removedS.toFixed(1)} s coupées, ${clips.length} plan(s)`,
+      message: tr(
+        `${removedFillers} hesitation(s) and ${removedRepeats} false-start word(s) removed, ${removedS.toFixed(1)} s cut, ${clips.length} shot(s)`,
+        `${removedFillers} hésitation(s) et ${removedRepeats} mot(s) de faux départ retirés, ${removedS.toFixed(1)} s coupées, ${clips.length} plan(s)`,
+      ),
     });
     return {
       edl: EdlSchema.parse({ ...edl, video: [{ ...main, clips }, ...edl.video.slice(1)], audio }),

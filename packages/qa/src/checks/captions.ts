@@ -8,7 +8,7 @@ import {
   safeRect,
   timelineWords,
 } from "@cutkiller/captions";
-import { type Analysis, dominantLanguage, type Edl, type StyleProfile } from "@cutkiller/core";
+import { type Analysis, dominantLanguage, type Edl, type StyleProfile, tr } from "@cutkiller/core";
 import type { PresetRegistry } from "@cutkiller/style";
 import { type CanvasRenderingContext2D, createCanvas } from "canvas";
 import { streamFrames } from "../decode";
@@ -76,13 +76,19 @@ export async function checkCaptionSync(
     errors.push(Math.abs(err));
     if (Math.abs(err) > limits.max)
       violations.push({
-        message: `« ${w.text} » surligné ${err > 0 ? "en avance" : "en retard"} de ${Math.abs(err).toFixed(1)} frame(s)`,
+        message: tr(
+          `« ${w.text} » highlighted ${Math.abs(err).toFixed(1)} frame(s) ${err > 0 ? "early" : "late"}`,
+          `« ${w.text} » surligné ${err > 0 ? "en avance" : "en retard"} de ${Math.abs(err).toFixed(1)} frame(s)`,
+        ),
         frame: w.fromFrame,
       });
   });
   const sorted = [...errors].sort((a, b) => a - b);
   const p95 = quantile(sorted, 0.95);
-  if (p95 > limits.p95) violations.push({ message: `écart p95 de ${p95.toFixed(2)} frame(s)` });
+  if (p95 > limits.p95)
+    violations.push({
+      message: tr(`p95 offset of ${p95.toFixed(2)} frame(s)`, `écart p95 de ${p95.toFixed(2)} frame(s)`),
+    });
 
   let missing = 0;
   if (analysis?.transcripts) {
@@ -90,7 +96,10 @@ export async function checkCaptionSync(
     for (const w of timelineWords(edl, analysis.transcripts)) {
       if (!/[\p{L}\p{N}]/u.test(w.text) || shown.has(`${w.source}#${w.wordId}`)) continue;
       missing++;
-      violations.push({ message: `« ${w.text} » prononcé mais pas sous-titré`, frame: w.fromFrame });
+      violations.push({
+        message: tr(`« ${w.text} » spoken but not captioned`, `« ${w.text} » prononcé mais pas sous-titré`),
+        frame: w.fromFrame,
+      });
     }
   }
   return graded("captions.sync", words.length + missing, violations, {
@@ -112,7 +121,10 @@ export function checkCaptionDensity(edl: Edl, profile: StyleProfile): CheckResul
   for (const cap of edl.captions) {
     const n = cap.words.length;
     if (c.wordsPerScreen && (n < c.wordsPerScreen[0] || n > c.wordsPerScreen[1]))
-      violations.push({ message: `${cap.id} : ${n} mots à l'écran`, frame: cap.fromFrame });
+      violations.push({
+        message: tr(`${cap.id}: ${n} words on screen`, `${cap.id} : ${n} mots à l'écran`),
+        frame: cap.fromFrame,
+      });
     const lines: string[][] = [];
     for (const w of cap.words) {
       const line = lines[w.line] ?? [];
@@ -125,7 +137,10 @@ export function checkCaptionDensity(edl: Edl, profile: StyleProfile): CheckResul
       const chars = line.join(" ").length;
       // A single word longer than the limit cannot be split: the layout shrinks it instead.
       if (chars > c.maxCharsPerLine && line.length > 1)
-        violations.push({ message: `${cap.id} : ligne de ${chars} caractères`, frame: cap.fromFrame });
+        violations.push({
+          message: tr(`${cap.id}: line of ${chars} characters`, `${cap.id} : ligne de ${chars} caractères`),
+          frame: cap.fromFrame,
+        });
     }
   }
   return graded("captions.density", edl.captions.length, violations, { captions: edl.captions.length });
@@ -151,12 +166,25 @@ export function checkSafeZones(edl: Edl, profile: StyleProfile, registry: Preset
     const x1 = cx + (box.x + box.w - cx) * s;
     const y1 = cy + (box.y + box.h - cy) * s;
     const out: string[] = [];
-    if (x0 < safe.x - tol) out.push(`${Math.round(safe.x - x0)} px à gauche`);
-    if (x1 > safe.x + safe.w + tol) out.push(`${Math.round(x1 - safe.x - safe.w)} px à droite`);
+    if (x0 < safe.x - tol)
+      out.push(tr(`${Math.round(safe.x - x0)} px on the left`, `${Math.round(safe.x - x0)} px à gauche`));
+    if (x1 > safe.x + safe.w + tol)
+      out.push(
+        tr(
+          `${Math.round(x1 - safe.x - safe.w)} px on the right`,
+          `${Math.round(x1 - safe.x - safe.w)} px à droite`,
+        ),
+      );
     if (y0 < safe.y - tol) out.push(`${Math.round(safe.y - y0)} px en haut`);
     if (y1 > safe.y + safe.h + tol) out.push(`${Math.round(y1 - safe.y - safe.h)} px en bas`);
     if (out.length > 0)
-      violations.push({ message: `${p.caption.id} déborde : ${out.join(", ")}`, frame: p.caption.fromFrame });
+      violations.push({
+        message: tr(
+          `${p.caption.id} overflows: ${out.join(", ")}`,
+          `${p.caption.id} déborde : ${out.join(", ")}`,
+        ),
+        frame: p.caption.fromFrame,
+      });
   }
   return graded("captions.safe-zones", timeline.placed.length, violations, {
     captions: timeline.placed.length,
@@ -277,7 +305,10 @@ export async function checkCaptionContrast(
     const ring = p.layout.strokePx / 2;
     if (ring < Math.max(1.5, 0.05 * p.layout.fontPx))
       violations.push({
-        message: `${ref} : contour de ${ring.toFixed(1)} px, trop fin pour isoler le texte du fond`,
+        message: tr(
+          `${ref}: ${ring.toFixed(1)} px outline, too thin to separate the text from the background`,
+          `${ref} : contour de ${ring.toFixed(1)} px, trop fin pour isoler le texte du fond`,
+        ),
       });
   }
 
@@ -333,7 +364,10 @@ export async function checkCaptionContrast(
       worst = Math.min(worst, ratio);
       if (ratio < min)
         violations.push({
-          message: `${p.caption.id} : contraste mesuré ${ratio.toFixed(2)}:1 (${cls === CLASSES.active ? "mot actif" : "texte"})`,
+          message: tr(
+            `${p.caption.id}: measured contrast ${ratio.toFixed(2)}:1 (${cls === CLASSES.active ? "active word" : "text"})`,
+            `${p.caption.id} : contraste mesuré ${ratio.toFixed(2)}:1 (${cls === CLASSES.active ? "mot actif" : "texte"})`,
+          ),
           frame: frames[k],
         });
     }

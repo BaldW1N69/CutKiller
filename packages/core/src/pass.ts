@@ -1,5 +1,6 @@
 import type { AnalyzerResults } from "./analysis";
 import type { Edl } from "./edl";
+import { tr } from "./i18n";
 import type { StyleProfile } from "./profile";
 import type { Diagnostic } from "./validate";
 import { validateEdl } from "./validate";
@@ -66,7 +67,10 @@ export function runPasses(edl: Edl, passes: readonly Pass[], ctx: PassContext): 
     const invalid = validateEdl(result.edl).filter((d) => d.level === "error");
     if (invalid.length > 0) {
       throw new Error(
-        `la passe « ${id} » a produit une EDL invalide : ${invalid.map((d) => d.message).join("; ")}`,
+        tr(
+          `pass « ${id} » produced an invalid EDL: ${invalid.map((d) => d.message).join("; ")}`,
+          `la passe « ${id} » a produit une EDL invalide : ${invalid.map((d) => d.message).join("; ")}`,
+        ),
       );
     }
     current = result.edl;

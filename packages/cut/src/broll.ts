@@ -10,6 +10,7 @@ import {
   type Pass,
   type StyleProfile,
   sortedClips,
+  tr,
   type VideoClip,
 } from "@cutkiller/core";
 import { timelineBeats } from "./beats";
@@ -323,7 +324,10 @@ export const brollPass: Pass = {
       diagnostics.push({
         level: "info",
         code: "broll.summary",
-        message: `${overlay.length} plan(s) de coupe (${seconds.toFixed(1)} s, ${Math.round((100 * seconds) / Math.max(1e-9, framesToSeconds(total, fps)))} % du montage), ${jumps} jump cut(s) masqué(s)`,
+        message: tr(
+          `${overlay.length} cutaway(s) (${seconds.toFixed(1)} s, ${Math.round((100 * seconds) / Math.max(1e-9, framesToSeconds(total, fps)))} % of the edit), ${jumps} jump cut(s) covered`,
+          `${overlay.length} plan(s) de coupe (${seconds.toFixed(1)} s, ${Math.round((100 * seconds) / Math.max(1e-9, framesToSeconds(total, fps)))} % du montage), ${jumps} jump cut(s) masqué(s)`,
+        ),
       });
     } else {
       const music = edl.audio.flatMap((t) => t.clips);
@@ -365,7 +369,10 @@ export const brollPass: Pass = {
       diagnostics.push({
         level: "info",
         code: "broll.summary",
-        message: `montage B-roll : ${mainClips.length} plan(s) sur ${framesToSeconds(total, fps).toFixed(1)} s, ${beats.length > 0 ? `un tous les ${cfg.beatsPerShot} temps` : "sans musique"}`,
+        message: tr(
+          `B-roll montage: ${mainClips.length} shot(s) over ${framesToSeconds(total, fps).toFixed(1)} s, ${beats.length > 0 ? `one every ${cfg.beatsPerShot} beats` : "no music"}`,
+          `montage B-roll : ${mainClips.length} plan(s) sur ${framesToSeconds(total, fps).toFixed(1)} s, ${beats.length > 0 ? `un tous les ${cfg.beatsPerShot} temps` : "sans musique"}`,
+        ),
       });
     }
 

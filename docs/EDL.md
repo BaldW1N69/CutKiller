@@ -1,6 +1,6 @@
 # EDL v1 — référence
 
-L'EDL (*edit decision list*) est le contrat entre la planification et le rendu. Elle se modifie à la main entre `cutkiller plan` et `cutkiller render`, et `cutkiller validate` la vérifie. Le schéma machine est dans [`schema/edl-1.schema.json`](../schema/edl-1.schema.json), généré depuis `packages/core/src/edl.ts`.
+L'EDL (*edit decision list*) est le contrat entre la planification et le rendu. Elle se modifie à la main entre `cutkiller plan` et `cutkiller render`, et `cutkiller validate` la vérifie. Le schéma machine est dans [`schema/edl-1.schema.json`](https://github.com/BaldW1N69/CutKiller/blob/main/schema/edl-1.schema.json), généré depuis `packages/core/src/edl.ts`.
 
 ## Unités
 

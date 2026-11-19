@@ -2,20 +2,20 @@
 
 > Rédigé le 19/11/2026. **Deadline du premier livrable : samedi 21/11/2026, même heure (J+2).** Point d'étape à ce moment-là.
 
-## Avancement (mis à jour le 19/11, 23 h, heure de Paris)
+## Avancement (mis à jour le 19/11, 23 h 30, heure de Paris)
 
 | Sprint | État | Preuve |
 |---|---|---|
 | 0 · Consolidation | ✅ fait | Base `lucid-knuth` fusionnée sur la branche de travail ; CI GitHub verte ; 168 tests TS + 27 tests Python |
 | 1 · Multilingue | ✅ fait | Langue détectée automatiquement ; en, fr, es, de, it, pt, nl ; test e2e anglais **99,8/100** |
-| 1 · Docker | 🟡 en cours | Image construite et testée en local ; publication GHCR à valider en CI (disque du runner) |
+| 1 · Docker | ✅ fait | Image Ubuntu 24.04 (FFmpeg 6.1) : build + `doctor` + rendu validés dans GitHub Actions ; montage anglais dans l'image : 99,8/100 |
 | 1 · `doctor` | ✅ fait | `cutkiller doctor` (FFmpeg, workers, canvas, modèles, GPU, mémoire) |
-| 1 · CLI bilingue | ⏳ pas commencé | Messages encore en français ; README anglais fait |
+| 1 · CLI bilingue | ✅ fait | Anglais par défaut, `CUTKILLER_LANG=fr` ; aide, logs, notes, 26 règles, messages QA et validateur ; tests dans les deux langues |
 | 2 · MCP | ✅ fait | 9 outils, test e2e avec le client MCP officiel |
 | 2 · Export pro | ✅ fait | `.otio` validé par opentimelineio 0.18, `.xml` (Premiere/Resolve/FCP) validé par xmllint ; import réel dans les logiciels **à tester par toi** |
 | 2 · Plugin Claude Code | ✅ fait | Skill `video-editing` + config MCP |
 | 2 · Sons libres (Openverse) | ⏳ backlog | — |
-| 3 · Vitrine | 🟡 en cours | README anglais + GIF avant/après réel (interview CC BY, 97,8/100), CONTRIBUTING, CoC, SECURITY, templates, CHANGELOG ; reste : site de docs, benchmark vs auto-editor |
+| 3 · Vitrine | ✅ fait | README anglais + GIF avant/après réel (interview CC BY, 97,8/100), CONTRIBUTING, CoC, SECURITY, templates, CHANGELOG ; site de docs (MkDocs, référence des règles générée depuis le code), benchmark vs auto-editor ([docs/BENCHMARK.md](docs/BENCHMARK.md)) |
 | 4 · Release v1.0.0 | ⏳ | — |
 
 ---
