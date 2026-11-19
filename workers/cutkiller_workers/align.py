@@ -38,7 +38,11 @@ def _model(name: str):
 
     torch.set_num_threads(int(os.environ.get("CUTKILLER_THREADS", os.cpu_count() or 4)))
     processor = Wav2Vec2Processor.from_pretrained(name)
-    model = Wav2Vec2ForCTC.from_pretrained(name).eval()
+    from .device import device
+
+    # The default install ships the CPU build of PyTorch: only move when it sees CUDA.
+    target = "cuda" if device() == "cuda" and torch.cuda.is_available() else "cpu"
+    model = Wav2Vec2ForCTC.from_pretrained(name).eval().to(target)
     return processor, model
 
 
@@ -102,7 +106,8 @@ def align_words(
         chunk = audio[int(ws * RATE) : int(we * RATE)]
         inputs = processor(chunk, sampling_rate=RATE, return_tensors="pt")
         with torch.inference_mode():
-            log_probs = torch.log_softmax(model(inputs.input_values).logits, dim=-1)
+            values = inputs.input_values.to(next(model.parameters()).device)
+            log_probs = torch.log_softmax(model(values).logits, dim=-1).cpu()
         targets: list[int] = []
         owner: list[int] = []  # word index of each target token (-1 for delimiters)
         for k in range(a, b):

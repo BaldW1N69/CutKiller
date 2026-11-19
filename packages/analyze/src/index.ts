@@ -91,7 +91,9 @@ async function cached<T>(dir: string, key: string, compute: () => Promise<T>): P
   const t0 = performance.now();
   const value = await compute();
   if (process.env.CUTKILLER_TIMINGS !== "0")
-    console.error(`ℹ [timing] ${key.split(".").slice(1).join(".")} ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+    console.error(
+      `ℹ [timing] ${key.split(".").slice(1).join(".")} ${((performance.now() - t0) / 1000).toFixed(1)} s`,
+    );
   await mkdir(dir, { recursive: true });
   await writeFile(file, JSON.stringify(value));
   return value;

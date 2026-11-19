@@ -26,3 +26,17 @@ def test_normalize_matches_the_vocabulary_case():
     upper = {c: i for i, c in enumerate("|ABCDEFGHIJKLMNOPQRSTUVWXYZ'")}
     assert normalize("Twenty-one", lower, "en") == "twenty|one"
     assert normalize("It's 2", upper, "en") == "IT'S|TWO"
+
+
+def test_device_defaults_to_cpu_and_can_be_forced(monkeypatch):
+    from cutkiller_workers import device
+
+    device.device.cache_clear()
+    monkeypatch.setenv("CUTKILLER_DEVICE", "cpu")
+    assert device.device() == "cpu"
+    assert device.whisper_compute_type(None) == "int8"
+    assert device.whisper_compute_type("float32") == "float32"
+    device.device.cache_clear()
+    monkeypatch.setenv("CUTKILLER_DEVICE", "cuda")
+    assert device.whisper_compute_type(None) == "float16"
+    device.device.cache_clear()

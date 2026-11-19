@@ -26,8 +26,10 @@ def _model(name: str, compute_type: str):
     from faster_whisper import WhisperModel
 
     threads = int(os.environ.get("CUTKILLER_THREADS", os.cpu_count() or 4))
+    from .device import device
+
     return WhisperModel(
-        name, device="cpu", compute_type=compute_type, cpu_threads=threads, download_root=models_dir()
+        name, device=device(), compute_type=compute_type, cpu_threads=threads, download_root=models_dir()
     )
 
 
@@ -36,7 +38,9 @@ def transcribe(request: dict[str, Any]) -> dict[str, Any]:
     requested = request.get("language", "auto")
     language = None if requested in (None, "", "auto") else requested
     model_name = request.get("model", "small")
-    model = _model(model_name, request.get("computeType", "int8"))
+    from .device import whisper_compute_type
+
+    model = _model(model_name, whisper_compute_type(request.get("computeType")))
     from .audio import load_mono
 
     # Decoded by our FFmpeg on the container timeline (not by PyAV inside faster-whisper):
@@ -50,7 +54,7 @@ def transcribe(request: dict[str, Any]) -> dict[str, Any]:
         language=language,
         word_timestamps=True,
         vad_filter=False,
-        beam_size=request.get("beamSize", 5),
+        beam_size=request.get("beamSize", int(os.environ.get("CUTKILLER_BEAM", "5"))),
         initial_prompt=prompt,
         condition_on_previous_text=False,
     )
