@@ -18,6 +18,7 @@ import {
   tr,
 } from "@cutkiller/core";
 import { assembleEdl, brollPass, cutPass, outputFps } from "@cutkiller/cut";
+import { applySelection, type Range } from "@cutkiller/editorial";
 import { motionPass } from "@cutkiller/motion";
 import { parseLabels, qualityCheck, reportMarkdown } from "@cutkiller/qa";
 import { reframePass } from "@cutkiller/reframe";
@@ -48,6 +49,8 @@ export async function plan(
   broll: readonly string[] = [],
   /** Spoken language (ISO 639-1) or "auto". */
   language?: string,
+  /** Editorial selection: only these source ranges, in this order (see @cutkiller/editorial). */
+  ranges?: readonly Range[],
 ): Promise<Edl> {
   const all = [...inputs, ...broll.filter((b) => !inputs.includes(b))];
   const analysis = await analyzeSources(all, {
@@ -103,7 +106,8 @@ export async function plan(
             ),
       );
   }
-  const assembled = assembleEdl(analysis, profile, { edlDir: dirname(resolve(edlPath)) });
+  const full = assembleEdl(analysis, profile, { edlDir: dirname(resolve(edlPath)) });
+  const assembled = ranges && ranges.length > 0 ? applySelection(full, ranges) : full;
   const { edl, diagnostics } = runPasses(assembled, PASSES, {
     analysis,
     profile,

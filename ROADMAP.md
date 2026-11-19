@@ -154,3 +154,22 @@ En continu : vidéos de démo sur les réseaux, showcase communautaire, présets
 | Publication npm/PyPI/Docker Hub impossible sans tes identifiants | GHCR via GitHub Actions (aucun identifiant) ; npm/PyPI plus tard, si tu le souhaites |
 | 48 h trop justes pour tout | Ordre d'impact fixe : consolidation → Docker + anglais → MCP → vitrine. Ce qui glisse est annoncé au point d'étape, pas caché |
 | Les étoiles ne se décrètent pas | Je livre ce qui rend un repo « starrable » (démo, une commande, docs) ; la diffusion (Reddit, X, HN, Product Hunt) relève de toi, je prépare les textes |
+
+## 9. Ambitions — file de travail permanente
+
+Objectifs volontairement hors de portée en 48 h. Chaque session de travail prend le **premier chantier ouvert** de cette liste (ordre d'impact), le livre avec une mesure, coche, et passe au suivant. Rien n'est coché sans preuve (test, mesure, CI).
+
+| # | Axe | Objectif chiffré | Aujourd'hui | État |
+|---|---|---|---|---|
+| A1 | Jugement éditorial | Vidéo longue → 10 Shorts classés par accroche et rétention prédite ; structure narrative réécrite par IA (Claude, optionnel) et vérifiée par la QA | Nettoyage seulement | 🟡 démarré |
+| A2 | Vitesse | 60 s de rushes en < 60 s sur portable CPU, < 10 s sur GPU | ~10 min (4 cœurs) | ⏳ |
+| A3 | Montage de pro | J/L cuts et match cuts générés, rampes de vitesse, riser → impact, room tone, débruitage voix | Coupes, punch-ins, ducking | ⏳ |
+| A4 | Interface | App web locale (timeline, aperçu, accepter/refuser chaque coupe) → app desktop, installeur 1 clic | CLI + MCP | ⏳ |
+| A5 | Benchmark public | « CutBench » : 100 rushes libres annotés, classement public des outils | 1 comparaison | ⏳ |
+| A6 | Qualité perçue | Test à l'aveugle sur 20 vidéos : ≥ 50 % préfèrent CutKiller à un monteur humain | Jamais mesuré | ⏳ |
+| A7 | Règles QA | 50 règles : VMAF, accessibilité, rythme de rétention, accroche < 3 s | 26 | ⏳ |
+| A8 | Formats | Podcast multicam, tutoriel écran (zoom sur le curseur), vlog, gaming, pub produit | Interview, B-roll, musique | ⏳ |
+| A9 | Langues | 30 langues avec alignement et hésitations | 7 | ⏳ |
+| A10 | Plateformes | CI Linux + macOS + Windows ; GPU NVIDIA et Apple Silicon testés | Linux | ⏳ |
+| A11 | Intégrations | Plugins natifs Premiere / Resolve, publication YouTube / TikTok, B-roll Pexels | Export OTIO / XML | ⏳ |
+| A12 | Adoption | 10 000 étoiles, 100 contributeurs en 6 mois, listes « awesome » | 0 | ⏳ (diffusion) |

@@ -56,6 +56,9 @@ const USAGE_EN = `cutkiller <command> [options]
   check <video> [--edl edl.json] -p <profile> [--json r.json] [--md r.md] [--min-score 90] [--truth labels.txt]
                                             26-rule quality check
   export <edl.json> -o edit.otio|edit.xml   timeline for DaVinci Resolve (.otio/.xml), Premiere Pro and Final Cut (.xml)
+  shorts <long video…> -p short -o <dir> [--count 5] [--min 15] [--max 60] [--ai]
+                                            one long video → N Shorts chosen for their hook, edited, scored and ranked
+                                            (--ai: Claude picks the clips; needs Anthropic credentials)
   music <query> [-o <dir>]                  downloads free music (CC0 / CC BY, Openverse) and writes its credit
   validate <edl.json>                       checks an EDL (schema + invariants)
   doctor                                    checks the installation (FFmpeg, workers, models, GPU)
@@ -115,6 +118,10 @@ async function main(argv: string[]): Promise<void> {
       look: { type: "string" },
       lang: { type: "string" },
       music: { type: "string" },
+      count: { type: "string" },
+      min: { type: "string" },
+      max: { type: "string" },
+      ai: { type: "boolean", default: false },
     },
   });
   /** The profile named by -p, with the image style of --look if any. */
@@ -230,6 +237,26 @@ async function main(argv: string[]): Promise<void> {
     case "mcp": {
       const { serveMcp } = await import("./mcp");
       await serveMcp();
+      return;
+    }
+    case "shorts": {
+      const dir = need(values.out, "out");
+      const inputs = await withMusic(positionals, values.music, dir);
+      const { makeShorts } = await import("./shorts");
+      const results = await makeShorts(inputs, await profileOf(), {
+        dir,
+        count: Number(values.count ?? 5),
+        minS: Number(values.min ?? 15),
+        maxS: Number(values.max ?? 60),
+        ai: values.ai,
+        draft: values.draft,
+        ...(values.lang ? { language: values.lang } : {}),
+      });
+      for (const r of results)
+        console.log(
+          `${r.rank}. ${r.plan.title} — ${r.plan.durationS} s — ${r.report.score}/100 — ${r.video}`,
+        );
+      console.log(`✔ ${join(dir, "shorts.md")}`);
       return;
     }
     case "music": {

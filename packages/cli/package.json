@@ -22,6 +22,7 @@
     "@cutkiller/analyze": "workspace:*",
     "@cutkiller/fixtures": "workspace:*",
     "@cutkiller/interchange": "workspace:*",
+    "@cutkiller/editorial": "workspace:*",
     "@modelcontextprotocol/sdk": "1.32.2",
     "zod": "4.6.5"
   }
