@@ -8,7 +8,7 @@ Raw footage in → a publish-ready YouTube video, Short, TikTok or Reel out — 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fbaldw1n69%2Fcutkiller-2496ED?logo=docker&logoColor=white)](https://github.com/BaldW1N69/CutKiller/pkgs/container/cutkiller)
 
-[Français](README.fr.md) · [Roadmap](ROADMAP.md) · [EDL reference](docs/EDL.md) · [Architecture](docs/AUDIT.md)
+[Français](README.fr.md) · [Roadmap](ROADMAP.md) · [Benchmark vs auto-editor](docs/BENCHMARK.md) · [EDL reference](docs/EDL.md) · [Architecture](docs/AUDIT.md)
 
 ```sh
 docker run --rm -v "$PWD:/work" -v cutkiller-models:/models \
