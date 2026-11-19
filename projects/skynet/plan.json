@@ -4,12 +4,12 @@
  "fps": 30,
  "width": 1080,
  "height": 1920,
- "durationInFrames": 528,
+ "durationInFrames": 408,
  "bpm": 120,
- "beatFrames": 15,
+ "beatFrames": 15.0,
  "audio": {
   "src": "projects/skynet/media/music.wav",
-  "startSec": 0
+  "startSec": 0.0
  },
  "video": {
   "src": "projects/skynet/media/footage-graded.mp4",
@@ -23,209 +23,174 @@
  },
  "shots": [
   {
-   "dur": 15,
-   "inSec": 2.3,
+   "from": 0,
+   "dur": 60,
+   "inSec": 35.0,
+   "tag": "intro wide",
+   "cx": 666.4,
+   "cy": 450.93333333333334,
    "zoom": 1.0,
-   "tag": "bts enter",
-   "from": 0
+   "push": 0.08
   },
   {
-   "dur": 15,
-   "inSec": 9.2,
-   "cx": 330,
-   "cy": 430,
-   "zoom": 1.35,
-   "tag": "bts push",
-   "from": 15
-  },
-  {
-   "dur": 15,
-   "inSec": 22.3,
-   "cx": 420,
-   "cy": 430,
-   "zoom": 1.35,
-   "tag": "bts shove",
-   "from": 30
-  },
-  {
-   "dur": 15,
-   "inSec": 30.4,
-   "cx": 260,
-   "cy": 380,
-   "zoom": 1.6,
-   "tag": "bts hair",
-   "from": 45
-  },
-  {
-   "dur": 30,
-   "inSec": 13.3,
-   "zoom": 1.0,
-   "push": 0.06,
-   "tag": "bts placing",
-   "from": 60
-  },
-  {
-   "dur": 30,
-   "inSec": 4.0,
-   "zoom": 1.0,
-   "push": 0.06,
-   "tag": "bts burgundy",
-   "from": 90
-  },
-  {
+   "from": 60,
    "dur": 15,
    "inSec": 35.0,
-   "cx": 238,
-   "cy": 425,
-   "zoom": 2.9,
    "tag": "01",
-   "from": 120,
-   "push": 0.06
+   "push": 0.06,
+   "cx": 235.6,
+   "cy": 429.1,
+   "zoom": 2.9304029304029307
   },
   {
+   "from": 75,
    "dur": 15,
-   "inSec": 35.4,
-   "cx": 430,
-   "cy": 455,
-   "zoom": 2.9,
+   "inSec": 35.933,
    "tag": "02",
-   "from": 135,
-   "push": 0.06
+   "push": 0.06,
+   "cx": 427.2,
+   "cy": 453.0,
+   "zoom": 2.9304029304029307
   },
   {
+   "from": 90,
    "dur": 15,
-   "inSec": 35.8,
-   "cx": 607,
-   "cy": 420,
-   "zoom": 2.9,
+   "inSec": 36.867,
    "tag": "03",
-   "from": 150,
-   "push": 0.06
+   "push": 0.06,
+   "cx": 611.3,
+   "cy": 426.2,
+   "zoom": 2.9304029304029307
   },
   {
+   "from": 105,
    "dur": 15,
-   "inSec": 36.2,
-   "cx": 742,
-   "cy": 425,
-   "zoom": 2.9,
+   "inSec": 37.8,
    "tag": "04",
-   "from": 165,
-   "push": 0.06
+   "push": 0.06,
+   "cx": 740.3,
+   "cy": 420.90000000000003,
+   "zoom": 2.9304029304029307
   },
   {
+   "from": 120,
    "dur": 15,
-   "inSec": 36.6,
-   "cx": 907,
-   "cy": 455,
-   "zoom": 2.9,
+   "inSec": 38.733,
    "tag": "05",
-   "from": 180,
-   "push": 0.06
+   "push": 0.06,
+   "cx": 907.2,
+   "cy": 465.5,
+   "zoom": 2.9304029304029307
   },
   {
+   "from": 135,
    "dur": 15,
-   "inSec": 37.0,
-   "cx": 1068,
-   "cy": 480,
-   "zoom": 2.9,
+   "inSec": 39.667,
    "tag": "06",
-   "from": 195,
-   "push": 0.06
+   "push": 0.06,
+   "cx": 1076.8,
+   "cy": 495.70000000000005,
+   "zoom": 2.9304029304029307
   },
   {
-   "dur": 30,
-   "inSec": 34.9,
-   "cx": 650,
-   "cy": 430,
-   "zoom": 1.3,
-   "push": -0.25,
-   "tag": "pull back",
-   "from": 210
-  },
-  {
-   "dur": 60,
-   "inSec": 35.6,
-   "cx": 650,
-   "cy": 430,
-   "zoom": 1.0,
+   "from": 150,
+   "dur": 15,
+   "inSec": 36.176,
+   "tag": "trio",
    "push": 0.05,
-   "tag": "hero lineup",
-   "from": 240
+   "cx": 424.7,
+   "cy": 439.7,
+   "zoom": 1.75
   },
   {
+   "from": 165,
+   "dur": 15,
+   "inSec": 36.624,
+   "tag": "trio",
+   "push": 0.05,
+   "cx": 908.1,
+   "cy": 462.1666666666667,
+   "zoom": 1.75
+  },
+  {
+   "from": 180,
+   "dur": 60,
+   "inSec": 35.56,
+   "tag": "hero wide",
+   "cx": 666.4,
+   "cy": 450.93333333333334,
+   "zoom": 1.0,
+   "push": 0.05
+  },
+  {
+   "from": 240,
    "dur": 30,
    "inSec": 38.0,
-   "cx": 600,
-   "cy": 380,
-   "zoom": 1.7,
+   "tag": "highlight",
    "push": 0.2,
-   "tag": "point",
-   "from": 300
+   "cx": 611.3,
+   "cy": 426.2,
+   "zoom": 1.7
   },
   {
+   "from": 270,
    "dur": 30,
-   "inSec": 39.6,
-   "zoom": 1.0,
-   "push": 0.04,
-   "tag": "lineup 2",
-   "from": 330
+   "inSec": 39.2,
+   "tag": "trio right",
+   "push": 0.05,
+   "cx": 908.1,
+   "cy": 462.1666666666667,
+   "zoom": 1.75
   },
   {
-   "dur": 30,
-   "inSec": 40.8,
-   "cx": 650,
-   "cy": 420,
+   "from": 300,
+   "dur": 60,
+   "inSec": 38.6,
+   "tag": "closing wide",
+   "cx": 666.4,
+   "cy": 450.93333333333334,
    "zoom": 1.12,
-   "tag": "smiles",
-   "from": 360
-  },
-  {
-   "dur": 90,
-   "inSec": 41.8,
-   "zoom": 1.0,
-   "push": 0.08,
-   "tag": "walk to camera",
-   "from": 390
+   "push": -0.12
   }
  ],
  "captions": [
   {
    "from": 6,
-   "dur": 108,
-   "text": "« décale-toi un peu à gauche… »"
+   "dur": 54,
+   "text": "> 06 membres en ligne"
   }
  ],
  "tags": [
   {
    "from": 0,
-   "text": "BTS"
+   "text": "TEAM"
   },
   {
-   "from": 120,
+   "from": 60,
    "text": "01/06"
   },
   {
-   "from": 135,
+   "from": 75,
    "text": "02/06"
   },
   {
-   "from": 150,
+   "from": 90,
    "text": "03/06"
   },
   {
-   "from": 165,
+   "from": 105,
    "text": "04/06"
   },
   {
-   "from": 180,
+   "from": 120,
    "text": "05/06"
   },
   {
-   "from": 195,
+   "from": 135,
    "text": "06/06"
   },
   {
-   "from": 210,
+   "from": 150,
    "text": "TEAM"
   }
  ],
@@ -254,20 +219,16 @@
   315,
   330,
   345,
-  360,
-  375,
-  390,
-  405,
-  420,
-  435,
-  450,
-  465,
-  480,
-  495,
-  510,
-  525
+  360
  ],
- "heroFrame": 240,
- "scaleFrame": 300,
- "endFrame": 480
+ "heroFrame": 180,
+ "scaleFrame": 240,
+ "endFrame": 360,
+ "curation": {
+  "window": [
+   35.0,
+   40.6
+  ],
+  "rejected": 0.875
+ }
 }

@@ -287,3 +287,85 @@ def plan_motion(audio: dict, *, audio_src: str, title: str, subtitle: str = "", 
         "beats": [{"frame": fr(b["t"]), "strength": b["strength"], "downbeat": b["isDownbeat"],
                    "energy": b["energy"]} for b in beats if b["t"] < end],
     }
+
+
+def plan_reel(audio: dict, cur: dict, video: dict, *, video_src: str, audio_src: str, brand: str,
+              tagline: str = "THE TEAM", accent: str = "#FF3B30", caption: str = "", fps: int = 30,
+              highlight: tuple[float, int] | None = None, start: float = 0.0) -> dict:
+    """9:16 editorial reel built only from the curated window (team in place, composed).
+
+    Layout in beats (4/4): intro wide (4) | roll call, one member per beat (N) | trios (2) |
+    DROP hero wide (4) | highlight (2) + trio (2) | closing wide (4) | end card on the next downbeat.
+    Every boundary is a real beat of `audio`, so it works with generated or supplied music."""
+    if not cur.get("best"):
+        raise ValueError("no usable take found in the footage")
+    a, b = cur["best"]["start"], cur["best"]["end"]
+    members = cur["members"]
+    n = len(members)
+    W, H = video["width"], video["height"]
+
+    t0 = _start_time(audio, start, True)
+    beats = [x["t"] for x in audio["beats"] if x["t"] >= t0 - 1e-3]
+    fr = lambda k: int(round((beats[k] - t0) * fps)) if k < len(beats) else int(round((beats[-1] - t0 + (k - len(beats) + 1) * 60 / audio["bpm"]) * fps))
+
+    def at(frac: float) -> float:  # time inside the curated window
+        return round(a + frac * (b - a), 3)
+
+    def face_crop(m: dict, zoom: float):
+        return dict(cx=m["x"], cy=m["y"] + 1.0 * m["size"], zoom=zoom)
+
+    def group_crop(ms: list[dict], zoom: float):
+        return dict(cx=float(np.mean([m["x"] for m in ms])), cy=float(np.mean([m["y"] for m in ms])) + 70, zoom=zoom)
+
+    shots, tags, k = [], [], 0
+    gx = float(np.mean([m["x"] for m in members]))
+    gy = float(np.mean([m["y"] for m in members])) + 70
+
+    def add(beats_len: int, in_sec: float, tag: str, **crop):
+        nonlocal k
+        f0, f1 = fr(k), fr(k + beats_len)
+        # never read past the curated window
+        in_sec = min(in_sec, b - (f1 - f0) / fps)
+        shots.append(dict({"from": f0, "dur": f1 - f0, "inSec": round(max(a, in_sec), 3), "tag": tag}, **crop))
+        k += beats_len
+
+    # intro
+    tags.append({"from": 0, "text": "TEAM"})
+    add(4, at(0.0), "intro wide", cx=gx, cy=gy, zoom=1.0, push=0.08)
+    # roll call
+    zoom_one = float(np.clip(W / (6.5 * np.median([m["size"] for m in members])), 2.2, 3.2))
+    for i, m in enumerate(members):
+        tags.append({"from": fr(k), "text": f"{i + 1:02d}/{n:02d}"})
+        add(1, at(i / max(1, n)), f"{i + 1:02d}", push=0.06, **face_crop(m, zoom_one))
+    # pad roll call to a bar boundary with trio shots
+    left, right = members[: (n + 1) // 2], members[n // 2:]
+    tags.append({"from": fr(k), "text": "TEAM"})
+    while k % 4:
+        side = left if (k % 2 == 0) else right
+        add(1, at(0.05 + 0.08 * (k % 4)), "trio", push=0.05, **group_crop(side, 1.75))  # early: keep the highlight fresh
+    hero = k
+    add(4, at(0.1), "hero wide", cx=gx, cy=gy, zoom=1.0, push=0.05)
+    scale = k
+    if highlight is not None:
+        t_h, idx = highlight
+        add(2, t_h, "highlight", push=0.2, **face_crop(members[idx], 1.7))
+    else:
+        add(2, at(0.5), "trio left", push=0.08, **group_crop(left, 1.75))
+    add(2, at(0.75), "trio right", push=0.05, **group_crop(right, 1.75))
+    add(4, at(1.0) - 4 * 60 / audio["bpm"], "closing wide", cx=gx, cy=gy, zoom=1.12, push=-0.12)
+    end = fr(k)
+    tail = int(round(1.6 * fps))
+    return {
+        "version": 1, "mode": "reel", "fps": fps, "width": 1080, "height": 1920,
+        "durationInFrames": end + tail, "bpm": audio["bpm"],
+        "beatFrames": round(60 / audio["bpm"] * fps, 3),
+        "audio": {"src": audio_src, "startSec": round(t0, 4)},
+        "video": {"src": video_src, "width": W, "height": H},
+        "brand": {"name": brand, "accent": accent, "tagline": tagline},
+        "shots": shots,
+        "captions": [{"from": 6, "dur": fr(4) - 6, "text": caption}] if caption else [],
+        "tags": tags,
+        "beats": [fr(i) for i in range(k + 1)],
+        "heroFrame": fr(hero), "scaleFrame": fr(scale), "endFrame": end,
+        "curation": {"window": [a, b], "rejected": cur.get("rejected")},
+    }

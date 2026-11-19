@@ -117,3 +117,19 @@ def test_tempo_outside_tracker_estimate(tmp_path):
     assert np.abs(bt - np.round(bt / 0.5) * 0.5).max() < 0.03
     assert bt[0] < 0.03  # quiet pad/tick intro is kept (not trimmed)
     # bar phase is not asserted: every kick in this bed is equally loud, so it is genuinely ambiguous
+
+
+def test_reel_plan_uses_only_curated_window():
+    from cutkiller.music import grid
+    from cutkiller.plan import plan_reel
+
+    cur = {"best": {"start": 35.0, "end": 40.6, "motion": 2.5}, "rejected": 0.87,
+           "members": [{"x": 235 + 170 * i, "y": 370, "size": 66} for i in range(6)]}
+    p = plan_reel(grid(120, end=6, drop=3, duration=13.6), cur, {"width": 1280, "height": 720},
+                  video_src="v.mp4", audio_src="m.wav", brand="X", highlight=(38.0, 2))
+    for s in p["shots"]:
+        assert 35.0 <= s["inSec"] and s["inSec"] + s["dur"] / 30 <= 40.6 + 1e-6, s
+    starts = [s["from"] for s in p["shots"]]
+    assert all(f % 15 == 0 for f in starts)          # every cut on a beat (120 BPM @ 30 fps)
+    assert p["heroFrame"] == 180 and p["endFrame"] == 360  # drop on bar 3, end card on bar 6 impact
+    assert [s["tag"] for s in p["shots"]][1:7] == ["01", "02", "03", "04", "05", "06"]

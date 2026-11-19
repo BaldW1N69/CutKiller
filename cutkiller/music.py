@@ -192,3 +192,14 @@ def minimal_tech(out: str | Path, bpm: float = 120, build: int = 1, drop: int = 
     out.parent.mkdir(parents=True, exist_ok=True)
     sf.write(out, stereo, SR)
     return out
+
+
+def grid(bpm: float, end: int, drop: int, duration: float, beats_per_bar: int = 4) -> dict:
+    """Exact analysis for a generated bed (no detection: we wrote the music, we know the grid)."""
+    beat = 60.0 / bpm
+    n = end * beats_per_bar + 1
+    beats = [{"t": round(i * beat, 4), "strength": 1.0 if i % beats_per_bar == 0 else 0.6, "energy": 0.8,
+              "beatInBar": i % beats_per_bar, "isDownbeat": i % beats_per_bar == 0} for i in range(n)]
+    return {"source": "generated", "duration": duration, "bpm": bpm, "grid": "exact", "beatsPerBar": beats_per_bar,
+            "beats": beats, "downbeats": [b["t"] for b in beats if b["isDownbeat"]],
+            "bars": [], "sections": [], "drop": round(drop * beats_per_bar * beat, 4), "onsets": []}

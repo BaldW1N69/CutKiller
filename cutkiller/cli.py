@@ -135,6 +135,58 @@ def _motion_kwargs(a) -> dict:
                 start=a.start, duration=a.duration, hero=a.hero)
 
 
+def _prepare(src: str, grade: bool) -> str:
+    """Constant 30 fps, rotation applied, optional clean grade + light sharpening (cached)."""
+    import subprocess
+    out = CACHE / f"prep-{_key(src, str(grade) + '|v1')}.mp4"
+    if not out.exists():
+        CACHE.mkdir(exist_ok=True)
+        vf = "fps=30,format=yuv420p"
+        if grade:
+            vf += (",unsharp=5:5:0.55:5:5:0,eq=contrast=1.07:brightness=-0.015:saturation=0.86:gamma=0.98,"
+                   "colorbalance=rs=-0.02:bs=0.03:rm=-0.025:bm=0.02:rh=-0.02:bh=0.015")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-vf", vf, "-an", "-c:v", "libx264", "-crf", "12",
+                        "-preset", "slow", str(out)], check=True)
+    return str(out.resolve())
+
+
+def _reel(a):
+    import subprocess
+    from .curate import curate
+    from .music import grid, minimal_tech
+    from .plan import plan_reel
+    from .video import probe
+
+    src = _prepare(a.video, not a.no_grade)
+    v = probe(src)
+    cur = _cached("curate", src, f"{a.group}|v1", lambda: curate(src, v["width"], v["height"], a.group))
+    if not cur["best"]:
+        raise SystemExit("no usable take found (nobody in place and still long enough)")
+    print(f"curated: keeping {cur['best']['start']:.2f}-{cur['best']['end']:.2f}s, "
+          f"rejected {cur['rejected']:.0%}, group of {cur['group']}", file=sys.stderr)
+    if a.music:
+        audio, music = _audio(a.music, None, 4, "auto"), str(Path(a.music).resolve())
+    else:
+        CACHE.mkdir(exist_ok=True)
+        raw = minimal_tech(CACHE / "bed-raw.wav", bpm=120, build=1, drop=3, end=6)
+        music = str((CACHE / "bed.wav").resolve())
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(raw), "-af", "loudnorm=I=-14:TP=-1:LRA=9",
+                        "-ar", "44100", music], check=True)
+        import soundfile as sf
+        audio = grid(120, end=6, drop=3, duration=sf.info(music).duration)
+    hl = None
+    if a.highlight:
+        t, n = a.highlight.split(":")
+        hl = (float(t), int(n) - 1)
+    plan = plan_reel(audio, cur, v, video_src=src, audio_src=music, brand=a.brand, tagline=a.tagline,
+                     accent=a.accent, caption=a.caption, highlight=hl)
+    if a.plan_out:
+        _write(plan, a.plan_out)
+    from .render import render_remotion
+    render_remotion(plan, a.out, crf=15)
+    print(f"rendered {a.out}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="cutkiller", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -170,6 +222,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--build", type=int, default=1, help="bar where kicks start")
     p.add_argument("--drop", type=int, default=4, help="bar of the drop")
     p.add_argument("--end", type=int, default=8, help="bar of the final impact")
+
+    p = sub.add_parser("curate", help="find the usable takes (group in place, composed, still)")
+    p.add_argument("video"); p.add_argument("-o", "--out"); p.add_argument("--group", type=int, help="number of people")
+
+    p = sub.add_parser("reel", help="curate footage + 9:16 editorial reel on the beat")
+    p.add_argument("video"); p.add_argument("-o", "--out", required=True)
+    p.add_argument("--brand", required=True); p.add_argument("--tagline", default="THE TEAM")
+    p.add_argument("--caption", default="", help="typed caption under the intro shot")
+    p.add_argument("--accent", default="#FF3B30")
+    p.add_argument("--music", help="music file (default: generate a 120 BPM bed)")
+    p.add_argument("--highlight", help="T:N = use member N (1-based) at T seconds for the post-drop punch-in")
+    p.add_argument("--group", type=int); p.add_argument("--no-grade", action="store_true")
+    p.add_argument("--plan-out")
 
     p = sub.add_parser("demo", help="generate synthetic demo music + footage into demo/")
     p.add_argument("--bpm", type=float, default=128)
@@ -222,6 +287,17 @@ def main(argv: list[str] | None = None) -> int:
         from .music import minimal_tech
         print(f"wrote {minimal_tech(a.out, a.bpm, a.build, a.drop, a.end)} "
               f"(drop at {a.drop * 240 / a.bpm:.2f}s, impact at {a.end * 240 / a.bpm:.2f}s)", file=sys.stderr)
+    elif a.cmd == "curate":
+        from .curate import curate
+        from .video import probe
+        v = probe(a.video)
+        cur = _cached("curate", a.video, f"{a.group}|v1", lambda: curate(a.video, v["width"], v["height"], a.group))
+        for sgm in cur["segments"]:
+            print(f"usable {sgm['start']:.2f}-{sgm['end']:.2f}s (motion {sgm['motion']})", file=sys.stderr)
+        print(f"group of {cur['group']}, rejected {cur['rejected']:.0%} of the footage", file=sys.stderr)
+        _write(cur, a.out)
+    elif a.cmd == "reel":
+        _reel(a)
     elif a.cmd == "demo":
         from .synth import demo_track, demo_video
         Path("demo").mkdir(exist_ok=True)
