@@ -1,0 +1,19 @@
+[project]
+name = "cutkiller"
+version = "0.1.0"
+description = "Beat-synced video cutting and motion design"
+requires-python = ">=3.10"
+dependencies = ["librosa>=0.10", "soundfile>=0.12", "numpy>=1.24", "opencv-python-headless>=4.8,<5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+cutkiller = "cutkiller.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["cutkiller"]
