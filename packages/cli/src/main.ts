@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname as dirOf, join, resolve as resolvePath } from "node:path";
 import { parseArgs } from "node:util";
 import { edlJsonSchema, profileJsonSchema } from "@cutkiller/core";
+import { toFcp7Xml, toOtio } from "@cutkiller/interchange";
 import { ffmpegVersion, probeSource } from "@cutkiller/media";
 import {
   captionLabels,
@@ -15,14 +16,18 @@ import {
 } from "@cutkiller/qa";
 import { listLooks, loadProfile, PresetRegistry, withLook } from "@cutkiller/style";
 import { calibrate, calibrationMarkdown } from "./calibrate";
+import { doctor, doctorReport } from "./doctor";
 import { check, doRender, plan, readEdl } from "./pipeline";
 
 const USAGE = `cutkiller <commande> [options]
 
+  mcp                                       serveur MCP (stdio) pour Claude, Cursor, Codex…
+  doctor                                    vérifie l'installation (FFmpeg, workers, modèles, GPU)
   probe <fichiers…>                         métadonnées des rushes
   plan <entrées…> -p <profil> -o edl.json   analyse + planification → EDL éditable
   validate <edl.json>                       vérifie une EDL (schéma + invariants)
   render <edl.json> -o out.mp4 [--draft]    rend une EDL
+  export <edl.json> -o edit.otio|edit.xml   timeline pour DaVinci Resolve (.otio/.xml), Premiere Pro et Final Cut (.xml)
   check <vidéo> [--edl edl.json] -p <profil> [--json r.json] [--md r.md] [--min-score 90] [--truth labels.txt]
   annotate <edl.json> -o labels.txt        mots surlignés à corriger à l'oreille (pistes d'étiquettes Audacity)
   auto <entrées…> -p <profil> -o <dossier> [--broll b.mp4]… [--draft] [--min-score 90]
@@ -34,6 +39,7 @@ const USAGE = `cutkiller <commande> [options]
 
 Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), ou chemin vers un .yaml.
 --draft : encodage rapide (preset veryfast) pour itérer.
+--lang  : langue parlée (fr, en, es, de, it, pt, nl…) ; par défaut détectée automatiquement.
 --fast  : sans analyse de la parole ni des beats (assemblage brut).
 --look  : style d'image (presets/look/) : film-print, bleach-grit (façon Fight Club), neon-80s (façon Vice City),
           teal-orange, noir, clean ; « cutkiller looks » les décrit. Le style apporte sa texture (grain, halo…).
@@ -68,6 +74,7 @@ async function main(argv: string[]): Promise<void> {
       truth: { type: "string" },
       broll: { type: "string", multiple: true },
       look: { type: "string" },
+      lang: { type: "string" },
     },
   });
   /** The profile named by -p, with the image style of --look if any. */
@@ -95,7 +102,14 @@ async function main(argv: string[]): Promise<void> {
       return;
     case "plan": {
       const out = need(values.out, "out");
-      const edl = await plan(positionals, await profileOf(), out, !values.fast, values.broll ?? []);
+      const edl = await plan(
+        positionals,
+        await profileOf(),
+        out,
+        !values.fast,
+        values.broll ?? [],
+        values.lang,
+      );
       console.log(`✔ ${out} : ${edl.video[0]?.clips.length ?? 0} clip(s)`);
       return;
     }
@@ -121,7 +135,7 @@ async function main(argv: string[]): Promise<void> {
       const profile = await profileOf();
       const edlPath = join(dir, "edit.edl.json");
       const video = join(dir, "final.mp4");
-      const edl = await plan(positionals, profile, edlPath, !values.fast, values.broll ?? []);
+      const edl = await plan(positionals, profile, edlPath, !values.fast, values.broll ?? [], values.lang);
       await doRender(edl, edlPath, video, values.draft, true);
       const report = await check(video, profile, edlPath, {
         json: join(dir, "quality.json"),
@@ -173,6 +187,33 @@ async function main(argv: string[]): Promise<void> {
       );
       await writeFile(join(dir, "report-1.schema.json"), `${JSON.stringify(reportJsonSchema(), null, 2)}\n`);
       console.log(`✔ schémas écrits dans ${dir}`);
+      return;
+    }
+    case "mcp": {
+      const { serveMcp } = await import("./mcp");
+      await serveMcp();
+      return;
+    }
+    case "export": {
+      const edlPath = need(positionals[0], "edl");
+      const out = need(values.out, "out");
+      const edl = await readEdl(edlPath);
+      const opts = { baseDir: dirOf(resolvePath(edlPath)) };
+      const xml = /\.xml$/i.test(out);
+      if (!xml && !/\.otio$/i.test(out))
+        throw new Error(
+          "export : -o doit finir par .otio (DaVinci Resolve, Avid…) ou .xml (Premiere Pro, Final Cut Pro 7, Resolve)",
+        );
+      await writeFile(out, xml ? toFcp7Xml(edl, opts) : toOtio(edl, opts));
+      console.log(
+        `✔ ${out} : ${edl.video.reduce((n, t) => n + t.clips.length, 0)} plan(s) — sous-titres : le .srt écrit à côté du rendu`,
+      );
+      return;
+    }
+    case "doctor": {
+      const { text, ok } = doctorReport(await doctor());
+      console.log(text);
+      if (!ok) process.exitCode = 1;
       return;
     }
     case "version":
