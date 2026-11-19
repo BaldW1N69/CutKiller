@@ -1,0 +1,58 @@
+name: Docker image
+
+# Publishes ghcr.io/<owner>/cutkiller: `latest` from main, `x.y.z` from tags v*.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    paths: [Dockerfile, .dockerignore, .github/workflows/docker.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/cutkiller
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: cutkiller:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test (doctor + render without speech models)
+        run: |
+          docker run --rm cutkiller:test doctor
+          docker run --rm -v "$PWD:/work" --entrypoint sh cutkiller:test -c '
+            ffmpeg -v error -f lavfi -i testsrc2=size=1080x1920:rate=30:duration=4 -f lavfi -i sine=frequency=440:duration=4 -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac clip.mp4 &&
+            cutkiller auto clip.mp4 -p short -o out --fast --draft --min-score 80 && ls -l out'
+      - uses: docker/build-push-action@v6
+        if: github.event_name != 'pull_request'
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
