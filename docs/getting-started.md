@@ -68,3 +68,14 @@ With `--ai`, Claude chooses the clips instead (it can move the hook to the front
 | `--min-score 90` | Exit code 1 below that score (CI-friendly) |
 | `CUTKILLER_LANG=fr` | Messages and reports in French |
 | `CUTKILLER_WHISPER_MODEL=small` | Lighter, faster transcription model |
+| `CUTKILLER_DEVICE=cuda` | Force the NVIDIA GPU (auto-detected by default; needs a CUDA build of PyTorch for the aligner) |
+| `CUTKILLER_BEAM=1` | Greedy transcription: faster, slightly less accurate |
+| `CUTKILLER_TIMINGS=0` | Hide the per-stage timings |
+
+## Measure it yourself
+
+```sh
+pnpm bench            # edits the CC-licensed test rushes, records stage timings and quality scores
+```
+
+Results land in `bench/results/results.md`, one row per run and commit.
