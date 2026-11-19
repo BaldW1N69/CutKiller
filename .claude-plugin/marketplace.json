@@ -1,0 +1,12 @@
+{
+  "name": "cutkiller",
+  "description": "CutKiller: the open-source video editor that grades its own work",
+  "owner": { "name": "BaldW1N69" },
+  "plugins": [
+    {
+      "name": "cutkiller",
+      "source": "./",
+      "description": "Video editing skill + local MCP server: edit, read the quality report, fix the EDL, render, export to Premiere/Resolve/Final Cut."
+    }
+  ]
+}
