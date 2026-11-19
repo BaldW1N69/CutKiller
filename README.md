@@ -15,12 +15,19 @@ docker run --rm -v "$PWD:/work" -v cutkiller-models:/models \
   ghcr.io/baldw1n69/cutkiller auto interview.mp4 music.mp3 -p short -o out
 ```
 
+<p align="center"><img src="docs/media/demo.gif" alt="Before: raw 16:9 interview. After: 9:16 Short with face tracking, matched exposure and word-by-word captions" width="100%"></p>
+<p align="center"><sub>Real run on a 60 s CC BY interview (Global Lives Project, 640×360): <code>cutkiller auto interview.mp4 music.mp3 -p short</code>, no manual step.</sub></p>
+
 ```
-ℹ [language] en
-… transcription de interview…
-rendu 100 % — 1312 frames à 41.0 fps
-Quality check — 99.8/100   (out/final.mp4, out/final.srt, out/quality.md)
+ℹ [language] fr
+ℹ [cut.summary] 1 hésitation(s) et 0 mot(s) de faux départ retirés, 6.3 s coupées, 23 plan(s)
+ℹ [reframe.summary] 23 plan(s) recadré(s) sur le visage
+ℹ [captions.summary] 72 sous-titre(s), 145 mot(s), style karaoke-pop@1.0.0
+ℹ [audio.summary] 1 zone(s) de ducking, 5 SFX, cible -14 LUFS
+# Quality check — 97.8/100
 ```
+
+The 2.2 points lost are honest: the source is 640×360, so the report flags the ×5 upscale (`image.sharpness`) and two caption words 4 frames off.
 
 ## Why CutKiller
 
@@ -124,3 +131,5 @@ Contributions are welcome: see the [roadmap](ROADMAP.md) for what comes next.
 ## License
 
 [Apache-2.0](LICENSE). Third-party sources, models and assets: [LICENSES.md](LICENSES.md).
+
+Demo footage: Global Lives Project, « Pierre Vallee, Trois-Rivières » ([archive.org](https://archive.org/details/globallivesproject_Pierre_Vallee_2013_fra_Trois_Rivieres_CA-QC-010004-013005_life_story_interview)), CC BY 3.0, edited by CutKiller. Music: Cely Grande, « Thunder », CC0.

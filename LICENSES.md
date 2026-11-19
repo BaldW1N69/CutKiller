@@ -117,3 +117,7 @@ Des témoignages de Wikimania Paris 2026 sous CC BY 4.0 (Wikimedia France) avaie
 | Image Docker `ghcr.io/baldw1n69/cutkiller` | distribution | contient FFmpeg (GPL-2.0+), Node.js (MIT), Python (PSF) et les paquets Debian bookworm, sous leurs licences | les sources de chaque paquet Debian sont disponibles via `apt-get source` / snapshot.debian.org | 🔎 |
 
 Les modèles de parole (Whisper, aligneurs) ne sont **pas** inclus dans l'image : ils sont téléchargés dans `/models` au premier usage.
+
+## 6. Démo du README
+
+`docs/media/demo.gif` : extrait de 8 s de l'entretien Global Lives Project « Pierre Vallee, Trois-Rivières » (CC BY 3.0, Karen Vanderborght, David Fabrega, Marie Dietlin, Rafi Leeuwenkroon, Marianne Ploska, Catherine Genest), à gauche brut, à droite monté par CutKiller (recadré, étalonné, sous-titré) ; musique Cely Grande « Thunder » (CC0). Attribution reprise sous le GIF dans le README.
