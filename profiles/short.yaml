@@ -61,4 +61,5 @@ audio:
   sfx:
     transitions: { push: whoosh@1, slide: whoosh-soft@1, glitch: glitch-burst@1 }
     punchIn: punch-tick@1
+    sectionChange: [riser@1, impact-boom@1]
     gainDb: -8

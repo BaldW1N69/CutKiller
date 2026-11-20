@@ -19,7 +19,7 @@ describe("effets sonores procéduraux", () => {
       sfx()
         .map((p) => p.name)
         .sort(),
-    ).toEqual(["glitch-burst", "punch-tick", "whoosh", "whoosh-soft"]);
+    ).toEqual(["glitch-burst", "impact-boom", "punch-tick", "riser", "whoosh", "whoosh-soft"]);
     for (const preset of sfx()) {
       const params = SfxParamsSchema.parse(preset.params);
       const a = synthesize(params, rate);
@@ -135,6 +135,31 @@ describe("passe audio", () => {
       expect((c?.at as number) + (hitS - (c?.in as number)) * 30).toBeCloseTo(frame, 3);
       expect(c?.in).toBeGreaterThanOrEqual(0);
       expect(c?.in).toBeLessThan(SFX_PREROLL_S); // only silence is trimmed
+    }
+  });
+
+  it("pose un riser puis un impact sur chaque changement de section éditoriale", () => {
+    const { edl, analysis } = edlWithSpeech([], {
+      video: [
+        {
+          id: "main",
+          clips: [
+            { id: "s01-001", source: "a", in: 0, out: 3, at: 0 },
+            { id: "s01-002", source: "a", in: 3, out: 5, at: 90 },
+            { id: "s02-001", source: "a", in: 12, out: 15, at: 150 },
+          ],
+        },
+      ],
+    });
+    const out = audioPass.run(edl, { analysis, profile: short, presets: registry }).edl;
+    const fx = out.audio.filter((t) => t.id.startsWith("sfx")).flatMap((t) => t.clips);
+    expect(fx.map((c) => [c.asset, c.syncTo])).toEqual([
+      ["riser@1.0.0", "cut:s02-001"],
+      ["impact-boom@1.0.0", "cut:s02-001"],
+    ]);
+    for (const c of fx) {
+      const { hitS } = sfxTiming(SfxParamsSchema.parse(registry.resolve(c.asset as string).params));
+      expect(c.at + (hitS - c.in) * 30).toBeCloseTo(150, 3);
     }
   });
 

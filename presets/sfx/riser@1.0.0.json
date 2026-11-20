@@ -1,0 +1,18 @@
+{
+  "name": "riser",
+  "version": "1.0.0",
+  "kind": "sfx",
+  "description": "Riser before a change of section: band-passed noise sweeping up for 1.6 s into the cut, then a short tail (1.7 s, hit at 1.6 s).",
+  "params": {
+    "type": "whoosh",
+    "durationMs": 1700,
+    "hitMs": 1600,
+    "lowHz": 150,
+    "highHz": 7000,
+    "q": 0.9,
+    "rise": 3.5,
+    "fallMs": 80,
+    "pan": 0,
+    "seed": 23
+  }
+}

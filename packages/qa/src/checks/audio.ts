@@ -273,6 +273,7 @@ export async function checkSfxSync(video: string, edl: Edl, profile: StyleProfil
     let expected: number | undefined;
     if (kind === "transition") expected = edl.transitions.find((t) => t.id === id)?.atFrame;
     else if (kind === "keyframes") expected = edl.keyframes.find((k) => k.target === id)?.keys[0]?.frame;
+    else if (kind === "cut") expected = edl.video[0]?.clips.find((v) => v.id === id)?.at;
     if (expected === undefined) {
       violations.push({
         message: tr(

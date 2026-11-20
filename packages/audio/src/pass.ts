@@ -122,6 +122,13 @@ export const audioPass: Pass = {
       for (const k of edl.keyframes)
         if (k.role === "micro" && k.why?.kind === "emphasis" && k.keys[0])
           events.push({ ref: a.sfx.punchIn, frame: k.keys[0].frame, syncTo: `keyframes:${k.target}` });
+    // Changes of section: the first shot of each editorial selection after the first.
+    if (a.sfx.sectionChange.length > 0)
+      for (const c of edl.video[0]?.clips ?? []) {
+        const m = /^s(\d+)-001$/.exec(c.id);
+        if (m && Number(m[1]) > 1)
+          for (const ref of a.sfx.sectionChange) events.push({ ref, frame: c.at, syncTo: `cut:${c.id}` });
+      }
     events.sort((x, y) => x.frame - y.frame);
     const sfxTracks: { id: string; clips: AudioClipInput[]; end: number }[] = [];
     let n = 0;

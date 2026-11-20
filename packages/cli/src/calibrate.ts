@@ -94,6 +94,7 @@ export function ripple(edl: Edl, from: number, delta: number): void {
   const event = (syncTo: string) => {
     const [kind, ref] = [syncTo.slice(0, syncTo.indexOf(":")), syncTo.slice(syncTo.indexOf(":") + 1)];
     if (kind === "transition") return edl.transitions.find((t) => t.id === ref)?.atFrame;
+    if (kind === "cut") return edl.video[0]?.clips.find((v) => v.id === ref)?.at;
     return edl.keyframes.find((t) => t.target === ref)?.keys[0]?.frame;
   };
   for (const track of edl.audio)

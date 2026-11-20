@@ -54,4 +54,5 @@ audio:
   duck: { depthDb: -15, attackMs: 150, releaseMs: 400, mergeGapMs: 900, holdMs: 200 }
   sfx:
     transitions: { push: whoosh-soft@1, slide: whoosh-soft@1, glitch: glitch-burst@1 }
+    sectionChange: [riser@1, impact-boom@1]
     gainDb: -12

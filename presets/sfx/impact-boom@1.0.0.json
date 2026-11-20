@@ -1,0 +1,16 @@
+{
+  "name": "impact-boom",
+  "version": "1.0.0",
+  "kind": "sfx",
+  "description": "Low impact landing on a change of section, after a riser: a pitched thump from 110 Hz down to 38 Hz with a soft click (500 ms).",
+  "params": {
+    "type": "tick",
+    "durationMs": 500,
+    "hitMs": 5,
+    "fromHz": 110,
+    "toHz": 38,
+    "decayMs": 450,
+    "click": 0.15,
+    "seed": 29
+  }
+}

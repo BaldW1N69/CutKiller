@@ -333,9 +333,15 @@ export const StyleProfileSchema = z.object({
         transitions: z.record(z.string(), z.string()).default({}),
         /** SFX on animated punch-ins (none if unset). */
         punchIn: z.string().optional(),
+        /**
+         * SFX on a change of section: the first cut into each editorial selection
+         * after the first (Shorts, --target cut-downs). Several presets play together,
+         * all landing on the cut (a riser, then an impact).
+         */
+        sectionChange: z.array(z.string()).default([]),
         gainDb: z.number().default(-10),
       })
-      .default({ transitions: {}, gainDb: -10 }),
+      .default({ transitions: {}, sectionChange: [], gainDb: -10 }),
   }),
 });
 
