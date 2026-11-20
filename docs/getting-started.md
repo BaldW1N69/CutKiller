@@ -81,12 +81,14 @@ cutkiller auto talk.mp4 music.mp3 -p long -o recap --target 60
 | `--lang en` | Force the spoken language (default: detected per rush) |
 | `--look neon-80s` | Image style; `cutkiller looks` lists them |
 | `--broll street.mp4` | Cutaways (repeatable) |
+| `--broll-search "harbor boats"` | Finds free cutaways: Pexels with `PEXELS_API_KEY`, else Wikimedia Commons (public domain, CC0, CC BY only); credits in `credits.txt` |
 | `--min-score 90` | Exit code 1 below that score (CI-friendly) |
 | `CUTKILLER_LANG=fr` | Messages and reports in French |
 | `CUTKILLER_WHISPER_MODEL=small` | Lighter, faster transcription model |
 | `CUTKILLER_DEVICE=cuda` | Force the NVIDIA GPU (auto-detected by default; needs a CUDA build of PyTorch for the aligner) |
 | `CUTKILLER_BEAM=1` | Greedy transcription: faster, slightly less accurate |
 | `CUTKILLER_TIMINGS=0` | Hide the per-stage timings |
+| `CUTKILLER_WORKER_MODE=oneshot` | One Python process per analysis task instead of one persistent worker |
 
 ## Measure it yourself
 

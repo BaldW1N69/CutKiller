@@ -28,9 +28,16 @@ def _model(name: str, compute_type: str):
     threads = int(os.environ.get("CUTKILLER_THREADS", os.cpu_count() or 4))
     from .device import device
 
-    return WhisperModel(
-        name, device=device(), compute_type=compute_type, cpu_threads=threads, download_root=models_dir()
-    )
+    common = {
+        "device": device(),
+        "compute_type": compute_type,
+        "cpu_threads": threads,
+        "download_root": models_dir(),
+    }
+    try:  # a cached model loads without asking the Hub
+        return WhisperModel(name, local_files_only=True, **common)
+    except Exception:  # noqa: BLE001 - not cached yet (faster-whisper raises various errors)
+        return WhisperModel(name, **common)
 
 
 def transcribe(request: dict[str, Any]) -> dict[str, Any]:

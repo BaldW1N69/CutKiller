@@ -5,6 +5,8 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 ## [Unreleased]
 
 ### Added
+- **`--broll-search "<query>"`**: free cutaways downloaded as 8 s excerpts (Pexels with `PEXELS_API_KEY`, else Wikimedia Commons, public domain / CC0 / CC BY only; CC BY-SA never by default since it would relicense the edit), credits in `credits.txt`.
+- **Persistent analysis worker**: one Python process serves every task of a run, models stay loaded (`CUTKILLER_WORKER_MODE=oneshot` for the old behaviour); cached models load without contacting the Hub (9.2 s → 7.7 s per cold load).
 - **`cutkiller studio`**: a local web page to edit by transcript — untick sentences, render, watch the result with its quality score and failed rules (no dependency, works on phones).
 - **16 languages** with word alignment and hesitation removal (was 7): Polish, Russian, Arabic, Chinese, Japanese, Finnish, Greek, Hungarian and Persian added.
 - **Riser → impact on changes of section**: two synthesized SFX (`riser@1`, `impact-boom@1`) land on the first cut of each editorial selection after the first (`profile.audio.sfx.sectionChange`, on in `short` and `long`); QA checks them against the cut (`syncTo: cut:<clip>`).

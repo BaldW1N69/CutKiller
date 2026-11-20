@@ -104,6 +104,7 @@ cutkiller reference reference.mp4 --against out/final.mp4
 | `--lang en` | Force the spoken language (default: detected per rush) |
 | `--look <name>` | Image style; `cutkiller looks` lists them |
 | `--broll <file>` | Cutaway footage (repeatable) |
+| `--broll-search "<query>"` | Free cutaways found online (Pexels with a key, else Wikimedia Commons PD/CC0/CC BY), credited |
 | `--draft` | Fast x264 preset for iterations |
 | `--fast` | No speech or beat analysis (assembly and zoom cuts only) |
 | `--min-score 90` | Exit code 1 if the quality score is lower (CI-friendly) |

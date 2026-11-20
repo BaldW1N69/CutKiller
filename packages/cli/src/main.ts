@@ -82,6 +82,7 @@ Profiles: short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), o
 --fast  : no speech or beat analysis (raw assembly).
 --look  : image style (presets/look/): film-print, bleach-grit, neon-80s, teal-orange, noir, clean; "cutkiller looks" describes them.
 --broll : cutaway footage (repeatable): over the speech, or a montage on the music when there is no speech.
+--broll-search : "<query>" finds free cutaways (Pexels with PEXELS_API_KEY, else Wikimedia Commons: public domain, CC0, CC BY).
 Messages in French: CUTKILLER_LANG=fr.`;
 const usage = () => tr(USAGE_EN, USAGE_FR);
 
@@ -99,6 +100,18 @@ async function targetRanges(inputs: string[], target: string | undefined, ai: bo
   if (!target) return undefined;
   const { cutdownRanges } = await import("./shorts");
   return cutdownRanges(inputs, Number(target), { ai, ...(language ? { language } : {}) });
+}
+
+/** --broll plus, with --broll-search "<query>", free footage found online (credits in <dir>/credits.txt). */
+async function withBroll(
+  broll: string[] | undefined,
+  query: string | undefined,
+  dir: string,
+): Promise<string[]> {
+  if (!query) return broll ?? [];
+  const { fetchBroll } = await import("./stock");
+  const found = await fetchBroll(query, join(dir, "broll"), { log: (m) => console.error(m) });
+  return [...(broll ?? []), ...found];
 }
 
 async function withMusic(inputs: string[], query: string | undefined, dir: string): Promise<string[]> {
@@ -135,6 +148,7 @@ async function main(argv: string[]): Promise<void> {
       ai: { type: "boolean", default: false },
       target: { type: "string" },
       port: { type: "string" },
+      "broll-search": { type: "string" },
     },
   });
   /** The profile named by -p, with the image style of --look if any. */
@@ -172,7 +186,7 @@ async function main(argv: string[]): Promise<void> {
         await profileOf(),
         out,
         !values.fast,
-        values.broll ?? [],
+        await withBroll(values.broll, values["broll-search"], dirOf(resolvePath(out))),
         values.lang,
         ranges,
       );
@@ -203,7 +217,15 @@ async function main(argv: string[]): Promise<void> {
       const video = join(dir, "final.mp4");
       const inputs = await withMusic(positionals, values.music, dir);
       const ranges = await targetRanges(inputs, values.target, values.ai, values.lang);
-      const edl = await plan(inputs, profile, edlPath, !values.fast, values.broll ?? [], values.lang, ranges);
+      const edl = await plan(
+        inputs,
+        profile,
+        edlPath,
+        !values.fast,
+        await withBroll(values.broll, values["broll-search"], dir),
+        values.lang,
+        ranges,
+      );
       await doRender(edl, edlPath, video, values.draft, true);
       const report = await check(video, profile, edlPath, {
         json: join(dir, "quality.json"),

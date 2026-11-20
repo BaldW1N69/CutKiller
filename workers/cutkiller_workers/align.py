@@ -37,12 +37,17 @@ def _model(name: str):
     from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 
     torch.set_num_threads(int(os.environ.get("CUTKILLER_THREADS", os.cpu_count() or 4)))
-    processor = Wav2Vec2Processor.from_pretrained(name)
+    try:  # a cached model loads without asking the Hub (one request per file otherwise)
+        processor = Wav2Vec2Processor.from_pretrained(name, local_files_only=True)
+        local = True
+    except OSError:
+        processor = Wav2Vec2Processor.from_pretrained(name)
+        local = False
     from .device import device
 
     # The default install ships the CPU build of PyTorch: only move when it sees CUDA.
     target = "cuda" if device() == "cuda" and torch.cuda.is_available() else "cpu"
-    model = Wav2Vec2ForCTC.from_pretrained(name).eval().to(target)
+    model = Wav2Vec2ForCTC.from_pretrained(name, local_files_only=local).eval().to(target)
     return processor, model
 
 
