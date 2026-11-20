@@ -58,6 +58,14 @@ CutKiller splits the transcript into sentences, finds the passages that open on 
 
 With `--ai`, Claude chooses the clips instead (it can move the hook to the front and drop digressions). It needs Anthropic credentials where CutKiller runs (`ANTHROPIC_API_KEY`); without them, or if the request fails, CutKiller uses the offline planner and says so.
 
+## A short version of a long video
+
+```sh
+cutkiller auto talk.mp4 music.mp3 -p long -o recap --target 60
+```
+
+`--target` keeps the strongest sentences up to that many seconds of speech, opens on the strongest hook and keeps the rest in its original order. Add `--ai` to let Claude choose them.
+
 ## Options
 
 | Option | |

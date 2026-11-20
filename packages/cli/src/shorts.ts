@@ -10,7 +10,9 @@ import { dominantLanguage, type StyleProfile, tr } from "@cutkiller/core";
 import {
   claudeShorts,
   hasAnthropicCredentials,
+  heuristicCutdown,
   heuristicShorts,
+  type Range,
   type ShortPlan,
   sentences,
 } from "@cutkiller/editorial";
@@ -116,4 +118,39 @@ export function shortsMarkdown(results: readonly ShortResult[]): string {
     ]),
   ];
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Ranges of a cut-down to `targetS` seconds (`auto --target 60`): the strongest
+ * sentences, strongest hook first. With `ai`, Claude chooses them as one clip of
+ * that length (offline fallback when unavailable).
+ */
+export async function cutdownRanges(
+  inputs: string[],
+  targetS: number,
+  opts: { ai: boolean; language?: string },
+): Promise<Range[]> {
+  const analysis = await analyzeSources(inputs, {
+    deep: true,
+    log: (m) => console.error(`… ${m}`),
+    ...(opts.language ? { language: opts.language } : {}),
+  });
+  const all = sentences(analysis.transcripts ?? {});
+  const language = dominantLanguage(analysis.transcripts);
+  const plan = opts.ai
+    ? (
+        await claudeShorts(all, {
+          count: 1,
+          minS: targetS * 0.8,
+          maxS: targetS,
+          ...(language ? { language } : {}),
+          log: (m) => console.error(`⚠ ${m}`),
+        })
+      )[0]
+    : heuristicCutdown(all, targetS, language ? { language } : {});
+  if (!plan || plan.ranges.length === 0) return [];
+  console.error(
+    `ℹ [editorial] cut-down: ${plan.sentenceIds.length} sentence(s), ${plan.durationS} s of speech (${plan.planner})`,
+  );
+  return plan.ranges;
 }

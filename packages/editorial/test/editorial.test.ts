@@ -4,6 +4,7 @@ import {
   applySelection,
   type ClaudeLike,
   claudeShorts,
+  heuristicCutdown,
   heuristicShorts,
   hookScore,
   sentences,
@@ -63,6 +64,16 @@ describe("editorial director", () => {
     const plans = heuristicShorts(s, { count: 3, minS: 2, maxS: 8 });
     const ids = plans.flatMap((p) => p.sentenceIds);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("cut-down fits the target, opens on the strongest hook, then keeps the original order", () => {
+    const s = sentences({ talk: TALK });
+    const plan = heuristicCutdown(s, 10, { language: "en" });
+    expect(plan.durationS).toBeLessThanOrEqual(10);
+    expect(plan.sentenceIds[0]).toBe(2);
+    const rest = plan.sentenceIds.slice(1);
+    expect(rest).toEqual([...rest].sort((a, b) => a - b));
+    expect(plan.sentenceIds).not.toContain(6); // « Anyway, uh, that was it. »
   });
 
   it("selection replaces the main track, in order", () => {

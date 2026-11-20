@@ -190,6 +190,50 @@ export function heuristicShorts(all: readonly Sentence[], opts: ShortsOptions = 
   return plans;
 }
 
+/**
+ * Cut-down to a target duration (a 60 s version of a 10 min video): the best
+ * sentences until the target is reached, in their original order, except the
+ * strongest hook, which opens the edit. Sentences that are mostly hesitation
+ * or shorter than three words are never picked.
+ */
+export function heuristicCutdown(
+  all: readonly Sentence[],
+  targetS: number,
+  opts: { language?: string } = {},
+): ShortPlan {
+  const scored = all
+    .map((s) => ({ s, score: hookScore(s, opts.language) }))
+    .filter(({ s }) => s.words.length >= 3);
+  const ranked = [...scored].sort((a, b) => b.score - a.score);
+  const chosen: Sentence[] = [];
+  let total = 0;
+  for (const { s } of ranked) {
+    const d = s.end - s.start;
+    if (total + d > targetS) continue;
+    chosen.push(s);
+    total += d;
+    if (total > targetS * 0.95) break;
+  }
+  const hook = ranked[0]?.s;
+  const ordered = chosen.filter((s) => s !== hook).sort((a, b) => a.id - b.id);
+  const span = hook && chosen.includes(hook) ? [hook, ...ordered] : ordered;
+  const first = span[0];
+  return {
+    title: first ? titleFrom(first.text) : "",
+    hook: first?.text ?? "",
+    sentenceIds: span.map((s) => s.id),
+    ranges: toRanges(span),
+    durationS: round1(duration(span)),
+    scores: {
+      hook: round1(first ? hookScore(first, opts.language) : 0),
+      retention: round1(span.reduce((m, s) => m + hookScore(s, opts.language), 0) / Math.max(1, span.length)),
+      clarity: 6,
+    },
+    why: `heuristic cut-down: the ${span.length} strongest sentences within ${targetS} s, strongest hook first`,
+    planner: "heuristic",
+  };
+}
+
 function titleFrom(text: string): string {
   const words = text
     .replace(/[«»"“”]/g, "")

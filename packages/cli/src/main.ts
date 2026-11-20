@@ -42,6 +42,7 @@ Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), o
 --music : « <recherche> » ajoute une musique libre trouvée sur Openverse (CC0 / CC BY), crédit dans credits.txt.
 --draft : encodage rapide (preset veryfast) pour itérer.
 --lang  : langue parlée (fr, en, es, de, it, pt, nl…) ; par défaut détectée automatiquement.
+--target: <secondes> garde seulement les phrases les plus fortes jusqu'à cette durée (version courte d'une vidéo longue) ; --ai : choisies par Claude.
 --fast  : sans analyse de la parole ni des beats (assemblage brut).
 --look  : style d'image (presets/look/) : film-print, bleach-grit (façon Fight Club), neon-80s (façon Vice City),
           teal-orange, noir, clean ; « cutkiller looks » les décrit. Le style apporte sa texture (grain, halo…).
@@ -73,6 +74,7 @@ const USAGE_EN = `cutkiller <command> [options]
 
 Profiles: short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), or a path to a .yaml.
 --lang  : spoken language (en, fr, es, de, it, pt, nl…); detected by default.
+--target: <seconds> keeps only the strongest sentences up to that length (a 60 s version of a long video); --ai: chosen by Claude.
 --music : "<query>" adds free music found on Openverse (CC0 / CC BY), credit in credits.txt.
 --draft : fast encode (veryfast preset) to iterate.
 --fast  : no speech or beat analysis (raw assembly).
@@ -90,6 +92,13 @@ function gate(report: Report, minScore: string | undefined): void {
 }
 
 /** Inputs plus, with --music "<query>", a free track found on Openverse (credit in <dir>/credits.txt). */
+/** With --target <seconds>: the editorial cut-down to keep; otherwise everything. */
+async function targetRanges(inputs: string[], target: string | undefined, ai: boolean, language?: string) {
+  if (!target) return undefined;
+  const { cutdownRanges } = await import("./shorts");
+  return cutdownRanges(inputs, Number(target), { ai, ...(language ? { language } : {}) });
+}
+
 async function withMusic(inputs: string[], query: string | undefined, dir: string): Promise<string[]> {
   if (!query) return inputs;
   const { path } = await fetchMusic(query, dir, { minDurationS: 60, log: (m) => console.error(m) });
@@ -122,6 +131,7 @@ async function main(argv: string[]): Promise<void> {
       min: { type: "string" },
       max: { type: "string" },
       ai: { type: "boolean", default: false },
+      target: { type: "string" },
     },
   });
   /** The profile named by -p, with the image style of --look if any. */
@@ -153,7 +163,16 @@ async function main(argv: string[]): Promise<void> {
     case "plan": {
       const out = need(values.out, "out");
       const inputs = await withMusic(positionals, values.music, dirOf(resolvePath(out)));
-      const edl = await plan(inputs, await profileOf(), out, !values.fast, values.broll ?? [], values.lang);
+      const ranges = await targetRanges(inputs, values.target, values.ai, values.lang);
+      const edl = await plan(
+        inputs,
+        await profileOf(),
+        out,
+        !values.fast,
+        values.broll ?? [],
+        values.lang,
+        ranges,
+      );
       console.log(`✔ ${out} : ${edl.video[0]?.clips.length ?? 0} clip(s)`);
       return;
     }
@@ -180,7 +199,8 @@ async function main(argv: string[]): Promise<void> {
       const edlPath = join(dir, "edit.edl.json");
       const video = join(dir, "final.mp4");
       const inputs = await withMusic(positionals, values.music, dir);
-      const edl = await plan(inputs, profile, edlPath, !values.fast, values.broll ?? [], values.lang);
+      const ranges = await targetRanges(inputs, values.target, values.ai, values.lang);
+      const edl = await plan(inputs, profile, edlPath, !values.fast, values.broll ?? [], values.lang, ranges);
       await doRender(edl, edlPath, video, values.draft, true);
       const report = await check(video, profile, edlPath, {
         json: join(dir, "quality.json"),
