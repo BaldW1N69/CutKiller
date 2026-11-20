@@ -67,7 +67,7 @@
               "exclusiveMinimum": 0
             },
             "preset": {
-              "default": "medium",
+              "default": "faster",
               "type": "string",
               "enum": [
                 "ultrafast",

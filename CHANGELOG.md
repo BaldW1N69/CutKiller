@@ -7,7 +7,10 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 ### Changed
 - **Transcription 2.9× faster** (60 s of speech: 73 s → 25 s on 4 CPU threads, same 146 words): the second, local Whisper pass that looked for hidden hesitations is now opt-in (`CUTKILLER_FILLER_RESCAN=1`). On 240 s of real interviews it found none the first pass had missed and took 60–70 % of the transcription time; the quality check, which re-transcribes the render, gets the same saving.
 
+- **Final renders 21 % faster** (54 s Short: 155 s → 122 s): delivery encodes use x264 `faster` instead of `medium`. At the delivery bitrate they measured the same: PSNR 37.04 vs 37.01 dB and SSIM 0.896 vs 0.893 on dense film grain (the hardest case), transparent on screen text, -0.9 dB at 54 dB on a soft interview. `veryfast` was rejected (-0.9 dB on grain). The upscale sharpening was kept: it multiplies fine detail by 5.4 (Laplacian variance), a visible effect, though it costs most of the decoding time.
+
 ### Fixed
+- **`render` then `check` reported false caption-sync errors** (99.3 % → 92.4 % on the same video): `render` only kept the dialogue stem with `--keep-stems`, so the check aligned words on the mix with music. Stems are now always kept, and `check` warns when it has to measure on the mix.
 - **Shorts and cut-downs no longer end on the first syllable of the next sentence**: the air kept after a selection (350 ms) now stops before the next word. Two of three real Shorts ended on a clipped « entre » / « mais » captioned for 1–2 frames.
 - **No more flash captions in fast speech**: a screen that would stay up less than `captions.minDurationMs` joins its neighbour, or the two are split again into readable screens (« OUI » · « ON VA VOIR » → « OUI ON » · « VA VOIR »), never across the end of a sentence.
 - Windows: Studio served every file as 404 (path check with `/`); the OTIO test expected POSIX file URLs.

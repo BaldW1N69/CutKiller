@@ -190,6 +190,15 @@ export async function check(
 ) {
   const edl = edlPath ? await readEdl(edlPath) : undefined;
   const analysis = edlPath ? await readAnalysis(edlPath) : undefined;
+  // Without the dialogue stem, word timings are measured on the mix: music and
+  // effects under the voice make the aligner place words late (false sync errors).
+  if (edl && !existsSync(`${video}.voice.wav`) && edl.audio.some((t) => t.clips.length > 0))
+    console.warn(
+      tr(
+        `⚠ ${video}.voice.wav not found: caption sync and fillers are measured on the mix with music, less reliable. Render with this version (stems are kept) and check again.`,
+        `⚠ ${video}.voice.wav introuvable : synchro des sous-titres et hésitations mesurées sur le mix avec musique, moins fiable. Refaites le rendu avec cette version (les pistes séparées sont gardées) puis vérifiez.`,
+      ),
+    );
   const t0 = performance.now();
   const report = await qualityCheck({
     video,

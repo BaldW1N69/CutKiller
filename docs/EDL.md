@@ -162,7 +162,7 @@ Les règles de mixage sont décrites ci-dessous.
   - Il est remesuré et corrigé jusqu'à ce que les deux contraintes tiennent.
   - Le plafond du rendu, à -1,5 dBTP, laisse 0,5 dB de marge à l'encodeur AAC sous la limite de livraison de -1 dBTP.
 
-`render --keep-stems` écrit `<vidéo>.voice.wav`, `.music.wav` (avec ducking), `.music-dry.wav` (même musique sans ducking) et `.sfx.wav`. La QA s'en sert pour mesurer le ducking et la synchronisation des effets.
+`render` écrit aussi `<vidéo>.voice.wav`, `.music.wav` (avec ducking), `.music-dry.wav` (même musique sans ducking) et `.sfx.wav`. La QA s'en sert pour mesurer le ducking et la synchronisation des effets.
 
 ## Traçabilité
 

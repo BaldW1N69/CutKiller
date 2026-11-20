@@ -67,7 +67,7 @@ describe("EDL validation", () => {
     if (r.ok) {
       expect(r.edl.video[0]?.clips[0]?.audioSplitFrames).toBe(0);
       expect(r.edl.output.audio.cutFadeMs).toBe(8);
-      expect(r.edl.output.video.preset).toBe("medium");
+      expect(r.edl.output.video.preset).toBe("faster");
     }
   });
 

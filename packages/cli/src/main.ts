@@ -134,7 +134,8 @@ async function main(argv: string[]): Promise<void> {
       "min-score": { type: "string" },
       draft: { type: "boolean", default: false },
       fast: { type: "boolean", default: false },
-      "keep-stems": { type: "boolean", default: false },
+      /** Accepted for compatibility: stems are always kept (the quality check needs the voice alone). */
+      "keep-stems": { type: "boolean", default: true },
       only: { type: "string" },
       against: { type: "string" },
       truth: { type: "string" },
@@ -195,13 +196,7 @@ async function main(argv: string[]): Promise<void> {
     }
     case "render": {
       const edlPath = need(positionals[0], "edl");
-      await doRender(
-        await readEdl(edlPath),
-        edlPath,
-        need(values.out, "out"),
-        values.draft,
-        values["keep-stems"],
-      );
+      await doRender(await readEdl(edlPath), edlPath, need(values.out, "out"), values.draft, true);
       return;
     }
     case "check": {
