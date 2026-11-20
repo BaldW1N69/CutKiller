@@ -1142,7 +1142,7 @@
         "voiceCleanup": {
           "default": {
             "highpassHz": 80,
-            "denoiseDb": 10
+            "denoiseDb": 0
           },
           "type": "object",
           "properties": {
@@ -1153,7 +1153,7 @@
               "maximum": 200
             },
             "denoiseDb": {
-              "default": 10,
+              "default": 0,
               "type": "number",
               "minimum": 0,
               "maximum": 40

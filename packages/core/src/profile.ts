@@ -323,15 +323,17 @@ export const StyleProfileSchema = z.object({
       .default({ thresholdLu: 4, ratio: 3, attackMs: 10, releaseMs: 150 }),
     /**
      * Dialogue cleanup before compression: a high-pass under the voice (rumble,
-     * handling noise) and adaptive spectral denoising (room hum, air conditioning).
-     * `denoiseDb` 0 turns denoising off; above ~15 dB voices start to sound processed.
+     * handling noise, on by default) and adaptive spectral denoising (room hum, air
+     * conditioning; off by default: it softens word attacks, which moved the measured
+     * caption sync by about half a frame on clean speech). Turn it on for noisy
+     * recordings; above ~15 dB voices start to sound processed.
      */
     voiceCleanup: z
       .object({
         highpassHz: z.number().nonnegative().max(200).default(80),
-        denoiseDb: z.number().min(0).max(40).default(10),
+        denoiseDb: z.number().min(0).max(40).default(0),
       })
-      .default({ highpassHz: 80, denoiseDb: 10 }),
+      .default({ highpassHz: 80, denoiseDb: 0 }),
     duck: z
       .object({
         /** How far the music goes down under speech. */
