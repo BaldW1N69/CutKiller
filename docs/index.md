@@ -17,7 +17,7 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -v cutkiller-models:/mode
 
 - **Cuts like an editor**: silences, hesitations (« um », « euh », « äh »…), false starts, at word accuracy, in 16 languages detected automatically.
 - **Finishes for the platform**: 9:16 face tracking, karaoke captions in the safe zones, -14 LUFS voice with ducked music, beat-synced cuts and punch-ins, looks.
-- **Proves it**: every render comes with `quality.md` — threshold, measurement and timecoded problems for each of the [27 rules](rules.md).
+- **Proves it**: every render comes with `quality.md` — threshold, measurement and timecoded problems for each of the [28 rules](rules.md).
 - **Works with your tools**: an editable JSON EDL, an [MCP server](agents.md) for Claude, Cursor or Codex, and [timelines](export.md) for Premiere Pro, DaVinci Resolve and Final Cut.
 
 Next: [Getting started](getting-started.md).

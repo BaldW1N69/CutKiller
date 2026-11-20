@@ -85,6 +85,37 @@ function margins(
  * than the limit, and every audio edit must keep 80–120 ms around its words
  * (unless the neighbouring sound was closer than that in the rush).
  */
+/**
+ * Hook: an independent VAD on the rendered dialogue must hear the voice within
+ * the profile's first seconds (a long silent intro loses short-form viewers).
+ */
+export async function checkHook(
+  video: string,
+  profile: StyleProfile,
+  vadOverride?: VoiceActivity,
+): Promise<CheckResult> {
+  const vad = vadOverride ?? (await runWorker<VoiceActivity>("vad", { path: voiceTrack(video) }));
+  const first = vad.speech[0]?.start;
+  if (first === undefined) return notEvaluated("montage.hook", tr("no voice heard", "aucune voix entendue"));
+  const max = profile.montage.hookMaxS;
+  return graded(
+    "montage.hook",
+    1,
+    first > max
+      ? [
+          {
+            message: tr(
+              `first word at ${first.toFixed(2)} s (max ${max} s)`,
+              `premier mot à ${first.toFixed(2)} s (max ${max} s)`,
+            ),
+            frame: 0,
+          },
+        ]
+      : [],
+    { firstWordS: Math.round(first * 100) / 100, maxS: max },
+  );
+}
+
 export async function checkSilences(
   video: string,
   edl: Edl,

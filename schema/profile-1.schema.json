@@ -460,6 +460,11 @@
           "type": "number",
           "exclusiveMinimum": 0
         },
+        "hookMaxS": {
+          "default": 2.5,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
         "wordMarginMs": {
           "default": [
             80,

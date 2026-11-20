@@ -32,7 +32,7 @@ Drop in your raw footage and a music file, get back a vertical Short with:
 - word-by-word captions inside TikTok/Reels safe zones
 - voice at -14 LUFS, music ducked under speech, cuts on the beat
 
-…and a quality report that tells you exactly what's still wrong, with timecodes (out of 27 rules).
+…and a quality report that tells you exactly what's still wrong, with timecodes (out of 28 rules).
 
 It can also pull the best 5 Shorts out of a long podcast, give you a 60 s version of a 10 min video, or let you edit by unticking sentences in a transcript. Exports to Premiere / Resolve / Final Cut if you want to finish by hand.
 
@@ -54,7 +54,7 @@ https://github.com/BaldW1N69/CutKiller
 
 ## LinkedIn (FR)
 
-J'ai publié CutKiller en open source : un monteur vidéo qui transforme des rushes bruts en Shorts, Reels ou vidéos YouTube prêts à publier, et qui **note son propre montage** sur 27 règles mesurables (son à -14 LUFS, sous-titres synchronisés à l'image près, cadrage du visage, zones sûres des plateformes…).
+J'ai publié CutKiller en open source : un monteur vidéo qui transforme des rushes bruts en Shorts, Reels ou vidéos YouTube prêts à publier, et qui **note son propre montage** sur 28 règles mesurables (son à -14 LUFS, sous-titres synchronisés à l'image près, cadrage du visage, zones sûres des plateformes…).
 
 Ce qu'il fait :
 - coupe les silences, les « euh » et les faux départs au mot près, en 16 langues ;

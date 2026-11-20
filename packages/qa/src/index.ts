@@ -22,7 +22,7 @@ import {
   checkExportFormat,
   checkSharpness,
 } from "./checks/image";
-import { checkBeatCuts, checkFillers, checkSilences, checkStaticShots } from "./checks/montage";
+import { checkBeatCuts, checkFillers, checkHook, checkSilences, checkStaticShots } from "./checks/montage";
 import {
   checkDurations,
   checkMotionBlur,
@@ -129,6 +129,7 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
       await run(() => checkCaptionSync(video, edl, profile, analysis, ctx.baseDir));
     if (hasSpeech) {
       await run(() => checkSilences(video, edl, profile, analysis));
+      await run(() => checkHook(video, profile));
       if (truth) await run(() => checkFillersTruth(truth, profile, edl.output.fps));
       else if (input.transcribeOutput !== false)
         await run(() => checkFillers(video, profile, edl.output.fps, undefined, language));

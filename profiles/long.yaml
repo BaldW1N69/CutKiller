@@ -9,6 +9,7 @@ export:
   targetBitrateFactor: 1.25
 montage:
   maxSilenceMs: 350
+  hookMaxS: 2.5
   wordMarginMs: [80, 120]
   jlCutFrames: [4, 12]
   beatToleranceFrames: 1

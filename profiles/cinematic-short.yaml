@@ -31,6 +31,7 @@ broll:
   beatsPerShot: 4
 montage:
   maxSilenceMs: 400
+  hookMaxS: 2
   wordMarginMs: [90, 140]
   jlCutFrames: [4, 12]
   beatToleranceFrames: 1

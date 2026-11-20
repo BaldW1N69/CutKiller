@@ -34,6 +34,7 @@ broll:
 montage:
   # On laisse respirer : pauses jusqu'à 0,5 s, marges de mots plus larges.
   maxSilenceMs: 500
+  hookMaxS: 5
   wordMarginMs: [100, 160]
   jlCutFrames: [4, 12]
   beatToleranceFrames: 1

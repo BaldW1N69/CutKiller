@@ -46,6 +46,15 @@ export const RULES: readonly Rule[] = [
     measuredOn: "rendu",
   },
   {
+    id: "montage.hook",
+    category: "montage",
+    titleFr: "Accroche : la voix arrive dans les premières secondes",
+    titleEn: "Hook: the voice comes in within the first seconds",
+    weight: 2,
+    phase: 2,
+    measuredOn: "rendu",
+  },
+  {
     id: "montage.beat-cuts",
     category: "montage",
     titleFr: "Coupes libres calées sur les beats (±1 frame)",
@@ -68,7 +77,7 @@ export const RULES: readonly Rule[] = [
     category: "montage",
     titleFr: "Aucun plan statique trop long",
     titleEn: "No static shot too long",
-    weight: 4,
+    weight: 3,
     phase: 2,
     measuredOn: "EDL",
   },
@@ -77,7 +86,7 @@ export const RULES: readonly Rule[] = [
     category: "montage",
     titleFr: "Punch-ins 105–115 %, jamais deux fois au même niveau",
     titleEn: "Punch-ins 105–115 %, never twice at the same level",
-    weight: 3,
+    weight: 2,
     phase: 2,
     measuredOn: "EDL",
   },
@@ -343,6 +352,8 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
         `p95 offset ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
         `écart p95 ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
       );
+    case "montage.hook":
+      return tr(`first word ≤ ${p.montage.hookMaxS} s`, `premier mot ≤ ${p.montage.hookMaxS} s`);
     case "captions.reading-time":
       return tr(
         `≥ ${p.captions.minDurationMs} ms on screen (±1 frame)`,

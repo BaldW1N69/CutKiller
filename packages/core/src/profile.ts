@@ -189,6 +189,11 @@ export const StyleProfileSchema = z.object({
     }),
   montage: z.object({
     maxSilenceMs: z.number().positive().default(350),
+    /**
+     * The hook: the voice must be heard within this many seconds of the start
+     * (viewers of short videos decide in the first seconds whether to stay).
+     */
+    hookMaxS: z.number().positive().default(2.5),
     wordMarginMs: Range.default([80, 120]),
     jlCutFrames: Range.default([4, 12]),
     /**

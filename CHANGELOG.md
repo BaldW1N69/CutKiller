@@ -27,6 +27,7 @@ Audit of the whole code for a shared-service use ([report](docs/security/AUDIT-2
 - Windows: Studio served every file as 404 (path check with `/`); the OTIO test expected POSIX file URLs.
 
 ### Added
+- **QA rule `montage.hook`** (28 rules): the voice must be heard within the profile's first seconds (Short 1 s, long 2.5 s, cinematic 5 s), measured by voice activity on the rendered dialogue. Real edits: first word at 0.13–0.19 s. Calibration: 1.5 s of silent intro is detected.
 - **L-cuts at changes of rush** (`montage.sourceChangeLCutFrames`, 6 frames by default): the next rush's picture comes in before its sound, over the end of the previous line, the classic editor's transition. The sound is unchanged sample for sample (only the picture cut moves). Never on a jump cut (lips would be out of sync), never when the edit is cut to music, only where the next rush shows no speech in those frames. On a real two-rush interview: 1 L-cut, rule `montage.jl-cuts` evaluated for the first time (100 %), score 97.3/100.
 - **QA rule `captions.reading-time`** (27 rules): each caption stays on screen at least the profile's minimum (±1 frame). It fails on the earlier Shorts (screens of 1–7 frames), passes on long-form edits.
 - **`tutorial` profile with screen zoom**: on screen recordings, a new `activity` analyzer finds where the picture changes and the camera pushes in on it (1.6×, eased 0.6 s moves, framing held ≥ 2 s, confirmed targets only), pulls back on a change of window, never leaves the picture. QA 100/100 on a synthetic screen recording.

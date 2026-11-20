@@ -236,6 +236,54 @@ export const VARIANTS: Variant[] = [
     },
   },
   {
+    id: "hook-late",
+    rule: "montage.hook",
+    expect: "fail",
+    what: "1,5 s sans voix ajoutées en tête : le premier mot arrive après le seuil du profil",
+    edl(edl, base) {
+      const first = main(edl)[0];
+      if (!first) throw new Error("variante inapplicable : piste vide");
+      const fps = edl.output.fps;
+      const ws = words(base, first.source);
+      // Word-free stretches of the same rush (head, pauses, tail), largest first,
+      // 80 ms away from any word, joined until 1.5 s of intro without voice.
+      const duration = edl.sources[first.source]?.durationS ?? 0;
+      const bounds = [0, ...ws.flatMap((w) => [w.start, w.end]), duration];
+      const gaps: [number, number][] = [];
+      for (let i = 0; i + 1 < bounds.length; i += 2) {
+        const a = (bounds[i] as number) + (i === 0 ? 0 : 0.08);
+        const b = (bounds[i + 1] as number) - (i + 2 === bounds.length ? 0.05 : 0.08);
+        if (b - a >= 0.3) gaps.push([a, b]);
+      }
+      gaps.sort((x, y) => y[1] - y[0] - (x[1] - x[0]));
+      const want = Math.round(1.5 * fps);
+      const pieces: { in: number; frames: number }[] = [];
+      let total = 0;
+      for (const [a, b] of gaps) {
+        if (total >= want) break;
+        const frames = Math.min(want - total, Math.floor((b - a) * fps));
+        pieces.push({ in: a, frames });
+        total += frames;
+      }
+      if (total < want) throw new Error("variante inapplicable : moins de 1,5 s de silence dans le rush");
+      ripple(edl, 0, total);
+      let at = 0;
+      for (const [k, piece] of pieces.entries()) {
+        const { reframe: _moving, ...still } = first;
+        edl.video[0]?.clips.push({
+          ...still,
+          id: `hook-pad-${k + 1}`,
+          in: piece.in,
+          out: piece.in + piece.frames / fps,
+          at,
+          audioSplitFrames: 0,
+          why: { kind: "selection", note: "silent intro (calibration)" },
+        });
+        at += piece.frames;
+      }
+    },
+  },
+  {
     id: "beat-cuts",
     rule: "montage.beat-cuts",
     expect: "fail",
@@ -396,14 +444,16 @@ export const VARIANTS: Variant[] = [
     id: "captions-flash",
     rule: "captions.reading-time",
     expect: "fail",
-    what: "un écran remplacé par le suivant au bout de 3 frames (débit rapide haché à chaque virgule)",
+    what: "un écran d'un mot remplacé par le suivant au bout de 3 frames (débit rapide haché à chaque virgule)",
     edl(edl) {
-      const [a, b] = edl.captions;
-      if (!a || !b) throw new Error("variante inapplicable : moins de deux sous-titres");
-      a.toFrame = a.fromFrame + 3;
-      for (const w of a.words) w.toFrame = Math.min(w.toFrame, a.toFrame);
-      a.words = a.words.filter((w) => w.fromFrame < a.toFrame);
-      if (a.words.length === 0) throw new Error("variante inapplicable : premier mot trop tardif");
+      // A one-word screen whose word is still shown whole within the 3 frames: only the
+      // time on screen changes, the word and its highlight stay where they are heard.
+      const cap = edl.captions.find(
+        (c) => c.words.length === 1 && (c.words[0]?.fromFrame ?? 0) <= c.fromFrame + 1,
+      );
+      if (!cap) throw new Error("variante inapplicable : aucun écran d'un seul mot");
+      cap.toFrame = cap.fromFrame + 3;
+      for (const w of cap.words) w.toFrame = Math.min(Math.max(w.toFrame, w.fromFrame + 1), cap.toFrame);
     },
   },
   {
