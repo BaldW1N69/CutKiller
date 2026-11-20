@@ -162,14 +162,14 @@ Objectifs volontairement hors de portée en 48 h. Chaque session de travail pren
 | # | Axe | Objectif chiffré | Aujourd'hui | État |
 |---|---|---|---|---|
 | A1 | Jugement éditorial | Vidéo longue → 10 Shorts classés par accroche et rétention prédite ; structure narrative réécrite par IA (Claude, optionnel) et vérifiée par la QA | `cutkiller shorts` (3 Shorts réels tirés d'une interview de 3 min : 97,2–97,9/100) ; `--target` (version courte) ; Claude via `--ai` (testé avec client simulé, pas de clé ici) | 🟡 avancé : reste la mesure de rétention réelle et un test avec clé API |
-| A2 | Vitesse | 60 s de rushes en < 60 s sur portable CPU, < 10 s sur GPU | ~10 min (4 cœurs) ; chronos par étape, GPU auto-détecté (non testé : pas de GPU ici), `pnpm bench` | 🟡 mesure en cours |
-| A3 | Montage de pro | J/L cuts et match cuts générés, rampes de vitesse, riser → impact, room tone, débruitage voix | Débruitage voix fait (bruit -6,1 dB, voix -0,13 dB) | 🟡 1/6 |
-| A4 | Interface | App web locale (timeline, aperçu, accepter/refuser chaque coupe) → app desktop, installeur 1 clic | CLI + MCP | ⏳ |
+| A2 | Vitesse | 60 s de rushes en < 60 s sur portable CPU, < 10 s sur GPU | Transcription 73 s / 60 s à chaud (modèle et beam déjà optimaux, mesuré) ; worker persistant : QA 178 s → 88 s (à re-mesurer à vide) ; GPU auto-détecté (non testé) | 🟡 en cours |
+| A3 | Montage de pro | J/L cuts et match cuts générés, rampes de vitesse, riser → impact, room tone, débruitage voix | Débruitage voix (bruit -6,1 dB, voix -0,13 dB), riser → impact aux changements de section | 🟡 2/6 |
+| A4 | Interface | App web locale (timeline, aperçu, accepter/refuser chaque coupe) → app desktop, installeur 1 clic | `cutkiller studio` : montage par transcription dans le navigateur (desktop + téléphone) | 🟡 v1 |
 | A5 | Benchmark public | « CutBench » : 100 rushes libres annotés, classement public des outils | `pnpm bench` (2 rushes, chronos + score par commit) | 🟡 amorcé |
 | A6 | Qualité perçue | Test à l'aveugle sur 20 vidéos : ≥ 50 % préfèrent CutKiller à un monteur humain | Jamais mesuré | ⏳ |
 | A7 | Règles QA | 50 règles : VMAF, accessibilité, rythme de rétention, accroche < 3 s | 26 | ⏳ |
-| A8 | Formats | Podcast multicam, tutoriel écran (zoom sur le curseur), vlog, gaming, pub produit | Interview, B-roll, musique | ⏳ |
+| A8 | Formats | Podcast multicam, tutoriel écran (zoom sur le curseur), vlog, gaming, pub produit | Profil `tutorial` : zoom sur la zone active de l'écran (QA 100/100 sur capture synthétique) | 🟡 1/5 |
 | A9 | Langues | 30 langues avec alignement et hésitations | 16 (en, fr testées de bout en bout ; les 9 ajoutées restent à valider sur voix réelle) | 🟡 16/30 |
-| A10 | Plateformes | CI Linux + macOS + Windows ; GPU NVIDIA et Apple Silicon testés | CI macOS + Windows ajoutée (install, doctor, montage rapide) | 🟡 en validation |
-| A11 | Intégrations | Plugins natifs Premiere / Resolve, publication YouTube / TikTok, B-roll Pexels | Export OTIO / XML | ⏳ |
-| A12 | Adoption | 10 000 étoiles, 100 contributeurs en 6 mois, listes « awesome » | 0 | ⏳ (diffusion) |
+| A10 | Plateformes | CI Linux + macOS + Windows ; GPU NVIDIA et Apple Silicon testés | Windows : la CI a trouvé un vrai bug (chemins dans les filtres FFmpeg), corrigé ; macOS bloqué tant que le dépôt est privé | 🟡 |
+| A11 | Intégrations | Plugins natifs Premiere / Resolve, publication YouTube / TikTok, B-roll Pexels | `--broll-search` (Pexels avec clé, sinon Wikimedia Commons PD/CC0/CC BY) ; `--music` (Openverse) ; export OTIO / XML | 🟡 |
+| A12 | Adoption | 10 000 étoiles, 100 contributeurs en 6 mois, listes « awesome » | Dépôt **privé** : à rendre public (historique vérifié, aucun secret) ; textes de lancement prêts (`launch/POSTS.md`) | ⏳ bloqué par la visibilité |
