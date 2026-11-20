@@ -8,6 +8,7 @@ import {
   heuristicShorts,
   hookScore,
   sentences,
+  titleFrom,
 } from "../src/index";
 
 /** A transcript built from sentences: each word lasts 0.3 s, 0.1 s apart, 1 s between sentences. */
@@ -57,6 +58,16 @@ describe("editorial director", () => {
     expect(best?.durationS).toBeLessThanOrEqual(12);
     expect(best?.ranges[0]?.start).toBeCloseTo(s[2]!.start - 0.25, 5);
     expect(best?.planner).toBe("heuristic");
+  });
+
+  it("titles end on a whole clause, never on a function word", () => {
+    expect(
+      titleFrom("En débarquant d'un bateau, on a toujours un minimum de 10 heures de repos.", "fr"),
+    ).toBe("En débarquant d'un bateau");
+    expect(titleFrom("Tu peux faire tous les bateaux.", "fr")).toBe("Tu peux faire tous les bateaux");
+    expect(
+      titleFrom("Why do most videos lose their viewers in the first three seconds of the edit?", "en"),
+    ).toBe("Why do most videos lose their viewers");
   });
 
   it("clips never share a sentence", () => {

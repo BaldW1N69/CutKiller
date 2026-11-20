@@ -173,7 +173,7 @@ export function heuristicShorts(all: readonly Sentence[], opts: ShortsOptions = 
     const span = ids.map((id) => all[id] as Sentence);
     const first = span[0] as Sentence;
     plans.push({
-      title: titleFrom(first.text),
+      title: titleFrom(first.text, language),
       hook: first.text,
       sentenceIds: ids,
       ranges: toRanges(span),
@@ -219,7 +219,7 @@ export function heuristicCutdown(
   const span = hook && chosen.includes(hook) ? [hook, ...ordered] : ordered;
   const first = span[0];
   return {
-    title: first ? titleFrom(first.text) : "",
+    title: first ? titleFrom(first.text, opts.language) : "",
     hook: first?.text ?? "",
     sentenceIds: span.map((s) => s.id),
     ranges: toRanges(span),
@@ -234,13 +234,21 @@ export function heuristicCutdown(
   };
 }
 
-function titleFrom(text: string): string {
-  const words = text
-    .replace(/[«»"“”]/g, "")
-    .split(/\s+/)
-    .slice(0, 8)
-    .join(" ");
-  return words.replace(/[,;:.…!?]+$/, "");
+/**
+ * A title from the opening sentence: its first clause when that clause is 3–10
+ * words long, otherwise its first 8 words without the function words they may
+ * end on (« … on a toujours un » → « … on a toujours »).
+ */
+export function titleFrom(text: string, language?: string): string {
+  const clean = text.replace(/[«»"“”]/g, "").trim();
+  const clause = clean.split(/[,;:—–]|\.\.\.|…/)[0]?.trim() ?? "";
+  const clauseWords = clause.split(/\s+/).filter(Boolean);
+  if (clauseWords.length >= 3 && clauseWords.length <= 10) return clause.replace(/[.!?]+$/, "");
+  const stop = new Set(lexicon(language).stopWords.map((w) => w.toLowerCase()));
+  const words = clean.split(/\s+/).slice(0, 8);
+  const bare = (w: string) => w.toLowerCase().replace(/[^\p{L}'’-]/gu, "");
+  while (words.length > 3 && stop.has(bare(words[words.length - 1] ?? ""))) words.pop();
+  return words.join(" ").replace(/[,;:.…!?]+$/, "");
 }
 
 /** Builds a plan from sentence ids chosen elsewhere (Claude), keeping only valid, in-range ids. */
