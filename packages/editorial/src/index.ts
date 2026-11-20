@@ -124,8 +124,8 @@ export function hookScore(s: Sentence, language?: string): number {
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
-/** A passage of consecutive sentences of one source, as ranges with a little air around speech. */
-function toRanges(chosen: Sentence[]): Range[] {
+/** Sentences as source ranges with a little air around speech; neighbours of one source merge. */
+export function toRanges(chosen: Sentence[]): Range[] {
   const ranges: Range[] = [];
   for (const s of chosen) {
     const start = Math.max(0, s.start - 0.25);

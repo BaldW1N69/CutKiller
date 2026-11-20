@@ -88,6 +88,9 @@ cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --md out/quality.m
 # A 60 s version of a long video: strongest sentences, strongest hook first (--ai: chosen by Claude)
 cutkiller auto talk.mp4 music.mp3 -p long -o recap --target 60
 
+# Edit by transcript in your browser: untick sentences, render, see the score
+cutkiller studio interview.mp4 music.mp3 -p short -o out   # http://localhost:4317
+
 # One long video → the 5 best Shorts, each edited, scored and ranked (--ai: Claude picks the clips)
 cutkiller shorts podcast.mp4 music.mp3 -p short -o shorts --count 5 [--ai]
 

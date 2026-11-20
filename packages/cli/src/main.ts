@@ -52,6 +52,8 @@ const USAGE_EN = `cutkiller <command> [options]
 
   auto <inputs…> -p <profile> -o <dir> [--broll b.mp4]… [--draft] [--min-score 90]
                                             analysis + edit + render + quality report, in one go
+  studio <inputs…> -p <profile> -o <dir> [--port 4317]
+                                            local web page: untick sentences in the transcript, render, see the score
   plan <inputs…> -p <profile> -o edl.json   analysis + planning → editable EDL
   render <edl.json> -o out.mp4 [--draft]    renders an EDL
   check <video> [--edl edl.json] -p <profile> [--json r.json] [--md r.md] [--min-score 90] [--truth labels.txt]
@@ -132,6 +134,7 @@ async function main(argv: string[]): Promise<void> {
       max: { type: "string" },
       ai: { type: "boolean", default: false },
       target: { type: "string" },
+      port: { type: "string" },
     },
   });
   /** The profile named by -p, with the image style of --look if any. */
@@ -257,6 +260,17 @@ async function main(argv: string[]): Promise<void> {
     case "mcp": {
       const { serveMcp } = await import("./mcp");
       await serveMcp();
+      return;
+    }
+    case "studio": {
+      const dir = need(values.out, "out");
+      const { studio } = await import("./studio");
+      await studio(await withMusic(positionals, values.music, dir), await profileOf(), {
+        dir,
+        port: Number(values.port ?? 4317),
+        ...(values.lang ? { language: values.lang } : {}),
+      });
+      await new Promise(() => {}); // serve until Ctrl+C
       return;
     }
     case "shorts": {

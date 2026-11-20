@@ -48,6 +48,14 @@ cutkiller check out/final.mp4 --edl out/edit.edl.json -p short --md out/quality.
 
 Some failures describe the input, not the edit — e.g. `image.sharpness` on a 640×360 source: the report says so instead of hiding it.
 
+## Edit by transcript (Studio)
+
+```sh
+cutkiller studio interview.mp4 music.mp3 -p short -o out
+```
+
+Open http://localhost:4317: every sentence of the rushes is listed with a checkbox. Untick what you don't want, click **Render draft**, and the edited video appears with its quality score and the rules it fails. **Render final** encodes at full quality. Your selection is saved in `out/studio.json`.
+
 ## One long video → many Shorts
 
 ```sh
