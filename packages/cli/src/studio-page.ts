@@ -35,10 +35,12 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 420px)
 .tools { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--line); align-items: center; }
 .tools input[type=search] { flex: 1; min-width: 160px; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; }
 ol { list-style: none; margin: 0; padding: 0; max-height: calc(100vh - 190px); overflow-y: auto; }
-li { display: grid; grid-template-columns: auto 64px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+li { display: grid; grid-template-columns: auto auto 56px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
 li:hover { background: var(--bg); }
 li .tc { font: 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 li.dropped .text { color: var(--drop); text-decoration: line-through; }
+li .play { border: 0; background: none; color: var(--accent); padding: 0 2px; font-size: 13px; cursor: pointer; }
+.mode { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 li.source { display: block; cursor: default; font: 600 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; background: var(--bg); }
 aside { display: grid; gap: 12px; align-content: start; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
@@ -73,6 +75,7 @@ a { color: var(--accent); }
   </section>
   <aside>
     <div class="card">
+      <div class="mode" id="mode" hidden></div>
       <video id="video" controls playsinline hidden></video>
       <div class="empty" id="novideo">Untick the sentences you don't want, then render.</div>
       <div class="status" id="status" role="status"></div>
@@ -115,6 +118,12 @@ function renderList() {
     box.id = "s" + s.id;
     box.checked = keep.has(s.id);
     box.setAttribute("aria-label", "Keep: " + s.text);
+    const play = document.createElement("button");
+    play.className = "play";
+    play.textContent = "▶";
+    play.title = "Listen to this sentence in the rush";
+    play.setAttribute("aria-label", "Listen: " + s.text);
+    play.addEventListener("click", (e) => { e.stopPropagation(); preview(s); });
     const time = document.createElement("span");
     time.className = "tc";
     time.textContent = tc(s.start);
@@ -122,7 +131,7 @@ function renderList() {
     text.className = "text";
     text.textContent = s.text;
     li.className = keep.has(s.id) ? "" : "dropped";
-    li.append(box, time, text);
+    li.append(box, play, time, text);
     const toggle = () => {
       if (keep.has(s.id)) keep.delete(s.id); else keep.add(s.id);
       box.checked = keep.has(s.id);
@@ -135,6 +144,16 @@ function renderList() {
   }
   if (!list.children.length) list.innerHTML = '<li class="empty">No sentence matches.</li>';
   stats();
+}
+
+function preview(s) {
+  const v = $("video");
+  v.src = state.sources[s.source] + "#t=" + Math.max(0, s.start - 0.2).toFixed(2) + "," + (s.end + 0.3).toFixed(2);
+  v.hidden = false;
+  $("novideo").hidden = true;
+  $("mode").hidden = false;
+  $("mode").textContent = "Rush · " + s.source + " · " + tc(s.start);
+  v.play().catch(() => {});
 }
 
 function stats() {
@@ -152,7 +171,7 @@ function show() {
   if (state.video) {
     const v = $("video");
     const src = "/files/" + state.video;
-    if (!v.src.endsWith(src)) v.src = src;
+    if (!v.src.endsWith(src) && !v.src.includes("/source/")) v.src = src;
     v.hidden = false;
     $("novideo").hidden = true;
     $("links").hidden = false;
@@ -182,7 +201,12 @@ function show() {
 async function refresh() {
   state = await (await fetch("/api/state")).json();
   show();
-  if (!state.busy && polling) { clearInterval(polling); polling = null; }
+  if (!state.busy && polling) {
+    clearInterval(polling);
+    polling = null;
+    // A render just finished: show it, not the rush being previewed.
+    if (state.video) { $("video").src = "/files/" + state.video; $("mode").hidden = false; $("mode").textContent = "Edited video"; }
+  }
 }
 
 async function render(final) {

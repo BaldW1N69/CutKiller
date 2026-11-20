@@ -10,7 +10,7 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { analyzeSources } from "@cutkiller/analyze";
 import { type StyleProfile, tr } from "@cutkiller/core";
 import { type Sentence, sentences, toRanges } from "@cutkiller/editorial";
@@ -26,6 +26,8 @@ export interface StudioOptions {
 
 interface StudioState {
   sentences: Pick<Sentence, "id" | "source" | "start" | "end" | "text">[];
+  /** Source id → URL of the rush, to listen to a sentence before choosing. */
+  sources: Record<string, string>;
   keep: number[];
   video?: string;
   report?: { score: number; coverage: number; failed: { id: string; title: string; first?: string }[] };
@@ -54,6 +56,9 @@ export async function studio(inputs: string[], profile: StyleProfile, opts: Stud
     : {};
   const state: StudioState = {
     sentences: all.map(({ id, source, start, end, text }) => ({ id, source, start, end, text })),
+    sources: Object.fromEntries(
+      Object.keys(analysis.sources).map((id) => [id, `/source/${encodeURIComponent(id)}`]),
+    ),
     keep: saved.keep ?? all.map((s) => s.id),
     ...(saved.video ? { video: saved.video } : {}),
     ...(saved.report ? { report: saved.report } : {}),
@@ -130,6 +135,12 @@ export async function studio(inputs: string[], profile: StyleProfile, opts: Stud
       }
       if (req.method === "GET" && url.pathname.startsWith("/files/"))
         return serveFile(req, res, resolve(opts.dir), decodeURIComponent(url.pathname.slice(7)));
+      if (req.method === "GET" && url.pathname.startsWith("/source/")) {
+        // Only the rushes of this session, by id: no arbitrary path from the URL.
+        const probe = analysis.sources[decodeURIComponent(url.pathname.slice(8))];
+        if (!probe) return send(res, 404, "not found", "text/plain");
+        return serveFile(req, res, dirname(probe.path), basename(probe.path));
+      }
       return send(res, 404, "not found", "text/plain");
     } catch (err) {
       return send(res, 500, JSON.stringify({ error: (err as Error).message }), "application/json");

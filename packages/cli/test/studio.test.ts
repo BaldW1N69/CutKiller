@@ -56,6 +56,10 @@ describe("Studio (edit by transcript)", () => {
     }, 300_000);
     expect(state.sentences.length).toBeGreaterThan(3);
     expect(await (await fetch(base)).text()).toContain("CutKiller Studio");
+    // Each sentence can be heard in its rush: the source is served by id, with Range.
+    const rush = await fetch(`${base}/source/speech-en`, { headers: { Range: "bytes=0-9" } });
+    expect(rush.status).toBe(206);
+    expect((await fetch(`${base}/source/unknown`)).status).toBe(404);
 
     // Keep every sentence but the first.
     const keep = state.sentences.slice(1).map((s) => s.id);
