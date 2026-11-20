@@ -1,0 +1,48 @@
+name: Platforms
+
+# Installs CutKiller from source on macOS and Windows, checks the installation
+# and runs a real (fast) edit: proof that it works beyond Linux. The full test
+# suite, with the speech models, runs on Linux in ci.yml.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - name: FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: astral-sh/setup-uv@v6
+      - name: Python workers
+        working-directory: workers
+        run: uv sync --locked
+      - run: pnpm typecheck
+      - name: Doctor
+        run: pnpm cutkiller doctor
+      - name: Fast edit (no speech models)
+        shell: bash
+        run: |
+          ffmpeg -v error -f lavfi -i testsrc2=size=1080x1920:rate=30:duration=6 -f lavfi -i sine=frequency=440:duration=6 -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac clip.mp4
+          pnpm cutkiller auto clip.mp4 -p short -o out --fast --draft --min-score 80
+          ls -l out
+      - name: Unit tests without media models
+        run: pnpm vitest run packages/editorial packages/interchange packages/core packages/style packages/cli/test/music.test.ts
