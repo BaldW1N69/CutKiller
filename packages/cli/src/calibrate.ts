@@ -393,6 +393,20 @@ export const VARIANTS: Variant[] = [
     },
   },
   {
+    id: "captions-flash",
+    rule: "captions.reading-time",
+    expect: "fail",
+    what: "un écran remplacé par le suivant au bout de 3 frames (débit rapide haché à chaque virgule)",
+    edl(edl) {
+      const [a, b] = edl.captions;
+      if (!a || !b) throw new Error("variante inapplicable : moins de deux sous-titres");
+      a.toFrame = a.fromFrame + 3;
+      for (const w of a.words) w.toFrame = Math.min(w.toFrame, a.toFrame);
+      a.words = a.words.filter((w) => w.fromFrame < a.toFrame);
+      if (a.words.length === 0) throw new Error("variante inapplicable : premier mot trop tardif");
+    },
+  },
+  {
     id: "safe-zones-clamped",
     rule: "captions.safe-zones",
     expect: "pass",

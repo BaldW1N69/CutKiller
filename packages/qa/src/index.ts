@@ -10,6 +10,7 @@ import { checkCutClicks, checkDucking, checkLoudness, checkSfxSync } from "./che
 import {
   checkCaptionContrast,
   checkCaptionDensity,
+  checkCaptionReadingTime,
   checkCaptionSync,
   checkSafeZones,
 } from "./checks/captions";
@@ -119,6 +120,7 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
     await run(() => checkColor(video, edl, profile));
     await run(() => checkSharpness(edl, profile));
     await run(() => checkCaptionDensity(edl, profile));
+    await run(() => checkCaptionReadingTime(edl, profile));
     await run(() => checkSafeZones(edl, profile, registry));
     await run(() => checkCaptionContrast(video, edl, profile, registry));
     const truth = input.truth;

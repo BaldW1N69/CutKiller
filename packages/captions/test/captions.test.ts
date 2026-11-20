@@ -140,6 +140,21 @@ describe("découpage", () => {
     expect(caps.map((c) => c.words.map((w) => w.text).join(" "))).toEqual(["IL FAUT PARTIR", "DE LA BASE"]);
   });
 
+  it("court : en débit rapide, aucun écran ne reste moins de 300 ms (il rejoint un voisin)", () => {
+    // 0,22 s par mot : sans fusion, « OUI » puis « BON » ne restaient que 7 frames.
+    const words = speech(["Oui,", "on", "va", "voir.", "Bon,", "tout", "va", "bien"], [], 0.12);
+    const { edl, analysis } = edlWith(words, "short");
+    const style = captionStyle(registry, "karaoke-pop@1");
+    const caps = buildCaptions(timelineWords(edl, analysis.transcripts), style, "k@1", short, 30, 200);
+    expect(caps.map((c) => c.words.map((w) => w.text).join(" "))).toEqual([
+      "OUI ON",
+      "VA VOIR",
+      "BON TOUT",
+      "VA BIEN",
+    ]);
+    for (const c of caps) expect(c.toFrame - c.fromFrame).toBeGreaterThanOrEqual(9);
+  });
+
   it("long : deux lignes de 32 caractères au plus, équilibrées, sans mot-outil en fin de ligne", () => {
     const stop = new Set(long.motion.stopWords);
     const ws = "les pêcheurs partent tôt le matin vers la grande baie"

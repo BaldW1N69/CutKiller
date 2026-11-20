@@ -113,6 +113,40 @@ export async function checkCaptionSync(
   });
 }
 
+/**
+ * Time on screen: each caption must stay up at least the profile's minimum
+ * (captions.minDurationMs) before the next one replaces it or the video ends.
+ * Flash screens come from fast speech chopped at every comma, or from an edit
+ * ending on the first syllable of a word. Tolerance: one frame.
+ */
+export function checkCaptionReadingTime(edl: Edl, profile: StyleProfile): CheckResult {
+  if (edl.captions.length === 0)
+    return notEvaluated("captions.reading-time", tr("no captions", "aucun sous-titre"));
+  const fps = edl.output.fps;
+  const minFrames = Math.round((profile.captions.minDurationMs / 1000) * fps);
+  const shown = edl.captions.map((c) => c.toFrame - c.fromFrame);
+  const violations: Violation[] = edl.captions.flatMap((c, i) =>
+    (shown[i] as number) < minFrames - 1
+      ? [
+          {
+            message: tr(
+              `${c.id}: « ${c.words.map((w) => w.text).join(" ")} » on screen ${shown[i]} frame(s), under ${minFrames}`,
+              `${c.id} : « ${c.words.map((w) => w.text).join(" ")} » à l'écran ${shown[i]} frame(s), moins de ${minFrames}`,
+            ),
+            frame: c.fromFrame,
+          },
+        ]
+      : [],
+  );
+  const sorted = [...shown].sort((a, b) => a - b);
+  return graded("captions.reading-time", edl.captions.length, violations, {
+    captions: edl.captions.length,
+    minFrames,
+    shortestFrames: sorted[0],
+    medianFrames: sorted[Math.floor((sorted.length - 1) / 2)],
+  });
+}
+
 /** Words per screen (short form), lines and characters per line. */
 export function checkCaptionDensity(edl: Edl, profile: StyleProfile): CheckResult {
   const c = profile.captions;

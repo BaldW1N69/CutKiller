@@ -124,12 +124,30 @@ export function hookScore(s: Sentence, language?: string): number {
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
-/** Sentences as source ranges with a little air around speech; neighbours of one source merge. */
-export function toRanges(chosen: Sentence[]): Range[] {
+/** Air kept before and after the speech of a selection, when the neighbours leave room. */
+const LEAD_S = 0.25;
+const TAIL_S = 0.35;
+/** Distance kept from a neighbouring word that is not selected (half the gap if tighter). */
+const GUARD_S = 0.04;
+
+/**
+ * Sentences as source ranges with a little air around speech; neighbours of one
+ * source merge. With `all` (every sentence of the rushes), the air stops short of
+ * the words that are not selected: in fast speech, a fixed 350 ms tail kept the
+ * first syllable of the next sentence, clipped at the very end of the edit.
+ */
+export function toRanges(chosen: Sentence[], all: readonly Sentence[] = chosen): Range[] {
   const ranges: Range[] = [];
   for (const s of chosen) {
-    const start = Math.max(0, s.start - 0.25);
-    const end = s.end + 0.35;
+    let prevEnd = Number.NEGATIVE_INFINITY;
+    let nextStart = Number.POSITIVE_INFINITY;
+    for (const o of all) {
+      if (o.source !== s.source || o === s || o.id === s.id) continue;
+      if (o.end <= s.start + 1e-3) prevEnd = Math.max(prevEnd, o.end);
+      if (o.start >= s.end - 1e-3) nextStart = Math.min(nextStart, o.start);
+    }
+    const start = Math.max(0, s.start - LEAD_S, prevEnd + Math.min(GUARD_S, (s.start - prevEnd) / 2));
+    const end = Math.min(s.end + TAIL_S, nextStart - Math.min(GUARD_S, (nextStart - s.end) / 2));
     const last = ranges[ranges.length - 1];
     if (last && last.source === s.source && start - last.end < 1.5) last.end = Math.max(last.end, end);
     else ranges.push({ source: s.source, start, end });
@@ -176,7 +194,7 @@ export function heuristicShorts(all: readonly Sentence[], opts: ShortsOptions = 
       title: titleFrom(first.text, language),
       hook: first.text,
       sentenceIds: ids,
-      ranges: toRanges(span),
+      ranges: toRanges(span, all),
       durationS: round1(duration(span)),
       scores: {
         hook: round1(c.hook),
@@ -222,7 +240,7 @@ export function heuristicCutdown(
     title: first ? titleFrom(first.text, opts.language) : "",
     hook: first?.text ?? "",
     sentenceIds: span.map((s) => s.id),
-    ranges: toRanges(span),
+    ranges: toRanges(span, all),
     durationS: round1(duration(span)),
     scores: {
       hook: round1(first ? hookScore(first, opts.language) : 0),
@@ -268,7 +286,7 @@ export function planFromIds(
     title: pick.title,
     hook: pick.hook,
     sentenceIds: ids,
-    ranges: toRanges(span),
+    ranges: toRanges(span, all),
     durationS: round1(d),
     scores: pick.scores,
     why: pick.why,

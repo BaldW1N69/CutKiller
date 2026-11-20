@@ -49,6 +49,10 @@ Same machine (4 CPU threads, no GPU), 60 s French interview.
 
 Decision: keep `large-v3-turbo` with beam 5. Greedy decoding drops words on real speech, and the small model is not faster once the alignment it shares with the large one is counted. Speed has to come from elsewhere.
 
+**Per stage** (same rush, warm models, idle machine, two runs): Whisper 16–19 s, forced alignment 7 s, **filler rescan 40–56 s**. The rescan re-transcribes a window around every word that lasts longer than its letters explain (36 windows on this rush, 102 on the 180 s one), hoping Whisper writes a hidden « euh » in a short context. On 240 s of real interviews and the synthetic fixture it found **no** hesitation the first pass had missed: the disfluent prompt already makes Whisper write them. It is now opt-in (`CUTKILLER_FILLER_RESCAN=1`). Transcription of the 60 s rush: **73 s → 24–26 s**, same 146 words. Caveat: one French speaker; a speaker whose hesitations Whisper smooths over may still benefit from it.
+
+**Whole Short from the 60 s rush** (`cutkiller auto`, short profile, cold cache, models loaded once): 321 s = analysis 51 s (transcription 43 s with model loading and language detection) + render 160 s (1,613 frames at 10.8 fps) + quality check 109 s. Score 97.8/100, unchanged. Next lever: the render.
+
 **Model loading**: 9.2 s per Python process (Whisper 3.4 s, aligner 4.9 s, partly spent asking the Hugging Face Hub about files already cached). A run starts about ten worker processes. Now: one persistent worker per run, and cached models load offline (7.7 s per cold load). Measured on the quality check of a 54 s Short, two runs each on an idle machine: 99 / 94 s with one process per task, 90 / 89 s with the persistent worker, **7 % faster**. A first measurement (178 → 88 s) was wrong: another job was running during the one-process run.
 
 **Quality check** of a 54 s Short (96 s in total), slowest rules: duplicate frames 28.6 s, caption sync 19.1 s, fillers (re-transcription) 15.4 s, reframing 13.2 s. Next candidates: a lower decode resolution for duplicate frames (needs recalibrating the rule), reusing the analysis transcript for fillers.

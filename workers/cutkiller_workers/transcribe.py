@@ -83,7 +83,7 @@ def transcribe(request: dict[str, Any]) -> dict[str, Any]:
     words = merge_apostrophes(words)
     if request.get("align", True) and languages.get(language).aligner and words:
         words = align_words(path, words, language=language)
-        if request.get("fillerRescan", True):
+        if request.get("fillerRescan", _rescan_default()):
             words = rescan_fillers(path, words, model, prompt, language)
     return {
         "language": language,
@@ -94,6 +94,13 @@ def transcribe(request: dict[str, Any]) -> dict[str, Any]:
 
 
 FILLERS = languages.LANGUAGES["fr"].fillers
+
+
+def _rescan_default() -> bool:
+    """Off unless CUTKILLER_FILLER_RESCAN=1: measured on 240 s of real interviews,
+    the second pass found no hesitation the first one had missed (the disfluent
+    prompt already writes them) and took 60-70 % of the transcription time."""
+    return os.environ.get("CUTKILLER_FILLER_RESCAN", "").strip() in ("1", "true", "yes")
 
 
 def detect_language(model: Any, audio: np.ndarray) -> str:
@@ -144,6 +151,7 @@ def _windows(
 
 BATCH_S = 28.0
 GAP_S = 1.0
+RESCAN_BEAM = 5
 
 
 def rescan_fillers(
@@ -183,7 +191,7 @@ def rescan_fillers(
             word_timestamps=True,
             vad_filter=False,
             initial_prompt=prompt,
-            beam_size=5,
+            beam_size=RESCAN_BEAM,
         )
         heard = merge_apostrophes(
             [

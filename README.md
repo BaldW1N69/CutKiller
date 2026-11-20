@@ -115,7 +115,7 @@ cutkiller reference reference.mp4 --against out/final.mp4
 
 ```
 rushes ─► analyze ─► plan passes (pure EDL → EDL) ─► render ─► quality-check
-          Whisper     cut → broll → reframe → color    FFmpeg      26 rules,
+          Whisper     cut → broll → reframe → color    FFmpeg      27 rules,
           CTC align   → motion → captions → audio      + Cairo     score /100
           VAD, beats,
           faces, skin
@@ -127,7 +127,7 @@ rushes ─► analyze ─► plan passes (pure EDL → EDL) ─► render ─►
 | EDL | `@cutkiller/core` | Schema, validator, integer frame times ([reference](docs/EDL.md), [JSON Schema](schema/edl-1.schema.json)) |
 | Planning | `cut`, `broll`, `reframe`, `color`, `motion`, `captions`, `audio` | Pure `EDL → EDL` passes in a fixed order |
 | Render | `@cutkiller/render` | Per-clip FFmpeg decode, 3D LUT grading, Cairo compositor (animations, motion blur, captions), CFR encode; stem mix with EBU R128 loudness and limiter |
-| QA | `@cutkiller/qa` | 26 rules, each measured on the render, the EDL or the render log |
+| QA | `@cutkiller/qa` | 27 rules, each measured on the render, the EDL or the render log |
 
 ## Development
 

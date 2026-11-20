@@ -131,7 +131,7 @@ export const RULES: readonly Rule[] = [
     category: "captions",
     titleFr: "Sous-titres synchronisés au mot",
     titleEn: "Captions synced to the word",
-    weight: 7,
+    weight: 6,
     phase: 4,
     measuredOn: "rendu",
   },
@@ -140,7 +140,16 @@ export const RULES: readonly Rule[] = [
     category: "captions",
     titleFr: "Mots par écran / lignes / caractères",
     titleEn: "Words per screen / lines / characters",
-    weight: 4,
+    weight: 3,
+    phase: 4,
+    measuredOn: "EDL",
+  },
+  {
+    id: "captions.reading-time",
+    category: "captions",
+    titleFr: "Chaque sous-titre reste à l'écran le temps d'être lu",
+    titleEn: "Every caption stays on screen long enough to be read",
+    weight: 3,
     phase: 4,
     measuredOn: "EDL",
   },
@@ -149,7 +158,7 @@ export const RULES: readonly Rule[] = [
     category: "captions",
     titleFr: "Safe zones des plateformes respectées",
     titleEn: "Platform safe zones respected",
-    weight: 5,
+    weight: 4,
     phase: 4,
     measuredOn: "EDL",
   },
@@ -333,6 +342,11 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
       return tr(
         `p95 offset ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
         `écart p95 ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
+      );
+    case "captions.reading-time":
+      return tr(
+        `≥ ${p.captions.minDurationMs} ms on screen (±1 frame)`,
+        `≥ ${p.captions.minDurationMs} ms à l'écran (±1 frame)`,
       );
     case "captions.density":
       return p.captions.wordsPerScreen

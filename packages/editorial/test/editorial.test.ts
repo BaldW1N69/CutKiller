@@ -9,6 +9,7 @@ import {
   hookScore,
   sentences,
   titleFrom,
+  toRanges,
 } from "../src/index";
 
 /** A transcript built from sentences: each word lasts 0.3 s, 0.1 s apart, 1 s between sentences. */
@@ -177,5 +178,38 @@ describe("Claude as editorial director", () => {
   it("falls back when the answer has no usable clip", async () => {
     const plans = await claudeShorts(s, { client: fakeClient({ shorts: [] }), count: 1, minS: 5, maxS: 12 });
     expect(plans[0]?.planner).toBe("heuristic");
+  });
+});
+
+describe("toRanges", () => {
+  const word = (text: string, start: number, end: number) => ({
+    text,
+    start,
+    end,
+    timing: "forced" as const,
+  });
+  const sentence = (id: number, start: number, end: number, text: string) => ({
+    id,
+    source: "a",
+    start,
+    end,
+    text,
+    words: [word(text, start, end)],
+  });
+  // Fast speech: the next sentence starts 50 ms after the chosen one.
+  const all = [
+    sentence(0, 0, 1.9, "Before."),
+    sentence(1, 2.0, 5.0, "Chosen."),
+    sentence(2, 5.05, 6, "After."),
+  ];
+
+  it("keeps air around speech when the neighbours leave room", () => {
+    expect(toRanges([sentence(0, 1, 2, "Alone.")])).toEqual([{ source: "a", start: 0.75, end: 2.35 }]);
+  });
+
+  it("never keeps the first syllable of the next sentence, nor the tail of the previous one", () => {
+    const [r] = toRanges([all[1] as (typeof all)[number]], all);
+    expect(r?.start).toBeCloseTo(1.94, 5);
+    expect(r?.end).toBeCloseTo(5.025, 5);
   });
 });

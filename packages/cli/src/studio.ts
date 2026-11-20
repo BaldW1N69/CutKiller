@@ -81,7 +81,7 @@ export async function studio(inputs: string[], profile: StyleProfile, opts: Stud
       );
     const edlPath = join(opts.dir, "edit.edl.json");
     const video = join(opts.dir, "final.mp4");
-    const edl = await plan(inputs, profile, edlPath, true, [], opts.language, toRanges(kept));
+    const edl = await plan(inputs, profile, edlPath, true, [], opts.language, toRanges(kept, all));
     await doRender(edl, edlPath, video, draft, true);
     const report: Report = await check(video, profile, edlPath, {
       json: join(opts.dir, "quality.json"),
