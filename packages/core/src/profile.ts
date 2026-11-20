@@ -191,6 +191,14 @@ export const StyleProfileSchema = z.object({
     maxSilenceMs: z.number().positive().default(350),
     wordMarginMs: Range.default([80, 120]),
     jlCutFrames: Range.default([4, 12]),
+    /**
+     * L-cut at each change of rush on the main track: the picture of the next rush
+     * comes in this many frames before its sound, over the end of the previous
+     * line (0 = off). Never on a jump cut (same rush: lips would be out of sync),
+     * never on a music-cut edit (the picture cut stays on the beat), only where the
+     * next rush shows no speech in those frames.
+     */
+    sourceChangeLCutFrames: z.number().int().nonnegative().default(6),
     beatToleranceFrames: z.number().int().nonnegative().default(1),
     maxStaticShotS: z.number().positive(),
     punchInScale: Range.default([1.05, 1.15]),

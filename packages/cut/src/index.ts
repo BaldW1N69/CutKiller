@@ -118,6 +118,7 @@ export const cutPass: Pass = {
       removedS += clip.out - clip.in - kept;
     }
 
+    const lCuts = sourceChangeLCuts(clips, edl, ctx, fps, beats.length > 0);
     const totalS = framesToSeconds(at, fps);
     const audio = edl.audio.map((track) => ({
       ...track,
@@ -138,8 +139,8 @@ export const cutPass: Pass = {
       level: "info",
       code: "cut.summary",
       message: tr(
-        `${removedFillers} hesitation(s) and ${removedRepeats} false-start word(s) removed, ${removedS.toFixed(1)} s cut, ${clips.length} shot(s)`,
-        `${removedFillers} hésitation(s) et ${removedRepeats} mot(s) de faux départ retirés, ${removedS.toFixed(1)} s coupées, ${clips.length} plan(s)`,
+        `${removedFillers} hesitation(s) and ${removedRepeats} false-start word(s) removed, ${removedS.toFixed(1)} s cut, ${clips.length} shot(s)${lCuts ? `, ${lCuts} L-cut(s)` : ""}`,
+        `${removedFillers} hésitation(s) et ${removedRepeats} mot(s) de faux départ retirés, ${removedS.toFixed(1)} s coupées, ${clips.length} plan(s)${lCuts ? `, ${lCuts} L-cut(s)` : ""}`,
       ),
     });
     return {
@@ -148,3 +149,50 @@ export const cutPass: Pass = {
     };
   },
 };
+
+type ClipInput = EdlInput["video"][number]["clips"][number];
+const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
+
+/**
+ * L-cuts where the main track changes rush: the picture cut moves `n` frames
+ * earlier while the sound edit stays where it was (`audioSplitFrames = n`), so the
+ * end of the previous line plays over the first frames of the next rush. The
+ * audio is unchanged sample for sample; only the picture changes. Applied only
+ * when the next rush has no word in the `n` frames it now shows earlier (else
+ * lips would move without sound), the previous shot keeps its minimum length,
+ * and the edit is not cut to music. Returns how many were made.
+ */
+export function sourceChangeLCuts(
+  clips: ClipInput[],
+  edl: Edl,
+  ctx: PassContext,
+  fps: number,
+  cutToMusic: boolean,
+): number {
+  const wanted = ctx.profile.montage.sourceChangeLCutFrames;
+  const [min, max] = ctx.profile.montage.jlCutFrames;
+  if (wanted <= 0 || cutToMusic) return 0;
+  const minShot = Math.round(ctx.profile.montage.minShotS * fps);
+  const frames = (c: ClipInput) => Math.round((c.out - c.in) * fps);
+  let made = 0;
+  for (let k = 1; k < clips.length; k++) {
+    const prev = clips[k - 1] as ClipInput;
+    const cur = clips[k] as ClipInput;
+    if (prev.source === cur.source || edl.sources[cur.source]?.still) continue;
+    if ((prev.at ?? 0) + frames(prev) !== cur.at || cur.audioSplitFrames || prev.audioSplitFrames) continue;
+    const words = ctx.analysis.transcripts?.[cur.source]?.words ?? [];
+    for (let n = Math.min(wanted, max); n >= min; n--) {
+      const t = n / fps;
+      const earlier = cur.in - t;
+      if (earlier < 0 || frames(prev) - n < minShot) continue;
+      if (words.some((w) => w.end > earlier && w.start < cur.in)) continue;
+      prev.out = round6(prev.out - t);
+      cur.in = round6(earlier);
+      cur.at = (cur.at ?? 0) - n;
+      cur.audioSplitFrames = n;
+      made++;
+      break;
+    }
+  }
+  return made;
+}

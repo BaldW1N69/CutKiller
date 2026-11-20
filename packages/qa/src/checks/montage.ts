@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { runWorker } from "@cutkiller/analyze";
 import {
   type Analysis,
+  type AudioSpan,
   clipEnd,
   type Edl,
   mainAudioSpans,
@@ -46,7 +47,20 @@ function tokensOf(source: string, analysis: Analysis | undefined, profile: Style
  * A clip's speech margins and how far each could grow before touching the
  * neighbouring sound of the rush (10 ms guard, as the planner uses).
  */
-function margins(clip: VideoClip, analysis: Analysis | undefined, profile: StyleProfile) {
+/**
+ * Air around a clip's words at its audio edits: a J/L cut moves the sound edit
+ * away from the picture cut by `audioSplitFrames`, the margins follow the sound.
+ */
+function margins(
+  clip: VideoClip,
+  analysis: Analysis | undefined,
+  profile: StyleProfile,
+  spans: readonly AudioSpan[],
+  fps: number,
+) {
+  const span = spans.find((s) => s.clip.id === clip.id);
+  const audioIn = clip.in + (span ? span.startFrame - clip.at : 0) / fps;
+  const audioOut = clip.out + (span ? span.endFrame - clipEnd(clip, fps) : 0) / fps;
   const ids = clip.why?.wordIds ?? [];
   const tokens = tokensOf(clip.source, analysis, profile);
   const firstIdx = tokens.findIndex((t) => t.id === ids[0]);
@@ -59,8 +73,8 @@ function margins(clip: VideoClip, analysis: Analysis | undefined, profile: Style
   return {
     first,
     last,
-    head: first.start - clip.in,
-    tail: clip.out - last.end,
+    head: first.start - audioIn,
+    tail: audioOut - last.end,
     headRoom: prev ? first.start - prev.end - 0.01 : Number.POSITIVE_INFINITY,
     tailRoom: next ? next.start - last.end - 0.01 : Number.POSITIVE_INFINITY,
   };
@@ -94,8 +108,9 @@ export async function checkSilences(
   }
   const [lo, hi] = profile.montage.wordMarginMs;
   const tol = 1; // ms, rounding of the EDL
-  for (const span of mainAudioSpans(edl)) {
-    const m = margins(span.clip, analysis, profile);
+  const spans = mainAudioSpans(edl);
+  for (const span of spans) {
+    const m = margins(span.clip, analysis, profile, spans, fps);
     if (!m) continue;
     if (span.cutAtStart) {
       items++;
@@ -182,8 +197,8 @@ export function checkBeatCuts(edl: Edl, profile: StyleProfile, analysis: Analysi
       // which may have been split by zoom cuts.
       let j = k - 1;
       while (j > 0 && (spans[j] as { continuesPrev: boolean }).continuesPrev) j--;
-      const head = margins(clips[j] as VideoClip, analysis, profile);
-      const tail = margins(prev, analysis, profile);
+      const head = margins(clips[j] as VideoClip, analysis, profile, spans, fps);
+      const tail = margins(prev, analysis, profile, spans, fps);
       if (!head || !tail) continue;
       // Same reachable range as the planner: the run starts where it starts on the
       // timeline, its length spans its words plus the smallest to largest margins,

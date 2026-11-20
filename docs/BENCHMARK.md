@@ -67,6 +67,11 @@ Decision: keep `large-v3-turbo` with beam 5. Greedy decoding drops words on real
 
 Decision: `faster` for delivery (equal on the hardest case), `veryfast` stays for drafts. Whole render 155 s → 122 s. The decoder's cost is the contrast-adaptive sharpening after upscaling (6× the cost of the resize alone): it multiplies fine detail by 5.4 (Laplacian variance 1.84 → 10.0), sharpening before the resize only reaches 2.6, so it stays.
 
+**Tried on the quality check, and rejected** (same Short, standalone `check`, idle machine):
+- Running the checks that wait on the Python worker (alignment, re-transcription, faces) alongside those that decode with FFmpeg: **172 s instead of 92.5 s**. On 4 cores both sides use every thread and slow each other down. Same score, so the order is safe, but sequential is faster here.
+- Measuring repeated frames in FFmpeg (`tblend` + `signalstats`) instead of JavaScript: 47 s against 12 s.
+- Comparing source frames before sharpening: 18.8 s → 9.5 s, but 5 of 1,613 repeat decisions change. Not worth altering a calibrated rule for 10 % of the check.
+
 **Same Short after these changes**: render 121 s, quality check 89 s (was 109 s, the check re-transcribes the render), score 97.9/100. With the 51 s cold analysis: about 261 s instead of 321 s.
 
 **Model loading**: 9.2 s per Python process (Whisper 3.4 s, aligner 4.9 s, partly spent asking the Hugging Face Hub about files already cached). A run starts about ten worker processes. Now: one persistent worker per run, and cached models load offline (7.7 s per cold load). Measured on the quality check of a 54 s Short, two runs each on an idle machine: 99 / 94 s with one process per task, 90 / 89 s with the persistent worker, **7 % faster**. A first measurement (178 → 88 s) was wrong: another job was running during the one-process run.

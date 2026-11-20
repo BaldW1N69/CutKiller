@@ -496,6 +496,12 @@
           "minItems": 2,
           "maxItems": 2
         },
+        "sourceChangeLCutFrames": {
+          "default": 6,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
         "beatToleranceFrames": {
           "default": 1,
           "type": "integer",

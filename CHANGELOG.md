@@ -10,12 +10,14 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 - **Final renders 21 % faster** (54 s Short: 155 s → 122 s): delivery encodes use x264 `faster` instead of `medium`. At the delivery bitrate they measured the same: PSNR 37.04 vs 37.01 dB and SSIM 0.896 vs 0.893 on dense film grain (the hardest case), transparent on screen text, -0.9 dB at 54 dB on a soft interview. `veryfast` was rejected (-0.9 dB on grain). The upscale sharpening was kept: it multiplies fine detail by 5.4 (Laplacian variance), a visible effect, though it costs most of the decoding time.
 
 ### Fixed
+- Captions and the margin checks now follow the sound, not the picture: a J/L cut written by hand in the EDL put the words under the neighbouring shot at the wrong time.
 - **`render` then `check` reported false caption-sync errors** (99.3 % → 92.4 % on the same video): `render` only kept the dialogue stem with `--keep-stems`, so the check aligned words on the mix with music. Stems are now always kept, and `check` warns when it has to measure on the mix.
 - **Shorts and cut-downs no longer end on the first syllable of the next sentence**: the air kept after a selection (350 ms) now stops before the next word. Two of three real Shorts ended on a clipped « entre » / « mais » captioned for 1–2 frames.
 - **No more flash captions in fast speech**: a screen that would stay up less than `captions.minDurationMs` joins its neighbour, or the two are split again into readable screens (« OUI » · « ON VA VOIR » → « OUI ON » · « VA VOIR »), never across the end of a sentence.
 - Windows: Studio served every file as 404 (path check with `/`); the OTIO test expected POSIX file URLs.
 
 ### Added
+- **L-cuts at changes of rush** (`montage.sourceChangeLCutFrames`, 6 frames by default): the next rush's picture comes in before its sound, over the end of the previous line, the classic editor's transition. The sound is unchanged sample for sample (only the picture cut moves). Never on a jump cut (lips would be out of sync), never when the edit is cut to music, only where the next rush shows no speech in those frames. On a real two-rush interview: 1 L-cut, rule `montage.jl-cuts` evaluated for the first time (100 %), score 97.3/100.
 - **QA rule `captions.reading-time`** (27 rules): each caption stays on screen at least the profile's minimum (±1 frame). It fails on the earlier Shorts (screens of 1–7 frames), passes on long-form edits.
 - **`tutorial` profile with screen zoom**: on screen recordings, a new `activity` analyzer finds where the picture changes and the camera pushes in on it (1.6×, eased 0.6 s moves, framing held ≥ 2 s, confirmed targets only), pulls back on a change of window, never leaves the picture. QA 100/100 on a synthetic screen recording.
 - Silent renders: loudness is reported as not evaluated instead of failing at -70 LUFS; every "not evaluated" note is translated.
