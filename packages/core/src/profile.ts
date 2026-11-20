@@ -74,6 +74,24 @@ export const StyleProfileSchema = z.object({
       maxFaceOffset: 0.25,
       maxAccelPx: 3,
     }),
+  /**
+   * Screen recordings (tutorials): zoom on where the screen changes (cursor,
+   * typing, a menu), back out when the whole screen changes. Off by default; the
+   * `tutorial` profile turns it on.
+   */
+  screenZoom: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** Zoom level on the active area. */
+      scale: z.number().min(1).max(3).default(1.6),
+      /** Shortest time spent on one framing (no zoom ping-pong). */
+      holdS: z.number().positive().default(2),
+      /** Duration of a zoom move. */
+      moveS: z.number().positive().default(0.6),
+      /** A change covering more than this share of the screen is a new scene: zoom out. */
+      maxFraction: z.number().min(0).max(1).default(0.25),
+    })
+    .default({ enabled: false, scale: 1.6, holdS: 2, moveS: 0.6, maxFraction: 0.25 }),
   /** Grading: every shot's skin tone matched to the edit's reference, then a look LUT. */
   color: z
     .object({

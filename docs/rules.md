@@ -20,6 +20,7 @@ Weight **4** · measured on render + EDL
 | `long` | pause ≤ 350 ms; margins 80–120 ms |
 | `cinematic` | pause ≤ 500 ms; margins 100–160 ms |
 | `cinematic-short` | pause ≤ 400 ms; margins 90–140 ms |
+| `tutorial` | pause ≤ 350 ms; margins 80–120 ms |
 
 ### `montage.fillers` — Hesitations and loud breaths removed
 
@@ -49,6 +50,7 @@ Weight **4** · measured on EDL
 | `long` | static shot ≤ 8 s |
 | `cinematic` | static shot ≤ 10 s |
 | `cinematic-short` | static shot ≤ 6 s |
+| `tutorial` | static shot ≤ 12 s |
 
 ### `montage.punch-ins` — Punch-ins 105–115 %, never twice at the same level
 
@@ -60,6 +62,7 @@ Weight **3** · measured on EDL
 | `long` | 105–115 %, never twice the same level |
 | `cinematic` | 104–112 %, never twice the same level |
 | `cinematic-short` | 104–112 %, never twice the same level |
+| `tutorial` | 105–115 %, never twice the same level |
 
 ## Motion
 
@@ -111,6 +114,7 @@ Weight **4** · measured on EDL
 | `long` | ≤ 2 lines × 32 chars |
 | `cinematic` | ≤ 2 lines × 38 chars |
 | `cinematic-short` | 2–4 words per screen |
+| `tutorial` | ≤ 2 lines × 32 chars |
 
 ### `captions.safe-zones` — Platform safe zones respected
 
@@ -122,6 +126,7 @@ Weight **5** · measured on EDL
 | `long` | inside title-safe |
 | `cinematic` | inside title-safe |
 | `cinematic-short` | inside tiktok ∩ reels ∩ shorts |
+| `tutorial` | inside title-safe |
 
 ### `captions.contrast` — WCAG contrast ≥ 4.5:1
 
@@ -179,6 +184,7 @@ Weight **2** · measured on EDL
 | `long` | enlargement ≤ ×2.2 |
 | `cinematic` | enlargement ≤ ×2 |
 | `cinematic-short` | enlargement ≤ ×2 |
+| `tutorial` | enlargement ≤ ×2.2 |
 
 ### `image.export-format` — H.264/H.265, constant 30 or 60 fps, right resolution
 
@@ -190,6 +196,7 @@ Weight **2** · measured on render
 | `long` | H.264/H.265, 30 or 60 fps CFR |
 | `cinematic` | H.264/H.265, 24 or 25 or 30 or 60 fps CFR |
 | `cinematic-short` | H.264/H.265, 24 or 25 or 30 or 60 fps CFR |
+| `tutorial` | H.264/H.265, 30 or 60 fps CFR |
 
 ### `image.bitrate` — Video bitrate above the minimum
 

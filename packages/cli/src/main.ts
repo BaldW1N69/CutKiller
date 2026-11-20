@@ -38,7 +38,7 @@ const USAGE_FR = `cutkiller <commande> [options]
   calibrate -o <dossier> [--only a,b]       calibre la QA : un défaut injecté par règle sur un montage propre
   schema --out <dossier>                    exporte les JSON Schemas (EDL, profil, rapport QA)
 
-Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), ou chemin vers un .yaml.
+Profils : short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), tutorial (captures d’écran 16:9), ou chemin vers un .yaml.
 --music : « <recherche> » ajoute une musique libre trouvée sur Openverse (CC0 / CC BY), crédit dans credits.txt.
 --draft : encodage rapide (preset veryfast) pour itérer.
 --lang  : langue parlée (fr, en, es, de, it, pt, nl…) ; par défaut détectée automatiquement.
@@ -74,7 +74,7 @@ const USAGE_EN = `cutkiller <command> [options]
   calibrate -o <dir> [--only a,b]           calibrates the QA: one defect injected per rule into a clean edit
   schema --out <dir>                        exports the JSON Schemas (EDL, profile, QA report)
 
-Profiles: short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), or a path to a .yaml.
+Profiles: short (9:16), long (16:9), cinematic (16:9), cinematic-short (9:16), tutorial (16:9 screen recordings), or a path to a .yaml.
 --lang  : spoken language (en, fr, es, de, it, pt, nl…); detected by default.
 --target: <seconds> keeps only the strongest sentences up to that length (a 60 s version of a long video); --ai: chosen by Claude.
 --music : "<query>" adds free music found on Openverse (CC0 / CC BY), credit in credits.txt.

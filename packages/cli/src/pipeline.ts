@@ -21,11 +21,20 @@ import { assembleEdl, brollPass, cutPass, outputFps } from "@cutkiller/cut";
 import { applySelection, type Range } from "@cutkiller/editorial";
 import { motionPass } from "@cutkiller/motion";
 import { parseLabels, qualityCheck, reportMarkdown } from "@cutkiller/qa";
-import { reframePass } from "@cutkiller/reframe";
+import { reframePass, screenZoomPass } from "@cutkiller/reframe";
 import { render } from "@cutkiller/render";
 import { PresetRegistry } from "@cutkiller/style";
 
-export const PASSES = [cutPass, brollPass, reframePass, colorPass, motionPass, captionsPass, audioPass];
+export const PASSES = [
+  cutPass,
+  brollPass,
+  reframePass,
+  screenZoomPass,
+  colorPass,
+  motionPass,
+  captionsPass,
+  audioPass,
+];
 
 export function printDiagnostics(diagnostics: Diagnostic[]): void {
   const icon = { error: "✖", warning: "⚠", info: "ℹ" } as const;
@@ -65,6 +74,7 @@ export async function plan(
     log: (m) => console.error(`… ${m}`),
     broll: new Set(broll.map((b) => resolve(b))),
     ...(language ? { language } : {}),
+    ...(profile.screenZoom.enabled ? { screen: true } : {}),
   });
   timing("analysis", t0);
   const spoken = dominantLanguage(analysis.transcripts);

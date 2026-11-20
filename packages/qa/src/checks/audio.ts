@@ -60,7 +60,7 @@ export function clickScore(samples: Float32Array, at: number): { jump: number; b
 export async function checkCutClicks(video: string, edl: Edl, profile: StyleProfile): Promise<CheckResult> {
   const { dialogue, other } = audioEditFrames(edl);
   const edits = [...dialogue, ...other];
-  if (edits.length === 0) return notEvaluated("audio.cut-clicks", "aucune coupe audio");
+  if (edits.length === 0) return notEvaluated("audio.cut-clicks", tr("no audio edit", "aucune coupe audio"));
   const [minFade, maxFade] = profile.audio.cutFadeMs;
   const violations: Violation[] = [];
   const fade = edl.output.audio.cutFadeMs;
@@ -97,7 +97,9 @@ export async function checkCutClicks(video: string, edl: Edl, profile: StyleProf
 export async function checkLoudness(video: string, profile: StyleProfile): Promise<CheckResult> {
   const a = profile.audio;
   const l = await measureLoudness(video);
-  if (!Number.isFinite(l.integrated)) return notEvaluated("audio.loudness", "piste audio silencieuse");
+  // FFmpeg reports pure silence as -70 LUFS: no sound to measure, not a loudness fault.
+  if (!Number.isFinite(l.integrated) || l.integrated <= -69.5)
+    return notEvaluated("audio.loudness", tr("silent audio track", "piste audio silencieuse"));
   const violations: Violation[] = [];
   if (Math.abs(l.integrated - a.integratedLufs) > a.lufsTolerance + 1e-9)
     violations.push({
@@ -254,7 +256,7 @@ export async function checkDucking(
 export async function checkSfxSync(video: string, edl: Edl, profile: StyleProfile): Promise<CheckResult> {
   const fps = edl.output.fps;
   const clips = edl.audio.flatMap((t) => t.clips.filter((c) => c.asset !== undefined && c.syncTo));
-  if (clips.length === 0) return notEvaluated("audio.sfx-sync", "aucun effet sonore");
+  if (clips.length === 0) return notEvaluated("audio.sfx-sync", tr("no sound effect", "aucun effet sonore"));
   const path = `${video}.sfx.wav`;
   if (!existsSync(path))
     return notEvaluated(

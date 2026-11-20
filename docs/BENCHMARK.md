@@ -33,3 +33,22 @@ uvx auto-editor .cache/rushes/gl-vallee-360-60.mp4 -o ae.mp4 --no-open
 pnpm cutkiller auto .cache/rushes/gl-vallee-360-60.mp4 .cache/rushes/cely-grande-thunder.mp3 -p short -o out
 ffmpeg -i ae.mp4 -af ebur128 -f null -       # loudness
 ```
+
+## Where the time goes (A2, measured 2026-11-20)
+
+Same machine (4 CPU threads, no GPU), 60 s French interview.
+
+**Transcription** (Whisper + forced alignment + filler rescan), models already loaded:
+
+| Model | Beam | Time | Words on the real rush | Ground truth found | Onset error p95 |
+|---|---|---|---|---|---|
+| large-v3-turbo (default) | 5 | 73 s | 146 | 23/28 | 9 ms |
+| large-v3-turbo | 1 | 86 s | **125** (22 words lost) | 23/28 | 9 ms |
+| small | 5 | 106 s | 146 | 22/28 | 9 ms |
+| small | 1 | 72 s | 148 | 21/28 | 9 ms |
+
+Decision: keep `large-v3-turbo` with beam 5. Greedy decoding drops words on real speech, and the small model is not faster once the alignment it shares with the large one is counted. Speed has to come from elsewhere.
+
+**Model loading**: 9.2 s per Python process (Whisper 3.4 s, aligner 4.9 s, partly spent asking the Hugging Face Hub about files already cached). A run starts about ten worker processes. Now: one persistent worker per run, and cached models load offline (7.7 s per cold load).
+
+**Quality check** of a 54 s Short (96 s in total), slowest rules: duplicate frames 28.6 s, caption sync 19.1 s, fillers (re-transcription) 15.4 s, reframing 13.2 s. Next candidates: a lower decode resolution for duplicate frames (needs recalibrating the rule), reusing the analysis transcript for fillers.

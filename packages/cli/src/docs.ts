@@ -6,7 +6,7 @@ import { writeFile } from "node:fs/promises";
 import { measuredOnLabel, RULES, ruleThreshold } from "@cutkiller/qa";
 import { loadProfile } from "@cutkiller/style";
 
-const PROFILES = ["short", "long", "cinematic", "cinematic-short"] as const;
+const PROFILES = ["short", "long", "cinematic", "cinematic-short", "tutorial"] as const;
 const CATEGORY = {
   montage: "Editing",
   motion: "Motion",

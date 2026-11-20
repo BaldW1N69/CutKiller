@@ -61,6 +61,12 @@ def _subjects(request: dict[str, Any]) -> Any:
     return subjects(request)
 
 
+def _activity(request: dict[str, Any]) -> Any:
+    from .activity import activity
+
+    return activity(request)
+
+
 TASKS: dict[str, Task] = {
     "ping": ping,
     "transcribe": _transcribe,
@@ -69,4 +75,5 @@ TASKS: dict[str, Task] = {
     "prosody": _prosody,
     "align": _align,
     "subjects": _subjects,
+    "activity": _activity,
 }

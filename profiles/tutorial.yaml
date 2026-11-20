@@ -1,0 +1,67 @@
+# Profil « tutorial » : tutoriels en capture d'écran (16:9) — zoom sur la zone active, pas de punch-in sur l'emphase.
+id: tutorial
+version: 1.0.0
+description: Tutoriels en capture d'écran (16:9) — la caméra zoome sur ce qui change à l'écran (curseur, saisie, menu) et dézoome aux changements de fenêtre.
+format: { kind: long, width: 1920, height: 1080, fps: 30 }
+export:
+  codec: h264
+  minBitrateMbps: { "30": 16, "60": 24 }
+  targetBitrateFactor: 1.25
+montage:
+  maxSilenceMs: 350
+  wordMarginMs: [80, 120]
+  jlCutFrames: [4, 12]
+  beatToleranceFrames: 1
+  maxStaticShotS: 12
+  punchInScale: [1.05, 1.15]
+  # Pas de zoom-cut statique : le zoom d'écran gère le cadrage.
+  zoomCutLevels: [1, 1]
+motion:
+  microDurationMs: [150, 300]
+  transitionDurationMs: [200, 500]
+  motionBlurThresholdPxPerFrame: 12
+  overshoot: [0.03, 0.08]
+  punchLevels: [1.06, 1.1, 1.13]
+  punchPreset: zoom-punch@1
+  # Pas de punch-in sur l'emphase : il se battrait avec le zoom d'écran.
+  emphasisMinScore: 99
+  punchMinSpacingS: 4
+  transitions:
+    sameSource: [whip-pan@1]
+    crossSource: [smooth-slide@1, whip-pan@1]
+    minSpacingS: 12
+    minRemovedS: 1.2
+captions:
+  style: subtitle-clean@1
+  maxLines: 2
+  maxCharsPerLine: 32
+  pauseBreakMs: 500
+  maxDurationS: 6
+  holdMs: 500
+  minDurationMs: 800
+  placement: { anchor: bottom, y: 0.92 }
+  # Zone de titrage (title-safe, 90 % de l'image) : rien sous les contrôles du lecteur.
+  safeZones:
+    title-safe: { top: 0.05, bottom: 0.05, left: 0.05, right: 0.05 }
+  maxSyncErrorFrames: { p95: 1, max: 3 }
+  minContrast: 4.5
+audio:
+  integratedLufs: -14
+  lufsTolerance: 1
+  truePeakDbtp: -1
+  duckingDb: [-18, -12]
+  cutFadeMs: [5, 10]
+  sfxToleranceFrames: 1
+  renderTruePeakDbtp: -1.5
+  musicBedLu: -7
+  duck: { depthDb: -15, attackMs: 150, releaseMs: 400, mergeGapMs: 900, holdMs: 200 }
+  sfx:
+    transitions: { push: whoosh-soft@1, slide: whoosh-soft@1, glitch: glitch-burst@1 }
+    sectionChange: [riser@1, impact-boom@1]
+    gainDb: -12
+screenZoom:
+  enabled: true
+  scale: 1.6
+  holdS: 2
+  moveS: 0.6
+  maxFraction: 0.25

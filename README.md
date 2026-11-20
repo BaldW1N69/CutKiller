@@ -42,6 +42,7 @@ Other AI video tools generate clips or cut silences. CutKiller edits **your real
 | **Sound** | Voice at -14 LUFS, true peak ≤ -1 dBTP after AAC encoding, music ducked under speech, SFX synced to the frame |
 | **Image** | Skin matched shot to shot, six looks (film-print, bleach-grit, neon-80s, teal-orange, noir, clean), grain, letterbox |
 | **B-roll** | Cutaways placed over speech, framed for vertical, or a music-driven montage when there is no speech |
+| **Tutorials** | `-p tutorial`: on screen recordings the camera zooms on where the screen changes (cursor, typing, a menu) and pulls back when the window changes |
 | **Shorts** | `cutkiller shorts`: a long recording becomes N Shorts that open on their strongest line, ranked by hook and quality score — offline, or chosen by Claude with `--ai` |
 | **Proof** | `quality.md` / `quality.json`: every rule's threshold, measurement, violations with timecodes, a score out of 100 |
 | **Control** | Everything goes through an [EDL in JSON](docs/EDL.md) you (or an AI agent) can edit by hand and re-render |
@@ -100,7 +101,7 @@ cutkiller reference reference.mp4 --against out/final.mp4
 
 | Option | |
 |---|---|
-| `-p short\|long\|cinematic\|cinematic-short` | Style profile (9:16 or 16:9), or a path to your own `.yaml` ([profiles/](profiles)) |
+| `-p short\|long\|cinematic\|cinematic-short\|tutorial` | Style profile (9:16 or 16:9), or a path to your own `.yaml` ([profiles/](profiles)) |
 | `--lang en` | Force the spoken language (default: detected per rush) |
 | `--look <name>` | Image style; `cutkiller looks` lists them |
 | `--broll <file>` | Cutaway footage (repeatable) |

@@ -22,7 +22,7 @@ import { fetchMusic } from "./music";
 import { check, doRender, plan } from "./pipeline";
 
 const VERSION = "1.0.0";
-const PROFILES = ["short", "long", "cinematic", "cinematic-short"] as const;
+const PROFILES = ["short", "long", "cinematic", "cinematic-short", "tutorial"] as const;
 
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
 

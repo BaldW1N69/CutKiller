@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, open, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
+  type Activity,
   type Analysis,
   type BeatGrid,
   type Prosody,
@@ -24,12 +25,21 @@ export interface AnalyzeOptions {
   whisperModel?: string;
   cacheDir?: string;
   log?: (message: string) => void;
+  /** Screen recordings: also locate where the picture changes (screen zoom). */
+  screen?: boolean;
   /** Inputs that are B-roll (resolved paths): probed and analysed for faces and colour, never transcribed. */
   broll?: ReadonlySet<string>;
 }
 
 /** Bump when an analyzer's output changes, to invalidate cached results. */
-const ANALYZER_VERSION = { transcribe: "9", vad: "2", beats: "3", prosody: "1", subjects: "3" } as const;
+const ANALYZER_VERSION = {
+  activity: "1",
+  transcribe: "9",
+  vad: "2",
+  beats: "3",
+  prosody: "1",
+  subjects: "3",
+} as const;
 
 /**
  * Stage 1 of the pipeline. Every input is probed; with `deep`, rushes with speech
@@ -54,6 +64,15 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
         runWorker("subjects", { path: probe.path }),
       );
       analysis.subjects = { ...analysis.subjects, [id]: subjects };
+      if (opts.screen && probe.role !== "broll" && !probe.still) {
+        opts.log?.(tr(`screen activity of ${id}…`, `activité à l'écran de ${id}…`));
+        const activity = await cached<Activity>(
+          cacheDir,
+          `${key}.activity-${ANALYZER_VERSION.activity}`,
+          () => runWorker("activity", { path: probe.path }),
+        );
+        analysis.activity = { ...analysis.activity, [id]: activity };
+      }
     }
     if (!probe.hasAudio || probe.role === "broll") continue;
     if (probe.hasVideo && !probe.still) {

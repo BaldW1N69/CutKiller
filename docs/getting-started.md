@@ -34,6 +34,7 @@ cutkiller auto interview.mp4 music.mp3 -p short -o out --draft
 | `cinematic-short` | 9:16, calmer: longer shots, dissolves, film look |
 | `long` | YouTube (16:9) |
 | `cinematic` | 16:9 with letterbox and film look |
+| `tutorial` | Screen recordings (16:9): zooms on the active area of the screen |
 
 `out/` then holds `final.mp4`, `final.srt`, the editable `edit.edl.json` and the report `quality.md`. `--draft` encodes fast; drop it for the final render.
 

@@ -185,3 +185,42 @@ def test_subjects_measure_the_tonal_range(tmp_path):
         assert p5 < 0.1
         assert p50 > 0.9
         assert p95 > 0.9
+
+
+def test_activity_follows_a_small_moving_square(tmp_path):
+    import subprocess
+
+    from cutkiller_workers.activity import activity
+
+    video = tmp_path / "screen.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=0x1e1e1e:s=640x360:r=30:d=4",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=white:s=12x12:r=30:d=4",
+            "-filter_complex",
+            "[0:v][1:v]overlay=x='if(lt(t,2),60+mod(t*60,60),500+mod(t*60,60))':y='if(lt(t,2),60,280)',format=yuv420p",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-y",
+            str(video),
+        ],
+        check=True,
+    )
+    samples = activity({"path": str(video)})["samples"]
+    early = [s for s in samples if 0.4 < s["t"] < 1.8 and s["fraction"] > 0]
+    late = [s for s in samples if 2.4 < s["t"] < 3.8 and s["fraction"] > 0]
+    assert early and late
+    assert all(s["cx"] < 0.3 and s["cy"] < 0.3 for s in early)
+    assert all(s["cx"] > 0.7 and s["cy"] > 0.7 for s in late)
+    assert all(s["fraction"] < 0.01 for s in early + late)

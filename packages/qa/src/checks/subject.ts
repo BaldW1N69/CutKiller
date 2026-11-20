@@ -248,7 +248,7 @@ export async function checkReframe(
 export async function checkColor(video: string, edl: Edl, profile: StyleProfile): Promise<CheckResult> {
   const cfg = profile.color;
   const main = edl.video[0]?.clips ?? [];
-  if (main.length === 0) return notEvaluated("image.color", "aucun plan");
+  if (main.length === 0) return notEvaluated("image.color", tr("no shot", "aucun plan"));
   const violations: Violation[] = [];
   const looks = new Set(main.map((c) => c.color?.look ?? "aucun"));
   if (looks.size > 1)

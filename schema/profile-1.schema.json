@@ -203,6 +203,44 @@
         }
       }
     },
+    "screenZoom": {
+      "default": {
+        "enabled": false,
+        "scale": 1.6,
+        "holdS": 2,
+        "moveS": 0.6,
+        "maxFraction": 0.25
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "scale": {
+          "default": 1.6,
+          "type": "number",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "holdS": {
+          "default": 2,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "moveS": {
+          "default": 0.6,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maxFraction": {
+          "default": 0.25,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
     "color": {
       "default": {
         "enabled": true,

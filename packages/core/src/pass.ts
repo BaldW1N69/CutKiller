@@ -52,7 +52,16 @@ export interface Pass {
 }
 
 /** Fixed order: B-roll once the speech is cut; reframe before motion/captions (they depend on the final frame), audio last (SFX follow transitions). */
-export const PASS_ORDER = ["cut", "broll", "reframe", "color", "motion", "captions", "audio"] as const;
+export const PASS_ORDER = [
+  "cut",
+  "broll",
+  "reframe",
+  "screen-zoom",
+  "color",
+  "motion",
+  "captions",
+  "audio",
+] as const;
 export type PassId = (typeof PASS_ORDER)[number];
 
 export function runPasses(edl: Edl, passes: readonly Pass[], ctx: PassContext): PassResult {

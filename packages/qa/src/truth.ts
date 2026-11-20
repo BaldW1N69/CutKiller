@@ -58,7 +58,7 @@ export function checkCaptionSyncTruth(edl: Edl, profile: StyleProfile, labels: L
   const fps = edl.output.fps;
   const { p95, max } = profile.captions.maxSyncErrorFrames;
   const words = edl.captions.flatMap((c) => c.words);
-  if (words.length === 0) return notEvaluated("captions.sync", "aucun sous-titre");
+  if (words.length === 0) return notEvaluated("captions.sync", tr("no captions", "aucun sous-titre"));
   const pool = labels.filter((l) => !isFillerLabel(l, profile));
   const errors: number[] = [];
   const violations: Violation[] = [];

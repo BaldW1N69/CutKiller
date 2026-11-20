@@ -14,6 +14,7 @@ import {
 import { planCamera, subjectTrack } from "./plan";
 
 export { type CameraKey, type CameraSettings, planCamera, subjectTrack } from "./plan";
+export { screenZoomPass } from "./screen";
 
 /**
  * Peak of |d²y/dx²| of an easing curve over [0, 1]: a move of D pixels over T frames

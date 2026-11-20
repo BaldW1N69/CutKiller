@@ -319,7 +319,8 @@ export function checkSharpness(edl: Edl, profile: StyleProfile): CheckResult {
       });
     }
   }
-  if (total === 0) return notEvaluated("image.sharpness", "taille des sources inconnue");
+  if (total === 0)
+    return notEvaluated("image.sharpness", tr("source size unknown", "taille des sources inconnue"));
   return {
     ruleId: "image.sharpness",
     status: violations.length === 0 ? "pass" : "fail",

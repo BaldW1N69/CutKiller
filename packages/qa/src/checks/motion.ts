@@ -202,7 +202,7 @@ export function checkPresets(edl: Edl, registry: PresetRegistry, profile: StyleP
       violations.push({ message: `${ref} : ${(e as Error).message}` });
     }
   }
-  if (items === 0) return notEvaluated("motion.presets", "aucun preset");
+  if (items === 0) return notEvaluated("motion.presets", tr("no preset", "aucun preset"));
   return graded("motion.presets", items, violations, { presets: library.length });
 }
 
@@ -240,7 +240,11 @@ export function checkDurations(edl: Edl, profile: StyleProfile, registry?: Prese
     if (ms < tLo - tol || ms > tHi + tol)
       violations.push({ message: `${t.id} : ${Math.round(ms)} ms`, frame: t.atFrame });
   }
-  if (items === 0) return notEvaluated("motion.durations", "aucune animation ni transition");
+  if (items === 0)
+    return notEvaluated(
+      "motion.durations",
+      tr("no animation or transition", "aucune animation ni transition"),
+    );
   return graded("motion.durations", items, violations, { animations: items });
 }
 
@@ -272,7 +276,7 @@ export function checkOvershoot(edl: Edl, registry: PresetRegistry, profile: Styl
         frame: t.atFrame,
       });
   }
-  if (items === 0) return notEvaluated("motion.overshoot", "aucune animation");
+  if (items === 0) return notEvaluated("motion.overshoot", tr("no animation", "aucune animation"));
   return graded("motion.overshoot", items, violations, { animations: items });
 }
 
@@ -335,6 +339,8 @@ export function checkPunchIns(edl: Edl, profile: StyleProfile): CheckResult {
   for (const track of edl.keyframes) {
     // Punches (micro) and the slow push-ins of the cinematic profiles (move) alike.
     if (trackProperty(track) !== "scale" || (track.role !== "micro" && track.role !== "move")) continue;
+    // A tutorial's screen zoom is a camera move following the action, not a punch-in.
+    if (track.why?.kind === "screen-zoom") continue;
     const clip = byId.get(trackClip(track)) as VideoClip | undefined;
     if (!clip) continue;
     const end = track.keys.at(-1)?.value ?? 1;
@@ -346,7 +352,7 @@ export function checkPunchIns(edl: Edl, profile: StyleProfile): CheckResult {
       track,
     });
   }
-  if (events.length === 0) return notEvaluated("montage.punch-ins", "aucun punch-in");
+  if (events.length === 0) return notEvaluated("montage.punch-ins", tr("no punch-in", "aucun punch-in"));
   events.sort((a, b) => a.frame - b.frame);
   const violations: Violation[] = [];
   events.forEach((e, k) => {

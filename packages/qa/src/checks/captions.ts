@@ -44,7 +44,7 @@ export async function checkCaptionSync(
 ): Promise<CheckResult> {
   const fps = edl.output.fps;
   const words = edl.captions.flatMap((c) => c.words);
-  if (words.length === 0) return notEvaluated("captions.sync", "aucun sous-titre");
+  if (words.length === 0) return notEvaluated("captions.sync", tr("no captions", "aucun sous-titre"));
   // The noise floor that word boundaries are refined against comes from the rush:
   // the edit has its pauses removed, its own floor would be far higher.
   const counts = new Map<string, number>();
@@ -116,7 +116,8 @@ export async function checkCaptionSync(
 /** Words per screen (short form), lines and characters per line. */
 export function checkCaptionDensity(edl: Edl, profile: StyleProfile): CheckResult {
   const c = profile.captions;
-  if (edl.captions.length === 0) return notEvaluated("captions.density", "aucun sous-titre");
+  if (edl.captions.length === 0)
+    return notEvaluated("captions.density", tr("no captions", "aucun sous-titre"));
   const violations: Violation[] = [];
   for (const cap of edl.captions) {
     const n = cap.words.length;
@@ -152,7 +153,8 @@ export function checkCaptionDensity(edl: Edl, profile: StyleProfile): CheckResul
  * platform safe areas — measured against the profile, not the EDL's own setting.
  */
 export function checkSafeZones(edl: Edl, profile: StyleProfile, registry: PresetRegistry): CheckResult {
-  if (edl.captions.length === 0) return notEvaluated("captions.safe-zones", "aucun sous-titre");
+  if (edl.captions.length === 0)
+    return notEvaluated("captions.safe-zones", tr("no captions", "aucun sous-titre"));
   const { width: W, height: H } = edl.output;
   const safe = safeRect(profileSafeArea(profile), W, H);
   const timeline = new CaptionTimeline(edl, registry);
@@ -281,7 +283,8 @@ export async function checkCaptionContrast(
   profile: StyleProfile,
   registry: PresetRegistry,
 ): Promise<CheckResult> {
-  if (edl.captions.length === 0) return notEvaluated("captions.contrast", "aucun sous-titre");
+  if (edl.captions.length === 0)
+    return notEvaluated("captions.contrast", tr("no captions", "aucun sous-titre"));
   const min = profile.captions.minContrast;
   const timeline = new CaptionTimeline(edl, registry);
   const violations: Violation[] = [];

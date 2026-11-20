@@ -58,9 +58,22 @@ export interface Subjects {
   samples: { t: number; faces: Face[]; rgb: [number, number, number]; luma?: [number, number, number] }[];
 }
 
+/**
+ * Where the picture changes, for screen recordings: per sample, the share of the
+ * image that changed since the previous sample and the box around the change
+ * (fractions of the frame). No box when nothing changed.
+ */
+export interface Activity {
+  fps: number;
+  width: number;
+  height: number;
+  samples: { t: number; fraction: number; cx?: number; cy?: number; w?: number; h?: number }[];
+}
+
 /** Per-source analyzer results, keyed by source id. */
 export interface AnalyzerResults {
   subjects?: Record<string, Subjects>;
+  activity?: Record<string, Activity>;
   transcripts?: Record<string, Transcript>;
   prosody?: Record<string, Prosody>;
   vad?: Record<string, VoiceActivity>;

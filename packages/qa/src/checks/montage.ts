@@ -226,7 +226,7 @@ const framingKey = (c: VideoClip) => `${c.source}|${c.transform.scale}|${c.trans
 export function checkStaticShots(edl: Edl, profile: StyleProfile): CheckResult {
   const fps = edl.output.fps;
   const clips = sortedClips(edl.video[0]?.clips ?? []);
-  if (clips.length === 0) return notEvaluated("montage.static-shots", "timeline vide");
+  if (clips.length === 0) return notEvaluated("montage.static-shots", tr("empty timeline", "timeline vide"));
   const changes = new Set<number>([0]);
   clips.forEach((c, k) => {
     const prev = clips[k - 1];
