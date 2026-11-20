@@ -13,7 +13,7 @@ import {
   maxAnimatedScale,
   type VideoClip,
 } from "@cutkiller/core";
-import { ffmpegBin, waitFor } from "@cutkiller/media";
+import { ffmpegBin, filterPath, waitFor } from "@cutkiller/media";
 import { applyGlitch, type LayerPlan, MotionTimeline, resolveTransitions } from "@cutkiller/motion";
 import type { PresetRegistry } from "@cutkiller/style";
 import { type Canvas, type CanvasRenderingContext2D, createCanvas, type ImageData } from "canvas";
@@ -108,7 +108,7 @@ export function decoderChain(
 /** Grading filter of a clip: its exposure, balance and look, baked into one LUT (`grades` by gradeKey). */
 export function gradeFilters(clip: VideoClip, grades: ReadonlyMap<string, string>): string[] {
   const lut = clip.color ? grades.get(gradeKey(clip.color)) : undefined;
-  return lut ? [`lut3d=file='${lut}':interp=tetrahedral`] : [];
+  return lut ? [`lut3d=file=${filterPath(lut)}:interp=tetrahedral`] : [];
 }
 
 export function decoderArgs(

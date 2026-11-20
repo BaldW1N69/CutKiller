@@ -175,3 +175,15 @@ export async function decodeMono(path: string, rate = 48_000): Promise<Float32Ar
   copy.set(stdout.subarray(0, copy.length));
   return new Float32Array(copy.buffer);
 }
+
+/**
+ * A file path as an option value inside an FFmpeg filtergraph, unquoted
+ * (`lut3d=file=${filterPath(p)}:interp=…`). FFmpeg unescapes twice: first the
+ * graph (\\ ' [ ] , ;), then the option (\\ ' :), so each special character is
+ * escaped for the option, then the result for the graph. Backslashes become
+ * forward slashes first: `C:\\tmp\\a.cube` → `C\\\\:/tmp/a.cube`.
+ */
+export function filterPath(path: string): string {
+  const option = path.replace(/\\/g, "/").replace(/[\\':]/g, (c) => `\\${c}`);
+  return option.replace(/[\\'[\],;]/g, (c) => `\\${c}`);
+}
