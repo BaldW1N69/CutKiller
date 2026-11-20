@@ -49,6 +49,6 @@ Same machine (4 CPU threads, no GPU), 60 s French interview.
 
 Decision: keep `large-v3-turbo` with beam 5. Greedy decoding drops words on real speech, and the small model is not faster once the alignment it shares with the large one is counted. Speed has to come from elsewhere.
 
-**Model loading**: 9.2 s per Python process (Whisper 3.4 s, aligner 4.9 s, partly spent asking the Hugging Face Hub about files already cached). A run starts about ten worker processes. Now: one persistent worker per run, and cached models load offline (7.7 s per cold load).
+**Model loading**: 9.2 s per Python process (Whisper 3.4 s, aligner 4.9 s, partly spent asking the Hugging Face Hub about files already cached). A run starts about ten worker processes. Now: one persistent worker per run, and cached models load offline (7.7 s per cold load). Measured on the quality check of a 54 s Short, two runs each on an idle machine: 99 / 94 s with one process per task, 90 / 89 s with the persistent worker, **7 % faster**. A first measurement (178 → 88 s) was wrong: another job was running during the one-process run.
 
 **Quality check** of a 54 s Short (96 s in total), slowest rules: duplicate frames 28.6 s, caption sync 19.1 s, fillers (re-transcription) 15.4 s, reframing 13.2 s. Next candidates: a lower decode resolution for duplicate frames (needs recalibrating the rule), reusing the analysis transcript for fillers.
