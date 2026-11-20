@@ -15,7 +15,7 @@
     "schema": "tsx packages/cli/src/main.ts schema --out schema",
     "fixtures": "tsx fixtures/generate.ts",
     "rushes": "tsx fixtures/rushes.ts",
-    "docs": "tsx packages/cli/src/main.ts docs --out docs/rules.md",
+    "docs:rules": "tsx packages/cli/src/main.ts docs --out docs/rules.md",
     "bench": "tsx fixtures/bench.ts"
   },
   "devDependencies": {

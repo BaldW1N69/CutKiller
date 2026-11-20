@@ -16,7 +16,7 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 - **Export to pro editors** (`cutkiller export`): OpenTimelineIO (`.otio`) and Final Cut Pro 7 XML (`.xml`) for DaVinci Resolve, Premiere Pro and Final Cut.
 - **Claude Code plugin**: `video-editing` skill (edit → read the report → fix → render loop) and MCP configuration.
 - **English messages and reports by default** (`CUTKILLER_LANG=fr` for French): CLI help, pipeline logs, edit notes, the 26 rule titles and thresholds, every QA and EDL validation message.
-- **Documentation site** (GitHub Pages, MkDocs): getting started, AI agents, export, a quality-rule reference generated from code (`pnpm docs`, checked in CI).
+- **Documentation site** (GitHub Pages, MkDocs): getting started, AI agents, export, a quality-rule reference generated from code (`pnpm run docs:rules`, checked in CI).
 - English README with a before/after demo; contributing guide, code of conduct, security policy, issue and PR templates.
 
 ### Changed

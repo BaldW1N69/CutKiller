@@ -130,7 +130,7 @@ rushes ─► analyze ─► plan passes (pure EDL → EDL) ─► render ─►
 pnpm check && pnpm typecheck && pnpm test     # lint, types, unit + FFmpeg integration + end-to-end
 (cd workers && uv run pytest && uv run ruff check .)
 pnpm fixtures                                  # synthetic test media (needs espeak-ng)
-pnpm docs                                      # regenerates docs/rules.md from the rule table
+pnpm run docs:rules                                      # regenerates docs/rules.md from the rule table
 ```
 
 Test media are generated on the fly (FFmpeg test patterns, espeak-ng voices in French and English with word-level ground truth). No media is committed except OFL fonts.
