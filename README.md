@@ -45,7 +45,7 @@ Other AI video tools generate clips or cut silences. CutKiller edits **your real
 | **Shorts** | `cutkiller shorts`: a long recording becomes N Shorts that open on their strongest line, ranked by hook and quality score — offline, or chosen by Claude with `--ai` |
 | **Proof** | `quality.md` / `quality.json`: every rule's threshold, measurement, violations with timecodes, a score out of 100 |
 | **Control** | Everything goes through an [EDL in JSON](docs/EDL.md) you (or an AI agent) can edit by hand and re-render |
-| **Languages** | Auto-detected: English, French, Spanish, German, Italian, Portuguese, Dutch (other languages: transcription and universal fillers) |
+| **Languages** | Auto-detected: 16 languages: English, French, Spanish, German, Italian, Portuguese, Dutch, Polish, Russian, Arabic, Chinese, Japanese, Finnish, Greek, Hungarian, Persian (others: transcription and universal fillers) |
 
 The QA is calibrated, not decorative: for each rule, one defect is injected into a clean edit and must be caught, while clean controls must pass ([calibration report](docs/phases/phase-7.md)). On real CC-licensed interviews the pipeline scores 97.5–99.9/100 ([phase 8 report](docs/phases/phase-8.md)).
 

@@ -9,7 +9,7 @@ def test_every_language_has_fillers_prompt_and_aligner():
 
 
 def test_unknown_language_falls_back_to_universal_fillers():
-    lang = languages.get("ja")
+    lang = languages.get("sw")
     assert lang.aligner is None and lang.prompt is None
     assert "hmm" in lang.fillers
 

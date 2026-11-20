@@ -11,7 +11,26 @@ import { loadProfile } from "../src/index";
 
 describe("lexicon", () => {
   it("covers the languages the workers align", () => {
-    expect(SUPPORTED_LANGUAGES).toEqual(expect.arrayContaining(["fr", "en", "es", "de", "it", "pt", "nl"]));
+    expect(SUPPORTED_LANGUAGES).toEqual(
+      expect.arrayContaining([
+        "fr",
+        "en",
+        "es",
+        "de",
+        "it",
+        "pt",
+        "nl",
+        "pl",
+        "ru",
+        "ar",
+        "zh",
+        "ja",
+        "fi",
+        "el",
+        "hu",
+        "fa",
+      ]),
+    );
     for (const code of SUPPORTED_LANGUAGES) {
       const lex = lexicon(code);
       expect(lex.fillerWords.length, code).toBeGreaterThan(3);

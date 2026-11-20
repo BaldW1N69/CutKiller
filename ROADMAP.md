@@ -169,7 +169,7 @@ Objectifs volontairement hors de portée en 48 h. Chaque session de travail pren
 | A6 | Qualité perçue | Test à l'aveugle sur 20 vidéos : ≥ 50 % préfèrent CutKiller à un monteur humain | Jamais mesuré | ⏳ |
 | A7 | Règles QA | 50 règles : VMAF, accessibilité, rythme de rétention, accroche < 3 s | 26 | ⏳ |
 | A8 | Formats | Podcast multicam, tutoriel écran (zoom sur le curseur), vlog, gaming, pub produit | Interview, B-roll, musique | ⏳ |
-| A9 | Langues | 30 langues avec alignement et hésitations | 7 | ⏳ |
+| A9 | Langues | 30 langues avec alignement et hésitations | 16 (en, fr testées de bout en bout ; les 9 ajoutées restent à valider sur voix réelle) | 🟡 16/30 |
 | A10 | Plateformes | CI Linux + macOS + Windows ; GPU NVIDIA et Apple Silicon testés | CI macOS + Windows ajoutée (install, doctor, montage rapide) | 🟡 en validation |
 | A11 | Intégrations | Plugins natifs Premiere / Resolve, publication YouTube / TikTok, B-roll Pexels | Export OTIO / XML | ⏳ |
 | A12 | Adoption | 10 000 étoiles, 100 contributeurs en 6 mois, listes « awesome » | 0 | ⏳ (diffusion) |

@@ -52,4 +52,4 @@ Never claim a fix worked without re-running `quality_check`. Report the final sc
 
 ## Limits (say them plainly)
 
-No speed ramps or slow motion, no generated video or voice, no multicam switching yet; hesitation lists exist for en, fr, es, de, it, pt, nl (other languages: transcription and universal fillers only).
+No speed ramps or slow motion, no generated video or voice, no multicam switching yet; hesitation lists exist for en, fr, es, de, it, pt, nl, pl, ru, ar, zh, ja, fi, el, hu, fa (other languages: transcription and universal fillers only).

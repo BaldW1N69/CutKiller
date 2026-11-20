@@ -5,6 +5,7 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 ## [Unreleased]
 
 ### Added
+- **16 languages** with word alignment and hesitation removal (was 7): Polish, Russian, Arabic, Chinese, Japanese, Finnish, Greek, Hungarian and Persian added.
 - **Riser → impact on changes of section**: two synthesized SFX (`riser@1`, `impact-boom@1`) land on the first cut of each editorial selection after the first (`profile.audio.sfx.sectionChange`, on in `short` and `long`); QA checks them against the cut (`syncTo: cut:<clip>`).
 - **`--target <seconds>`** on `auto` / `plan`: a cut-down of a long video to its strongest sentences, strongest hook first (`--ai`: chosen by Claude).
 - **Dialogue cleanup** before compression: 80 Hz high-pass and adaptive denoising (`profile.audio.voiceCleanup`, on by default). Measured on speech with -40 dBFS pink noise: noise in the pauses -6.1 dB, voice -0.13 dB.
