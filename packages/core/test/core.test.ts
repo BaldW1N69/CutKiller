@@ -229,3 +229,30 @@ describe("passes", () => {
     );
   });
 });
+
+describe("limits (EDLs from strangers)", () => {
+  const base = {
+    version: "1.4.0",
+    output: { format: "short", width: 1080, height: 1920, fps: 30, video: { bitrateMbps: 20 }, audio: {} },
+    sources: { a: { path: "a.mp4", durationS: 100_000 } },
+    video: [{ id: "main", clips: [{ id: "c1", source: "a", in: 0, out: 10, at: 0 }] }],
+  };
+  it("refuses a gigantic frame, frame rate or bitrate before any render", () => {
+    for (const output of [
+      { ...base.output, width: 100_000 },
+      { ...base.output, fps: 10_000 },
+      { ...base.output, video: { bitrateMbps: 100_000 } },
+    ])
+      expect(parseEdl({ ...base, output } as never).ok).toBe(false);
+    expect(parseEdl(base as never).ok).toBe(true);
+  });
+  it("refuses a timeline longer than 4 h", () => {
+    const long = {
+      ...base,
+      video: [{ id: "main", clips: [{ id: "c1", source: "a", in: 0, out: 20_000, at: 0 }] }],
+    };
+    const r = parseEdl(long as never);
+    expect(r.ok).toBe(false);
+    expect(r.diagnostics.map((d) => d.code)).toContain("edl.too-long");
+  });
+});

@@ -9,7 +9,7 @@ Montage automatique de rushes pour YouTube (16:9) et Shorts / TikTok / Reels (9:
 ## En une commande (Docker)
 
 ```sh
-docker run --rm -v "$PWD:/work" -v cutkiller-models:/models \
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -v cutkiller-models:/models \
   ghcr.io/baldw1n69/cutkiller auto interview.mp4 musique.mp3 -p short -o out
 ```
 

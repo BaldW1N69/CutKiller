@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import { isLinearEase } from "./ease";
-import { type Edl, EdlSchema, SPATIAL_PROPERTIES } from "./edl";
+import { type Edl, EdlSchema, LIMITS, SPATIAL_PROPERTIES } from "./edl";
 import { tr } from "./i18n";
 import { clipEnd, clipFrames, mainAudioSpans, sortedClips } from "./timeline";
 
@@ -39,6 +39,15 @@ export function validateEdl(edl: Edl): Diagnostic[] {
     out.push({ level: "error", code, message, ...(path ? { path } : {}) });
   const fps = edl.output.fps;
   const clipIds = new Map<string, string>();
+  const lastFrame = edl.video.reduce((m, t) => t.clips.reduce((n, c) => Math.max(n, clipEnd(c, fps)), m), 0);
+  if (lastFrame > LIMITS.durationS * fps)
+    err(
+      "edl.too-long",
+      tr(
+        `timeline of ${Math.round(lastFrame / fps)} s, over the ${LIMITS.durationS / 3600} h limit`,
+        `timeline de ${Math.round(lastFrame / fps)} s, au-delà de la limite de ${LIMITS.durationS / 3600} h`,
+      ),
+    );
 
   const checkId = (id: string, path: string) => {
     if (clipIds.has(id))

@@ -83,3 +83,58 @@ describe("MCP server (stdio, real client)", () => {
     expect(await readFile(xml, "utf8")).toContain("<xmeml");
   }, 700_000);
 });
+
+describe("MCP server confined to a workspace (shared service)", () => {
+  const client = new Client({ name: "cutkiller-test", version: "0.0.0" });
+  let workspace = "";
+  let outside = "";
+
+  beforeAll(async () => {
+    const { mkdtemp, writeFile } = await import("node:fs/promises");
+    workspace = await mkdtemp(join(tmpdir(), "ck-ws-"));
+    outside = await mkdtemp(join(tmpdir(), "ck-outside-"));
+    await writeFile(join(outside, "secret.json"), '{"token":"do-not-leak"}\n');
+    await client.connect(
+      new StdioClientTransport({
+        command: TSX,
+        args: [MAIN, "mcp"],
+        cwd: ROOT,
+        stderr: "ignore",
+        env: { ...process.env, CUTKILLER_WORKSPACE: workspace } as Record<string, string>,
+      }),
+    );
+  }, 60_000);
+  afterAll(async () => {
+    await client.close();
+  });
+
+  it("refuses to read or write outside the workspace, and never returns a non-EDL file", async () => {
+    const { writeFile } = await import("node:fs/promises");
+    const read = await client.callTool({
+      name: "read_edl",
+      arguments: { edlPath: join(outside, "secret.json") },
+    });
+    expect((read as TextResult).isError).toBe(true);
+    expect(textOf(read)).not.toContain("do-not-leak");
+    // Inside the workspace too: a file that is not an EDL is not echoed back.
+    await writeFile(join(workspace, "notes.json"), '{"token":"do-not-leak"}\n');
+    const inside = await client.callTool({
+      name: "read_edl",
+      arguments: { edlPath: join(workspace, "notes.json") },
+    });
+    expect(textOf(inside)).not.toContain("do-not-leak");
+    // Escaping through ".." is resolved before the check.
+    const dotdot = await client.callTool({
+      name: "read_edl",
+      arguments: { edlPath: join(workspace, "..", outside.split("/").pop() as string, "secret.json") },
+    });
+    expect(textOf(dotdot)).not.toContain("do-not-leak");
+    const write = await client.callTool({
+      name: "write_edl",
+      arguments: { edlPath: join(outside, "planted.json"), edl: {} },
+    });
+    expect((write as TextResult).isError).toBe(true);
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(join(outside, "planted.json"))).toBe(false);
+  });
+});

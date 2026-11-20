@@ -11,7 +11,7 @@ Raw footage in → a publish-ready YouTube video, Short, TikTok or Reel out — 
 [**Documentation**](https://baldw1n69.github.io/CutKiller/) · [Français](README.fr.md) · [Roadmap](ROADMAP.md) · [Benchmark vs auto-editor](docs/BENCHMARK.md) · [EDL reference](docs/EDL.md) · [Architecture](docs/AUDIT.md)
 
 ```sh
-docker run --rm -v "$PWD:/work" -v cutkiller-models:/models \
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -v cutkiller-models:/models \
   ghcr.io/baldw1n69/cutkiller auto interview.mp4 music.mp3 -p short -o out
 ```
 
@@ -90,7 +90,7 @@ cutkiller check out/final.mp4 --edl out/edit.edl.json -p long --md out/quality.m
 cutkiller auto talk.mp4 music.mp3 -p long -o recap --target 60
 
 # Edit by transcript in your browser: untick sentences, render, see the score
-cutkiller studio interview.mp4 music.mp3 -p short -o out   # http://localhost:4317
+cutkiller studio interview.mp4 music.mp3 -p short -o out   # open the printed link (it carries the session key)
 
 # One long video → the 5 best Shorts, each edited, scored and ranked (--ai: Claude picks the clips)
 cutkiller shorts podcast.mp4 music.mp3 -p short -o shorts --count 5 [--ai]

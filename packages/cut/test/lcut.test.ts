@@ -1,4 +1,4 @@
-import { mainAudioSpans, parseEdl } from "@cutkiller/core";
+import { type EdlInput, mainAudioSpans, parseEdl } from "@cutkiller/core";
 import { loadProfile } from "@cutkiller/style";
 import { describe, expect, it } from "vitest";
 import { sourceChangeLCuts } from "../src";
@@ -14,7 +14,7 @@ async function setup(bWords: ReturnType<typeof word>[]) {
     video: [{ id: "main", clips: [] }],
   });
   if (!r.ok) throw new Error("bad EDL");
-  const clips = [
+  const clips: EdlInput["video"][number]["clips"] = [
     { id: "a1", source: "a", in: 1, out: 4, at: 0 },
     { id: "b1", source: "b", in: 2, out: 5, at: 90 },
   ];

@@ -9,8 +9,11 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tr } from "@cutkiller/core";
+import { fetchPublic, type HostResolver } from "./net";
 
 const API = "https://api.openverse.org/v1/audio/";
+/** A music bed is a few MB; anything far larger is not one. */
+const MAX_MUSIC_BYTES = 100 * 1024 * 1024;
 
 export interface Track {
   id: string;
@@ -86,7 +89,12 @@ export async function searchMusic(
 export async function fetchMusic(
   query: string,
   dir: string,
-  opts: { minDurationS?: number; fetchImpl?: typeof fetch; log?: (m: string) => void } = {},
+  opts: {
+    minDurationS?: number;
+    fetchImpl?: typeof fetch;
+    resolveHost?: HostResolver;
+    log?: (m: string) => void;
+  } = {},
 ): Promise<{ path: string; track: Track }> {
   const tracks = await searchMusic(query, opts);
   const track = tracks[0];
@@ -94,15 +102,24 @@ export async function fetchMusic(
     throw new Error(
       tr(`no free music found for « ${query} »`, `aucune musique libre trouvée pour « ${query} »`),
     );
-  const res = await (opts.fetchImpl ?? fetch)(track.url);
+  const res = await fetchPublic(track.url, {
+    ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
+    ...(opts.resolveHost ? { resolveHost: opts.resolveHost } : {}),
+  });
   if (!res.ok) throw new Error(`${track.url}: HTTP ${res.status}`);
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (declared > MAX_MUSIC_BYTES) throw new Error(`${track.url}: ${declared} bytes, over the limit`);
   await mkdir(dir, { recursive: true });
   const safe = track.title
     .replace(/\.[a-z0-9]+$/i, "")
     .replace(/[^\p{L}\p{N}_-]+/gu, "-")
     .slice(0, 60);
-  const path = join(dir, `music-${safe || track.id}.${track.filetype}`);
-  await writeFile(path, Buffer.from(await res.arrayBuffer()));
+  const ext = /^(mp3|wav|ogg|flac|m4a)$/i.test(track.filetype) ? track.filetype.toLowerCase() : "mp3";
+  const id = track.id.replace(/[^\p{L}\p{N}_-]+/gu, "-").slice(0, 60);
+  const path = join(dir, `music-${safe || id}.${ext}`);
+  const body = Buffer.from(await res.arrayBuffer());
+  if (body.length > MAX_MUSIC_BYTES) throw new Error(`${track.url}: ${body.length} bytes, over the limit`);
+  await writeFile(path, body);
   await appendFile(join(dir, "credits.txt"), `Music: ${track.attribution}\nSource: ${track.landingUrl}\n`);
   opts.log?.(
     tr(

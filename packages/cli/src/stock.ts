@@ -11,7 +11,8 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tr } from "@cutkiller/core";
-import { ffmpeg } from "@cutkiller/media";
+import { ffmpeg, MEDIA_FORMATS } from "@cutkiller/media";
+import { type HostResolver, publicHttpsUrl, REMOTE_INPUT_GUARD } from "./net";
 
 export interface StockClip {
   provider: "pexels" | "commons";
@@ -31,6 +32,8 @@ export interface StockOptions {
   allowShareAlike?: boolean;
   fetchImpl?: typeof fetch;
   env?: NodeJS.ProcessEnv;
+  /** DNS resolution used to refuse private addresses (tests replace it). */
+  resolveHost?: HostResolver;
 }
 
 const UA = { "User-Agent": "cutkiller (https://github.com/BaldW1N69/CutKiller)" };
@@ -172,8 +175,11 @@ export async function fetchBroll(
         String(Math.min(seconds, c.durationS)),
         "-user_agent",
         UA["User-Agent"],
+        ...REMOTE_INPUT_GUARD,
+        "-format_whitelist",
+        MEDIA_FORMATS,
         "-i",
-        c.url,
+        await publicHttpsUrl(c.url, opts.resolveHost),
         "-an",
         "-vf",
         "scale=-2:'min(1080,ih)'",

@@ -4,6 +4,29 @@ import type { SourceProbe } from "@cutkiller/core";
 export const ffmpegBin = (): string => process.env.CUTKILLER_FFMPEG ?? "ffmpeg";
 export const ffprobeBin = (): string => process.env.CUTKILLER_FFPROBE ?? "ffprobe";
 
+/**
+ * Containers a media input may be: FFmpeg recognises a file by its bytes, not its
+ * name, and some formats are made of references to other files (HLS playlists,
+ * concat lists) or of protocols (http, concat:, subfile:). A playlist sent as a
+ * "rush" would make FFmpeg read another file of the machine into the render.
+ * Only local files of these self-contained formats are opened.
+ */
+export const MEDIA_FORMATS =
+  "mov,matroska,webm,avi,mpegts,flv,mxf,wav,w64,mp3,flac,ogg,aac,aiff,caf,image2,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe,tiff_pipe,gif";
+
+/** Options that restrict the input that follows them to a local file of a media format. */
+export const MEDIA_INPUT_GUARD: readonly string[] = [
+  "-protocol_whitelist",
+  "file,pipe",
+  "-format_whitelist",
+  MEDIA_FORMATS,
+];
+
+/** `-i path` for a user media file, guarded (see MEDIA_FORMATS). */
+export function mediaInput(path: string): string[] {
+  return [...MEDIA_INPUT_GUARD, "-i", path];
+}
+
 export interface RunResult {
   stdout: Buffer;
   stderr: string;
@@ -69,6 +92,7 @@ export interface FfprobeResult {
 
 export async function ffprobe(path: string): Promise<FfprobeResult> {
   const { stdout } = await run(ffprobeBin(), [
+    ...MEDIA_INPUT_GUARD,
     "-v",
     "error",
     "-show_streams",
@@ -122,6 +146,7 @@ export async function probeSource(path: string): Promise<SourceProbe> {
  */
 export async function isVariableFrameRate(path: string, seconds = 10): Promise<boolean> {
   const { stdout } = await run(ffprobeBin(), [
+    ...MEDIA_INPUT_GUARD,
     "-v",
     "error",
     "-select_streams",
@@ -159,8 +184,7 @@ export async function decodeMono(path: string, rate = 48_000): Promise<Float32Ar
   const { stdout } = await ffmpeg([
     "-v",
     "error",
-    "-i",
-    path,
+    ...mediaInput(path),
     "-map",
     "0:a:0",
     "-ac",

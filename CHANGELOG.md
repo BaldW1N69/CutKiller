@@ -4,6 +4,16 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 
 ## [Unreleased]
 
+### Security
+Audit of the whole code for a shared-service use ([report](docs/security/AUDIT-2026-11-20.md), [SECURITY.md](SECURITY.md)):
+- **FFmpeg inputs restricted to local files of self-contained media formats**: a `.m3u8` playlist sent as a rush made FFmpeg read another file of the machine into the render (reproduced, now refused; TS and Python tests).
+- **`CUTKILLER_WORKSPACE`**: every user path (rushes, EDL sources, outputs, MCP arguments) must stay inside it, `..` and symlinks included. `read_edl` only returns a valid EDL; `write_edl` only writes `.json`.
+- **Studio**: session key in the printed link (HttpOnly SameSite cookie), Host and Origin checks, JSON-only render API, 413 over 1 MB. Blocks CSRF and DNS rebinding.
+- **EDL limits** (4096 px, 120 fps, 400 Mbps, 4 h, bounded collections) and a 100 MB cap on music downloads.
+- **Downloads**: https and public addresses only, each redirect re-checked, FFmpeg limited to https for remote media.
+- **Dependencies**: zod 4.6.6 (HIGH advisory); Python index restricted to torch, which brought urllib3 1.26 → 2.8, requests 2.28 → 2.34, certifi, idna, filelock, setuptools up to date; `pnpm audit` and `pip-audit` in CI.
+- **Docker image runs as an unprivileged user** (uid 10001); run it with `-u "$(id -u):$(id -g)"`.
+
 ### Changed
 - **Transcription 2.9× faster** (60 s of speech: 73 s → 25 s on 4 CPU threads, same 146 words): the second, local Whisper pass that looked for hidden hesitations is now opt-in (`CUTKILLER_FILLER_RESCAN=1`). On 240 s of real interviews it found none the first pass had missed and took 60–70 % of the transcription time; the quality check, which re-transcribes the render, gets the same saving.
 

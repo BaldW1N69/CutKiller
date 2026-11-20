@@ -10,7 +10,7 @@ import {
   tr,
   type VideoClip,
 } from "@cutkiller/core";
-import { ffmpeg, ffprobe, isVariableFrameRate, parseRate } from "@cutkiller/media";
+import { ffmpeg, ffprobe, isVariableFrameRate, mediaInput, parseRate } from "@cutkiller/media";
 import { MotionTimeline, resolveTransitions } from "@cutkiller/motion";
 import type { PresetRegistry } from "@cutkiller/style";
 import { clipAt, clipFrameStats, clipMotion, type FrameStats, frameDiffs, STATIC_MOTION } from "../decode";
@@ -92,8 +92,7 @@ export async function checkBitrate(ctx: VideoContext): Promise<CheckResult> {
 export async function checkBlackFrames(ctx: VideoContext): Promise<CheckResult> {
   const th = ctx.profile.export.blackPixelThreshold;
   const { stderr } = await ffmpeg([
-    "-i",
-    ctx.video,
+    ...mediaInput(ctx.video),
     "-map",
     "0:v:0",
     "-vf",

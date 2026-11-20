@@ -11,7 +11,7 @@
     "@cutkiller/core": "workspace:*",
     "@cutkiller/render": "workspace:*",
     "@cutkiller/media": "workspace:*",
-    "zod": "4.6.5",
+    "zod": "4.6.6",
     "@cutkiller/style": "workspace:*",
     "@cutkiller/analyze": "workspace:*",
     "@cutkiller/cut": "workspace:*",

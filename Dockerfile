@@ -44,7 +44,16 @@ RUN cd workers && uv sync --locked --no-dev && rm -rf /root/.cache
 COPY . .
 RUN printf '#!/bin/sh\nexec /app/node_modules/.bin/tsx /app/packages/cli/src/main.ts "$@"\n' > /usr/local/bin/cutkiller \
  && chmod +x /usr/local/bin/cutkiller \
- && mkdir -p /models /work
+ && useradd --create-home --uid 10001 cutkiller \
+ && mkdir -p /models /work \
+ && chmod 1777 /models /work
+
+# Not root: a flaw in a decoder reached through a crafted video gets an
+# unprivileged user. Run with -u "$(id -u):$(id -g)" so files written to a
+# mounted folder belong to you; /models and /work accept any user.
+ENV UV_NO_SYNC=1 \
+    HOME=/home/cutkiller
+USER cutkiller
 
 VOLUME ["/models"]
 WORKDIR /work

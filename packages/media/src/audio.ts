@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { ffmpeg } from "./ffmpeg";
+import { ffmpeg, mediaInput } from "./ffmpeg";
 
 export interface Loudness {
   /** Integrated loudness (EBU R128 / ITU-R BS.1770-4), LUFS; -Infinity for silence. */
@@ -14,8 +14,7 @@ export interface Loudness {
 export async function measureLoudness(path: string): Promise<Loudness> {
   const { stderr } = await ffmpeg([
     "-nostats",
-    "-i",
-    path,
+    ...mediaInput(path),
     "-map",
     "0:a:0",
     "-af",

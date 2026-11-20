@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 
+from .audio import media_input
 from .subjects import _probe_size
 
 
@@ -35,8 +36,7 @@ def activity(request: dict[str, Any]) -> dict[str, Any]:
             "-v",
             "error",
             "-nostdin",
-            "-i",
-            path,
+            *media_input(path),
             "-map",
             "0:v:0",
             "-vf",

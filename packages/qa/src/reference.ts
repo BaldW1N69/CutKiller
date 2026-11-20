@@ -4,7 +4,7 @@
  * "does it look like what I expect?" becomes a table of numbers, with the profile
  * settings to move when they differ.
  */
-import { ffmpeg, ffprobe, measureLoudness, parseRate } from "@cutkiller/media";
+import { ffmpeg, ffprobe, measureLoudness, mediaInput, parseRate } from "@cutkiller/media";
 
 export interface Fingerprint {
   video: string;
@@ -41,8 +41,7 @@ const mean = (xs: number[]) => (xs.length === 0 ? 0 : xs.reduce((a, b) => a + b,
 async function sceneCuts(video: string, threshold: number): Promise<number[]> {
   const { stderr } = await ffmpeg([
     "-hide_banner",
-    "-i",
-    video,
+    ...mediaInput(video),
     "-map",
     "0:v:0",
     "-vf",
@@ -60,8 +59,7 @@ async function pictureStats(video: string) {
     "-hide_banner",
     "-v",
     "error",
-    "-i",
-    video,
+    ...mediaInput(video),
     "-map",
     "0:v:0",
     "-vf",
@@ -89,8 +87,7 @@ async function pictureStats(video: string) {
 async function letterboxShare(video: string, height: number): Promise<number> {
   const { stderr } = await ffmpeg([
     "-hide_banner",
-    "-i",
-    video,
+    ...mediaInput(video),
     "-map",
     "0:v:0",
     "-vf",

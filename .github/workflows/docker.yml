@@ -50,7 +50,8 @@ jobs:
       - name: Smoke test (doctor + render without speech models)
         run: |
           docker run --rm cutkiller:test doctor
-          docker run --rm -v "$PWD:/work" --entrypoint sh cutkiller:test -c '
+          test "$(docker run --rm --entrypoint id cutkiller:test -u)" = 10001
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" --entrypoint sh cutkiller:test -c '
             ffmpeg -v error -f lavfi -i testsrc2=size=1080x1920:rate=30:duration=4 -f lavfi -i sine=frequency=440:duration=4 -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac clip.mp4 &&
             cutkiller auto clip.mp4 -p short -o out --fast --draft --min-score 80 && ls -l out'
       - uses: docker/build-push-action@v6

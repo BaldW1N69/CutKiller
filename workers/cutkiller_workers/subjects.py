@@ -19,6 +19,7 @@ from typing import Any
 
 import numpy as np
 
+from .audio import media_input
 from .transcribe import models_dir
 
 YUNET_URL = (
@@ -56,6 +57,7 @@ def _probe_size(path: str) -> tuple[int, int]:
     out = subprocess.run(
         [
             ffprobe,
+            *media_input(path)[:-2],
             "-v",
             "error",
             "-select_streams",
@@ -108,8 +110,7 @@ def subjects(request: dict[str, Any]) -> dict[str, Any]:
             "-v",
             "error",
             "-nostdin",
-            "-i",
-            path,
+            *media_input(path),
             "-map",
             "0:v:0",
             "-vf",

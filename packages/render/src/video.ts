@@ -13,7 +13,7 @@ import {
   maxAnimatedScale,
   type VideoClip,
 } from "@cutkiller/core";
-import { ffmpegBin, filterPath, waitFor } from "@cutkiller/media";
+import { confinePath, ffmpegBin, filterPath, mediaInput, waitFor } from "@cutkiller/media";
 import { applyGlitch, type LayerPlan, MotionTimeline, resolveTransitions } from "@cutkiller/motion";
 import type { PresetRegistry } from "@cutkiller/style";
 import { type Canvas, type CanvasRenderingContext2D, createCanvas, type ImageData } from "canvas";
@@ -53,7 +53,7 @@ export function decoderChain(
   let H = Math.round((outH * k) / 2) * 2;
   const source = edl.sources[clip.source];
   if (!source) throw new Error(`source inconnue ${clip.source}`);
-  const path = resolve(baseDir, source.path);
+  const path = confinePath(resolve(baseDir, source.path));
   const frames = clipFrames(clip, fps) + pad.head + pad.tail;
   const start = Math.max(0, clip.in - pad.head / fps);
   // Crop before scaling: resampling only the kept area is several times cheaper.
@@ -95,7 +95,9 @@ export function decoderChain(
     fit = `crop=w='${cw}/${scale}':h='${ch}/${scale}':x='clip(iw/2+${x}*${cw}-ow/2,0,iw-ow)':y='clip(ih/2+${y}*${ch}-oh/2,0,ih-oh)'${grade(cropArea)},scale=${W}:${H}:flags=lanczos${sharpen}`;
   }
   return {
-    input: source.still ? ["-loop", "1", "-i", path] : ["-ss", start.toFixed(6), "-i", path],
+    input: source.still
+      ? ["-loop", "1", ...mediaInput(path)]
+      : ["-ss", start.toFixed(6), ...mediaInput(path)],
     // start_time=0: output time 0 is the seek point; if the video stream starts
     // later than that (offset streams), its first frame is held, never shifted.
     vf: [`fps=${fps}:start_time=0:round=near`, fit, ...(graded ? [] : filters)].join(","),

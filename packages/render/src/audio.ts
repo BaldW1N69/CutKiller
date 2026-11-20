@@ -8,7 +8,15 @@ import {
   mainAudioSpans,
   type PresetResolver,
 } from "@cutkiller/core";
-import { ffmpeg, ffprobe, measureLoudness, readWavF32, writeWavF32 } from "@cutkiller/media";
+import {
+  confinePath,
+  ffmpeg,
+  ffprobe,
+  measureLoudness,
+  mediaInput,
+  readWavF32,
+  writeWavF32,
+} from "@cutkiller/media";
 
 interface Segment {
   path: string;
@@ -37,8 +45,7 @@ export async function conformAudio(
     await ffmpeg([
       "-v",
       "error",
-      "-i",
-      path,
+      ...mediaInput(path),
       "-map",
       "0:a:0",
       "-vn",
@@ -93,7 +100,7 @@ export function audioSegments(
         continue;
       }
       last = {
-        path: resolve(baseDir, source.path),
+        path: confinePath(resolve(baseDir, source.path)),
         sourceIn: span.sourceIn,
         sourceOut: span.sourceOut,
         startSeconds: framesToSeconds(span.startFrame, fps),
@@ -113,7 +120,7 @@ export function audioSegments(
       let path: string | undefined;
       if (kind === "music" && clip.source !== undefined) {
         const source = edl.sources[clip.source];
-        if (source) path = resolve(baseDir, source.path);
+        if (source) path = confinePath(resolve(baseDir, source.path));
       } else if (kind === "sfx" && clip.asset !== undefined) path = assets.get(clip.asset);
       if (!path) continue;
       segments.push({
@@ -156,7 +163,7 @@ export function audioMixArgs(
 
   segments.forEach((seg, i) => {
     const input = conformed.get(seg.path) ?? seg.path;
-    args.push("-ss", seg.sourceIn.toFixed(6), "-i", input);
+    args.push("-ss", seg.sourceIn.toFixed(6), ...mediaInput(input));
     // A source whose audio stream stops before its video (by a few ms) would end
     // the piece abruptly before the fade: the fade ends where the audio does.
     const available = (durations.get(input) ?? Number.POSITIVE_INFINITY) - seg.sourceIn;

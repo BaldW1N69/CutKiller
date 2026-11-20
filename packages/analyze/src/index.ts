@@ -12,7 +12,7 @@ import {
   tr,
   type VoiceActivity,
 } from "@cutkiller/core";
-import { probeSource } from "@cutkiller/media";
+import { confinePath, probeSource } from "@cutkiller/media";
 import { runWorker } from "./worker";
 
 export { runWorker, workersDir } from "./worker";
@@ -52,7 +52,7 @@ export async function analyzeSources(paths: readonly string[], opts: AnalyzeOpti
   const model = opts.whisperModel ?? process.env.CUTKILLER_WHISPER_MODEL ?? "large-v3-turbo";
   const language = opts.language ?? process.env.CUTKILLER_LANGUAGE ?? "auto";
   for (const path of paths) {
-    const probe = await probeSource(resolve(path));
+    const probe = await probeSource(confinePath(path));
     if (opts.broll?.has(resolve(path)) && probe.hasVideo) probe.role = "broll";
     const id = sourceId(path, analysis.sources);
     analysis.sources[id] = probe;

@@ -8,7 +8,7 @@ import {
   sortedClips,
   type VideoClip,
 } from "@cutkiller/core";
-import { ffmpegBin, waitFor } from "@cutkiller/media";
+import { ffmpegBin, mediaInput, waitFor } from "@cutkiller/media";
 import { decoderChain } from "@cutkiller/render";
 
 /** Streams decoded frames of a given byte size to `onFrame`, one at a time. */
@@ -62,7 +62,7 @@ export async function frameDiffs(
   const diffs: number[] = [];
   let prev: Buffer | null = null;
   await streamFrames(
-    ["-i", path, "-map", "0:v:0", "-vf", "format=gray", "-f", "rawvideo", "-"],
+    [...mediaInput(path), "-map", "0:v:0", "-vf", "format=gray", "-f", "rawvideo", "-"],
     width * height,
     (f) => {
       // One pass for both measures; frames are fresh memory (no copy needed).

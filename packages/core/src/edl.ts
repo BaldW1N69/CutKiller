@@ -190,14 +190,30 @@ export const CaptionSchema = z.object({
   why: ReasonSchema.optional(),
 });
 
+/**
+ * Upper bounds of what an EDL may ask for: generous for real work (4K UHD in
+ * either orientation, 120 fps, 4 h), they keep an EDL from a stranger (shared
+ * service, agent) from asking for a render that exhausts memory or disk.
+ */
+export const LIMITS = {
+  side: 4096,
+  fps: 120,
+  bitrateMbps: 400,
+  sampleRate: 192_000,
+  durationS: 4 * 3600,
+  clips: 20_000,
+  captions: 50_000,
+  keyframeTracks: 20_000,
+} as const;
+
 export const OutputSchema = z.object({
   format: z.enum(["short", "long"]),
-  width: z.number().int().positive().multipleOf(2),
-  height: z.number().int().positive().multipleOf(2),
-  fps: z.number().int().positive(),
+  width: z.number().int().positive().multipleOf(2).max(LIMITS.side),
+  height: z.number().int().positive().multipleOf(2).max(LIMITS.side),
+  fps: z.number().int().positive().max(LIMITS.fps),
   video: z.object({
     codec: z.enum(["h264", "h265"]).default("h264"),
-    bitrateMbps: z.number().positive(),
+    bitrateMbps: z.number().positive().max(LIMITS.bitrateMbps),
     /**
      * Encoder speed/quality trade-off; `veryfast` for drafts. `faster` for delivery:
      * at the delivery bitrates it matched `medium` (PSNR 37.04 vs 37.01 dB on dense
@@ -265,7 +281,7 @@ export const OutputSchema = z.object({
       placement: { anchor: "bottom", y: 0.9 },
     }),
   audio: z.object({
-    sampleRate: z.number().int().positive().default(48_000),
+    sampleRate: z.number().int().positive().max(LIMITS.sampleRate).default(48_000),
     /** Integrated loudness of the final mix (EBU R128), LUFS. */
     targetLufs: z.number().default(-14),
     /** True-peak ceiling of the mix before encoding (kept under the delivery limit with a margin for the codec). */
@@ -312,12 +328,15 @@ export const EdlSchema = z.object({
   output: OutputSchema,
   sources: z.record(Id, SourceSchema),
   /** First track is the main (continuous) track; the following ones are overlays. */
-  video: z.array(z.object({ id: Id, clips: z.array(VideoClipSchema) })).min(1),
+  video: z
+    .array(z.object({ id: Id, clips: z.array(VideoClipSchema).max(LIMITS.clips) }))
+    .min(1)
+    .max(16),
   audio: z.array(z.object({ id: Id, clips: z.array(AudioClipSchema) })).default([]),
-  keyframes: z.array(KeyframeTrackSchema).default([]),
-  transitions: z.array(TransitionSchema).default([]),
+  keyframes: z.array(KeyframeTrackSchema).max(LIMITS.keyframeTracks).default([]),
+  transitions: z.array(TransitionSchema).max(LIMITS.clips).default([]),
   /** Burnt-in captions, in timeline order, never overlapping. */
-  captions: z.array(CaptionSchema).default([]),
+  captions: z.array(CaptionSchema).max(LIMITS.captions).default([]),
   markers: z.object({ beats: z.array(Frame).optional() }).default({}),
 });
 

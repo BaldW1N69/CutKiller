@@ -9,7 +9,7 @@ Raw footage in → a publish-ready YouTube video, Short, TikTok or Reel out — 
 <small>Real run on a 60 s CC BY interview (Global Lives Project): `cutkiller auto interview.mp4 music.mp3 -p short`, no manual step. Score 97.8/100.</small>
 
 ```sh
-docker run --rm -v "$PWD:/work" -v cutkiller-models:/models \
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -v cutkiller-models:/models \
   ghcr.io/baldw1n69/cutkiller auto interview.mp4 music.mp3 -p short -o out
 ```
 

@@ -7,6 +7,7 @@
  * No dependencies: Node's http server, one HTML page, files served with Range
  * support so the browser can seek in the render.
  */
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -22,6 +23,46 @@ export interface StudioOptions {
   dir: string;
   port: number;
   language?: string;
+  /** Session secret (default: CUTKILLER_STUDIO_TOKEN, else random). */
+  token?: string;
+}
+
+const COOKIE = "ck_studio";
+const MAX_BODY = 1_000_000;
+
+/**
+ * Who may talk to the Studio: only a page served by this Studio, opened from
+ * the link printed in the terminal. The Host header must name this machine
+ * (a DNS-rebinding page names its own domain), the session token must come
+ * with every request (cookie set by that link, or X-CutKiller-Token), and a
+ * render is only started by a same-origin JSON request (a cross-site form or
+ * fetch cannot send one without a CORS preflight, which is never answered).
+ */
+export function studioGuard(port: number, token: string) {
+  const hosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`]);
+  const secret = Buffer.from(token);
+  const same = (given: string | undefined) => {
+    if (!given) return false;
+    const b = Buffer.from(given);
+    return b.length === secret.length && timingSafeEqual(b, secret);
+  };
+  const cookieToken = (req: IncomingMessage) =>
+    (req.headers.cookie ?? "")
+      .split(";")
+      .map((c) => c.trim().split("="))
+      .find(([k]) => k === COOKIE)?.[1];
+  return {
+    hostOk: (req: IncomingMessage) => hosts.has(req.headers.host ?? ""),
+    authorized: (req: IncomingMessage) =>
+      same(cookieToken(req)) || same(req.headers["x-cutkiller-token"] as string | undefined),
+    sameOrigin: (req: IncomingMessage) => {
+      const origin = req.headers.origin;
+      return origin === undefined || origin === `http://${req.headers.host}`;
+    },
+    isJson: (req: IncomingMessage) => /^application\/json\b/i.test(req.headers["content-type"] ?? ""),
+    tokenMatches: same,
+    cookie: `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/`,
+  };
 }
 
 interface StudioState {
@@ -105,14 +146,44 @@ export async function studio(inputs: string[], profile: StyleProfile, opts: Stud
     await persist();
   };
 
+  const token = opts.token ?? process.env.CUTKILLER_STUDIO_TOKEN ?? randomBytes(24).toString("base64url");
+  const guard = studioGuard(opts.port, token);
   const server = createServer(async (req, res) => {
     try {
+      if (!guard.hostOk(req)) return send(res, 403, "forbidden host", "text/plain");
       const url = new URL(req.url ?? "/", "http://localhost");
+      // The link printed in the terminal: trade the token for a session cookie.
+      if (
+        req.method === "GET" &&
+        url.pathname === "/" &&
+        guard.tokenMatches(url.searchParams.get("token") ?? undefined)
+      ) {
+        res.writeHead(303, { Location: "/", "Set-Cookie": guard.cookie, "Cache-Control": "no-store" });
+        res.end();
+        return;
+      }
+      if (!guard.authorized(req))
+        return send(
+          res,
+          401,
+          tr(
+            "Open the Studio from the link printed in the terminal (it carries the session key).",
+            "Ouvrez le Studio depuis le lien affiché dans le terminal (il contient la clé de session).",
+          ),
+          "text/plain; charset=utf-8",
+        );
       if (req.method === "GET" && url.pathname === "/")
         return send(res, 200, STUDIO_HTML, "text/html; charset=utf-8");
       if (req.method === "GET" && url.pathname === "/api/state")
         return send(res, 200, JSON.stringify(state), "application/json");
       if (req.method === "POST" && url.pathname === "/api/render") {
+        if (!guard.sameOrigin(req) || !guard.isJson(req))
+          return send(
+            res,
+            403,
+            JSON.stringify({ error: "cross-origin or non-JSON request" }),
+            "application/json",
+          );
         if (state.busy)
           return send(
             res,
@@ -120,7 +191,10 @@ export async function studio(inputs: string[], profile: StyleProfile, opts: Stud
             JSON.stringify({ error: tr("a render is already running", "un rendu est déjà en cours") }),
             "application/json",
           );
-        const body = JSON.parse((await readBody(req)) || "{}") as { keep?: number[]; final?: boolean };
+        const raw = await readBody(req);
+        if (raw === undefined)
+          return send(res, 413, JSON.stringify({ error: "request too large" }), "application/json");
+        const body = JSON.parse(raw || "{}") as { keep?: number[]; final?: boolean };
         const keep = (body.keep ?? []).filter((id) => Number.isInteger(id) && id >= 0 && id < all.length);
         state.busy = true;
         delete state.error;
@@ -149,8 +223,8 @@ export async function studio(inputs: string[], profile: StyleProfile, opts: Stud
   await new Promise<void>((ok) => server.listen(opts.port, "127.0.0.1", ok));
   console.log(
     tr(
-      `✔ CutKiller Studio: http://localhost:${opts.port}  (Ctrl+C to stop)`,
-      `✔ CutKiller Studio : http://localhost:${opts.port}  (Ctrl+C pour arrêter)`,
+      `✔ CutKiller Studio: http://localhost:${opts.port}/?token=${token}  (Ctrl+C to stop)`,
+      `✔ CutKiller Studio : http://localhost:${opts.port}/?token=${token}  (Ctrl+C pour arrêter)`,
     ),
   );
 }
@@ -160,14 +234,23 @@ function send(res: ServerResponse, status: number, body: string, type: string): 
   res.end(body);
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+/** The request body, or undefined past MAX_BODY (the rest is not read). */
+function readBody(req: IncomingMessage): Promise<string | undefined> {
   return new Promise((ok, fail) => {
     let data = "";
+    let over = false;
     req.on("data", (c: Buffer) => {
+      if (over) return;
       data += c.toString();
-      if (data.length > 1_000_000) req.destroy();
+      if (data.length > MAX_BODY) {
+        over = true;
+        req.pause();
+        ok(undefined);
+      }
     });
-    req.on("end", () => ok(data));
+    req.on("end", () => {
+      if (!over) ok(data);
+    });
     req.on("error", fail);
   });
 }

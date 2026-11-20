@@ -12,6 +12,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { parseEdl, type StyleProfile, SUPPORTED_LANGUAGES } from "@cutkiller/core";
 import { toFcp7Xml, toOtio } from "@cutkiller/interchange";
+import { confinePath } from "@cutkiller/media";
 import type { Report } from "@cutkiller/qa";
 import { listLooks, loadProfile, PresetRegistry, withLook } from "@cutkiller/style";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -27,7 +28,8 @@ const PROFILES = ["short", "long", "cinematic", "cinematic-short", "tutorial"] a
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
 
 async function profileOf(name: string, look?: string): Promise<StyleProfile> {
-  const profile = await loadProfile(name);
+  // A profile is a built-in name or a path to a .yaml file (then inside the workspace).
+  const profile = await loadProfile(/[\\/]|\.ya?ml$/i.test(name) ? confinePath(name) : name);
   return look ? withLook(profile, await PresetRegistry.load(), look) : profile;
 }
 
@@ -117,6 +119,9 @@ export function createServer(): McpServer {
       },
     },
     async ({ inputs, outDir, broll, music, lang, draft, fast, profile, look }) => {
+      inputs = inputs.map((i) => confinePath(i));
+      broll = broll.map((b) => confinePath(b));
+      outDir = confinePath(outDir);
       const p = await profileOf(profile, look);
       if (music) inputs = [...inputs, (await fetchMusic(music, outDir, { minDurationS: 60 })).path];
       const edlPath = join(outDir, "edit.edl.json");
@@ -154,7 +159,15 @@ export function createServer(): McpServer {
       },
     },
     async ({ inputs, edlPath, broll, lang, fast, profile, look }) => {
-      const edl = await plan(inputs, await profileOf(profile, look), edlPath, !fast, broll, lang);
+      edlPath = confinePath(edlPath);
+      const edl = await plan(
+        inputs.map((i) => confinePath(i)),
+        await profileOf(profile, look),
+        edlPath,
+        !fast,
+        broll.map((b) => confinePath(b)),
+        lang,
+      );
       const clips = edl.video[0]?.clips ?? [];
       const cuts = clips.map((c) => c.why?.note).filter(Boolean);
       return text(
@@ -174,7 +187,12 @@ export function createServer(): McpServer {
       description: "Returns the EDL JSON (clips, cuts with their reason, animations, captions, audio).",
       inputSchema: { edlPath: z.string() },
     },
-    async ({ edlPath }) => text(await readFile(edlPath, "utf8")),
+    async ({ edlPath }) => {
+      // Only an EDL is ever returned, never the raw content of another file.
+      const result = parseEdl(JSON.parse(await readFile(confinePath(edlPath), "utf8")));
+      if (!result.ok) return { ...text("Not a valid EDL."), isError: true };
+      return text(JSON.stringify(result.edl, null, 2));
+    },
   );
 
   server.registerTool(
@@ -189,6 +207,8 @@ export function createServer(): McpServer {
       },
     },
     async ({ edlPath, edl }) => {
+      if (!/\.json$/i.test(edlPath)) return { ...text("The EDL path must end with .json."), isError: true };
+      edlPath = confinePath(edlPath);
       const result = parseEdl(edl);
       const diag = result.diagnostics.map((d) => `${d.level}: ${d.message}`);
       if (!result.ok) return { ...text(["EDL not saved: invalid.", ...diag].join("\n")), isError: true };
@@ -210,6 +230,8 @@ export function createServer(): McpServer {
       },
     },
     async ({ edlPath, out, draft }) => {
+      edlPath = confinePath(edlPath);
+      out = confinePath(out);
       const result = parseEdl(JSON.parse(await readFile(edlPath, "utf8")));
       if (!result.ok) return { ...text(result.diagnostics.map((d) => d.message).join("\n")), isError: true };
       const log = await doRender(result.edl, edlPath, out, draft, true);
@@ -233,6 +255,9 @@ export function createServer(): McpServer {
       },
     },
     async ({ video, edlPath, reportPath, profile, look }) => {
+      video = confinePath(video);
+      if (edlPath) edlPath = confinePath(edlPath);
+      if (reportPath) reportPath = confinePath(reportPath);
       const report = await check(
         video,
         await profileOf(profile, look),
@@ -263,15 +288,20 @@ export function createServer(): McpServer {
     },
     async ({ inputs, outDir, count, minS, maxS, ai, draft, lang, profile, look }) => {
       const { makeShorts } = await import("./shorts");
-      const results = await makeShorts(inputs, await profileOf(profile, look), {
-        dir: outDir,
-        count,
-        minS,
-        maxS,
-        ai,
-        draft,
-        ...(lang ? { language: lang } : {}),
-      });
+      outDir = confinePath(outDir);
+      const results = await makeShorts(
+        inputs.map((i) => confinePath(i)),
+        await profileOf(profile, look),
+        {
+          dir: outDir,
+          count,
+          minS,
+          maxS,
+          ai,
+          draft,
+          ...(lang ? { language: lang } : {}),
+        },
+      );
       return text(
         [
           ...results.map(
@@ -296,6 +326,8 @@ export function createServer(): McpServer {
       },
     },
     async ({ edlPath, out }) => {
+      edlPath = confinePath(edlPath);
+      out = confinePath(out);
       const result = parseEdl(JSON.parse(await readFile(edlPath, "utf8")));
       if (!result.ok) return { ...text(result.diagnostics.map((d) => d.message).join("\n")), isError: true };
       const opts = { baseDir: dirname(resolve(edlPath)) };
