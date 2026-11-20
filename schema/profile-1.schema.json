@@ -1101,6 +1101,27 @@
             }
           }
         },
+        "voiceCleanup": {
+          "default": {
+            "highpassHz": 80,
+            "denoiseDb": 10
+          },
+          "type": "object",
+          "properties": {
+            "highpassHz": {
+              "default": 80,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 200
+            },
+            "denoiseDb": {
+              "default": 10,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 40
+            }
+          }
+        },
         "duck": {
           "default": {
             "depthDb": -15,

@@ -320,6 +320,25 @@ export async function renderAudio(
   let musicLufs = Number.NaN;
   let musicGainDb = 0;
   let voicePath = join(workDir, "voice.wav");
+  const cleanup = target.voiceCleanup;
+  const cleanFilters = cleanup ? voiceCleanupFilters(cleanup) : [];
+  if (voice && cleanFilters.length > 0) {
+    const cleaned = join(workDir, "voice-clean.wav");
+    await ffmpeg([
+      "-v",
+      "error",
+      "-i",
+      voicePath,
+      "-af",
+      cleanFilters.join(","),
+      "-c:a",
+      "pcm_f32le",
+      "-y",
+      cleaned,
+    ]);
+    voicePath = cleaned;
+    voice = (await readWavF32(cleaned)).samples;
+  }
   if (voice) voiceLufs = (await measureLoudness(voicePath)).integrated;
   const comp = target.voiceCompression;
   if (voice && comp && Number.isFinite(voiceLufs)) {
@@ -418,4 +437,15 @@ export async function renderAudio(
     truePeakDbtp: result.truePeak,
     passes: passes + 1,
   };
+}
+
+/**
+ * FFmpeg filters of the dialogue cleanup: a 2-pole high-pass under the voice, then
+ * adaptive spectral denoising whose noise profile follows the recording (`tn=1`).
+ */
+export function voiceCleanupFilters(c: { highpassHz: number; denoiseDb: number }): string[] {
+  const out: string[] = [];
+  if (c.highpassHz > 0) out.push(`highpass=f=${c.highpassHz}:poles=2`);
+  if (c.denoiseDb > 0) out.push(`afftdn=nr=${c.denoiseDb}:nf=-50:tn=1`);
+  return out;
 }

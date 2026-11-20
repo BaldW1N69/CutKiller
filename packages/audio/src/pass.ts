@@ -82,6 +82,7 @@ export const audioPass: Pass = {
         truePeakDbtp: a.renderTruePeakDbtp,
         musicBedLu: a.musicBedLu,
         voiceCompression: a.voiceCompression,
+        voiceCleanup: a.voiceCleanup,
       },
     };
 

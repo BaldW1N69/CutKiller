@@ -5,6 +5,7 @@ All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/en/1.
 ## [Unreleased]
 
 ### Added
+- **Dialogue cleanup** before compression: 80 Hz high-pass and adaptive denoising (`profile.audio.voiceCleanup`, on by default). Measured on speech with -40 dBFS pink noise: noise in the pauses -6.1 dB, voice -0.13 dB.
 - **`cutkiller shorts`** (and MCP `make_shorts`): one long recording → N Shorts that open on their strongest line, each edited, rendered, scored and ranked in `shorts.md`. Offline editorial planner by default; `--ai` lets Claude choose the clips (structured output, server-side fallbacks, offline fallback when unavailable).
 - **Stage timings** (`ℹ [timing]`) for analysis workers, planning, render and QA, to measure where the time goes (`CUTKILLER_TIMINGS=0` hides them).
 - **Multilingual editing**: spoken language detected per rush; hesitation lists, forced aligner and number spelling for English, French, Spanish, German, Italian, Portuguese and Dutch; `--lang` to force it.

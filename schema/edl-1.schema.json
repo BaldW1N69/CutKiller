@@ -277,6 +277,25 @@
                 "releaseMs"
               ]
             },
+            "voiceCleanup": {
+              "type": "object",
+              "properties": {
+                "highpassHz": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 200
+                },
+                "denoiseDb": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 40
+                }
+              },
+              "required": [
+                "highpassHz",
+                "denoiseDb"
+              ]
+            },
             "bitrateKbps": {
               "default": 192,
               "type": "integer",

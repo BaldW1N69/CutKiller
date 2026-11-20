@@ -285,6 +285,10 @@ export const OutputSchema = z.object({
         releaseMs: z.number().positive(),
       })
       .optional(),
+    /** Dialogue cleanup before compression: high-pass (Hz, 0 = off) and adaptive denoising (dB, 0 = off). */
+    voiceCleanup: z
+      .object({ highpassHz: z.number().nonnegative().max(200), denoiseDb: z.number().min(0).max(40) })
+      .optional(),
     bitrateKbps: z.number().int().positive().default(192),
     /** Micro-fade applied at every audio edit point to avoid clicks. */
     cutFadeMs: z.number().nonnegative().default(8),
