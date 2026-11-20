@@ -10,7 +10,7 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { analyzeSources } from "@cutkiller/analyze";
 import { type StyleProfile, tr } from "@cutkiller/core";
 import { type Sentence, sentences, toRanges } from "@cutkiller/editorial";
@@ -175,7 +175,7 @@ function readBody(req: IncomingMessage): Promise<string> {
 /** Files of the output folder only (no path traversal), with Range support for video seeking. */
 function serveFile(req: IncomingMessage, res: ServerResponse, root: string, name: string): void {
   const path = resolve(root, name);
-  if (!path.startsWith(`${root}/`) || !existsSync(path)) {
+  if (!path.startsWith(root + sep) || !existsSync(path)) {
     send(res, 404, "not found", "text/plain");
     return;
   }

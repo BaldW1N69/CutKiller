@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { type Edl, EdlSchema } from "@cutkiller/core";
 import { describe, expect, it } from "vitest";
 import { editMarkers, timelineFrames, toFcp7Xml, toOtio } from "../src/index";
@@ -75,10 +76,14 @@ describe("interchange", () => {
       [30, 60],
       [120, 75],
     ]);
-    expect(clips[0].media_references.DEFAULT_MEDIA.target_url).toBe("file:///proj/rushes/talk%20&%20co.mp4");
+    expect(clips[0].media_references.DEFAULT_MEDIA.target_url).toBe(
+      pathToFileURL(resolve("/proj/rushes/talk & co.mp4")).href,
+    );
     expect(a1.kind).toBe("Audio");
     expect(a1.children).toHaveLength(2);
-    expect(a2.children[0].media_references.DEFAULT_MEDIA.target_url).toBe("file:///abs/music.wav");
+    expect(a2.children[0].media_references.DEFAULT_MEDIA.target_url).toBe(
+      pathToFileURL(resolve("/abs/music.wav")).href,
+    );
     expect(otio.tracks.markers).toHaveLength(2);
   });
 
