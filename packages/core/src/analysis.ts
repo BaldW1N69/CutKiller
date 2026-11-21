@@ -26,6 +26,25 @@ export interface VoiceActivity {
   speech: Interval[];
   noiseFloorDb: number;
   peakDb: number;
+  /** Level of loud speech (90th percentile of 10 ms frames), dBFS. */
+  speechDb?: number;
+  /** Level of the first and last 30 ms of the recording, dBFS. */
+  edgeDb?: { start: number; end: number };
+}
+
+/** Within this many dB of loud speech, an edge of the recording is still mid-word. */
+export const TRUNCATED_EDGE_DB = 15;
+
+/**
+ * Whether the recording starts or stops in the middle of a word: its first or
+ * last 30 ms are nearly as loud as its speech (a word ending naturally fades
+ * 20 dB or more before the file ends). Measured on real rushes: a cut-off
+ * « pour… » ends 6 dB under speech, a finished « 6h. » 22 dB under.
+ */
+export function truncatedEdges(vad: VoiceActivity | undefined): { start: boolean; end: boolean } {
+  if (!vad?.edgeDb || vad.speechDb === undefined) return { start: false, end: false };
+  const limit = vad.speechDb - TRUNCATED_EDGE_DB;
+  return { start: vad.edgeDb.start > limit, end: vad.edgeDb.end > limit };
 }
 
 export interface BeatGrid {

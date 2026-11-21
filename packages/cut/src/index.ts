@@ -82,7 +82,7 @@ export const cutPass: Pass = {
         continue;
       }
       const vad = ctx.analysis.vad?.[clip.source];
-      const view = speechTokens(transcript.words, vad?.speech, ctx.profile);
+      const view = speechTokens(transcript.words, vad?.speech, ctx.profile, vad);
       hallucinated += view.hallucinated;
       const tokens = view.tokens
         .filter((t) => t.word.end > clip.in && t.word.start < clip.out)

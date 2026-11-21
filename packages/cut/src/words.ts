@@ -1,6 +1,6 @@
-import type { StyleProfile, Word } from "@cutkiller/core";
+import { type StyleProfile, truncatedEdges, type VoiceActivity, type Word } from "@cutkiller/core";
 
-export type Removal = "filler" | "contextual-filler" | "repeat";
+export type Removal = "filler" | "contextual-filler" | "repeat" | "truncated";
 
 export interface Token {
   /** Position in the token list. */
@@ -126,6 +126,8 @@ export function speechTokens(
   words: readonly Word[],
   speech: readonly { start: number; end: number }[] | undefined,
   profile: StyleProfile,
+  /** The rush's voice activity: a word the recording cuts off is never kept. */
+  vad?: VoiceActivity,
 ): { tokens: Token[]; hallucinated: number } {
   const pad = 0.15;
   const heard = (w: Word) => !speech || speech.some((s) => w.end > s.start - pad && w.start < s.end + pad);
@@ -136,5 +138,14 @@ export function speechTokens(
     profile,
     ids,
   );
+  const cut = truncatedEdges(vad);
+  if (vad && (cut.start || cut.end))
+    for (const t of tokens) {
+      if (cut.start && t.word.start <= EDGE_S) t.removed = "truncated";
+      if (cut.end && t.word.end >= vad.durationS - EDGE_S) t.removed = "truncated";
+    }
   return { tokens: resolveOverlaps(tokens), hallucinated };
 }
+
+/** A word this close to the start or end of a recording cut mid-word is the cut one. */
+const EDGE_S = 0.1;

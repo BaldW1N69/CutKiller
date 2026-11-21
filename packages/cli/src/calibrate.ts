@@ -236,6 +236,23 @@ export const VARIANTS: Variant[] = [
     },
   },
   {
+    id: "word-cut",
+    rule: "montage.whole-words",
+    expect: "fail",
+    what: "la fin d'un plan coupe son dernier mot en deux",
+    edl(edl, base) {
+      const clips = main(edl);
+      for (const clip of clips) {
+        const last = clip.why?.wordIds?.at(-1);
+        const w = last === undefined ? undefined : words(base, clip.source)[last];
+        if (!w || w.end - w.start < 0.2 || w.start <= clip.in) continue;
+        setOut(edl, clip, (w.start + w.end) / 2);
+        return;
+      }
+      throw new Error("variante inapplicable : aucun plan finissant sur un mot de plus de 200 ms");
+    },
+  },
+  {
     id: "hook-late",
     rule: "montage.hook",
     expect: "fail",

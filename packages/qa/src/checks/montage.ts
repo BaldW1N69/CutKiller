@@ -37,7 +37,8 @@ function tokensOf(source: string, analysis: Analysis | undefined, profile: Style
   let tokens = bySource.get(source);
   if (!tokens) {
     const transcript = analysis.transcripts?.[source];
-    tokens = transcript ? speechTokens(transcript.words, analysis.vad?.[source]?.speech, profile).tokens : [];
+    const vad = analysis.vad?.[source];
+    tokens = transcript ? speechTokens(transcript.words, vad?.speech, profile, vad).tokens : [];
     bySource.set(source, tokens);
   }
   return tokens;
@@ -85,6 +86,64 @@ function margins(
  * than the limit, and every audio edit must keep 80–120 ms around its words
  * (unless the neighbouring sound was closer than that in the rush).
  */
+/** How far a word may cross an audio edit before it counts as cut (alignment noise). */
+const WORD_EDGE_TOLERANCE_S = 0.02;
+
+/**
+ * Whole words: no audio edit (start, end, cut) falls inside a word of the rush.
+ * A clipped syllable is audible even when it lasts two frames, and a voice
+ * activity detector smooths it away: the check reads the transcript. Nor is a
+ * word the recording itself cuts off kept (its edge is still loud: see
+ * truncatedEdges).
+ */
+export function checkWholeWords(
+  edl: Edl,
+  profile: StyleProfile,
+  analysis: Analysis | undefined,
+): CheckResult {
+  if (!analysis?.transcripts || Object.keys(analysis.transcripts).length === 0)
+    return notEvaluated("montage.whole-words", tr("no transcript", "aucune transcription"));
+  const tol = WORD_EDGE_TOLERANCE_S;
+  const spans = mainAudioSpans(edl);
+  const violations: Violation[] = [];
+  let edges = 0;
+  spans.forEach((span, k) => {
+    const tokens = tokensOf(span.clip.source, analysis, profile);
+    if (tokens.length === 0) return;
+    const next = spans[k + 1];
+    const bounds: [number, number, string][] = [];
+    if (!span.continuesPrev) bounds.push([span.sourceIn, span.startFrame, "start"]);
+    if (!next?.continuesPrev) bounds.push([span.sourceOut, span.endFrame, "end"]);
+    // A word the recording itself cuts off (see truncatedEdges), kept by the edit.
+    for (const x of tokens)
+      if (
+        x.removed === "truncated" &&
+        x.word.end > span.sourceIn + tol &&
+        x.word.start < span.sourceOut - tol
+      )
+        violations.push({
+          message: tr(
+            `« ${x.word.text} » cut off by the recording itself`,
+            `« ${x.word.text} » tronqué par l'enregistrement lui-même`,
+          ),
+          frame: span.startFrame,
+        });
+    for (const [t, frame, side] of bounds) {
+      edges++;
+      const cut = tokens.find((x) => x.word.start < t - tol && x.word.end > t + tol);
+      if (cut)
+        violations.push({
+          message: tr(
+            `« ${cut.word.text} » cut by the ${side === "start" ? "start" : "end"} of a clip`,
+            `« ${cut.word.text} » coupé par ${side === "start" ? "le début" : "la fin"} d'un plan`,
+          ),
+          frame,
+        });
+    }
+  });
+  return graded("montage.whole-words", Math.max(1, edges), violations, { edges });
+}
+
 /**
  * Hook: an independent VAD on the rendered dialogue must hear the voice within
  * the profile's first seconds (a long silent intro loses short-form viewers).

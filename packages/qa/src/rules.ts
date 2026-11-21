@@ -32,7 +32,7 @@ export const RULES: readonly Rule[] = [
     category: "montage",
     titleFr: "Silences > 350 ms supprimés, marges 80–120 ms",
     titleEn: "Silences > 350 ms removed, 80–120 ms margins",
-    weight: 4,
+    weight: 3,
     phase: 2,
     measuredOn: "rendu + EDL",
   },
@@ -41,9 +41,18 @@ export const RULES: readonly Rule[] = [
     category: "montage",
     titleFr: "Hésitations et respirations fortes supprimées",
     titleEn: "Hesitations and loud breaths removed",
-    weight: 4,
+    weight: 3,
     phase: 2,
     measuredOn: "rendu",
+  },
+  {
+    id: "montage.whole-words",
+    category: "montage",
+    titleFr: "Aucun mot coupé par une coupe, le début ou la fin",
+    titleEn: "No word cut by an edit, the start or the end",
+    weight: 2,
+    phase: 2,
+    measuredOn: "EDL",
   },
   {
     id: "montage.hook",
@@ -352,6 +361,8 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
         `p95 offset ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
         `écart p95 ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
       );
+    case "montage.whole-words":
+      return tr("no audio edit inside a word (±20 ms)", "aucune coupe son dans un mot (±20 ms)");
     case "montage.hook":
       return tr(`first word ≤ ${p.montage.hookMaxS} s`, `premier mot ≤ ${p.montage.hookMaxS} s`);
     case "captions.reading-time":

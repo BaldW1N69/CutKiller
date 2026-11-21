@@ -35,7 +35,7 @@ export interface AnalyzeOptions {
 const ANALYZER_VERSION = {
   activity: "1",
   transcribe: "10",
-  vad: "2",
+  vad: "3",
   beats: "3",
   prosody: "1",
   subjects: "3",
