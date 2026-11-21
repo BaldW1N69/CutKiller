@@ -1,0 +1,14 @@
+{
+  "name": "caption-fade",
+  "version": "1.0.0",
+  "kind": "motion",
+  "description": "Apparition d'un sous-titre : opacité 0 → 1 en 160 ms, courbe décélérée (ease-out).",
+  "params": {
+    "property": "opacity",
+    "role": "entry",
+    "durationMs": 160,
+    "from": 0,
+    "to": 1,
+    "ease": "ease-out-cubic"
+  }
+}

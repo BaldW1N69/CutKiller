@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: FFmpeg, espeak-ng (fixtures vocales)
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng
+          ffmpeg -version | head -1
+
+      - name: Cache des modèles (Whisper, wav2vec2) et des analyses
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/cutkiller
+          key: models-${{ hashFiles('workers/cutkiller_workers/transcribe.py', 'workers/cutkiller_workers/align.py', 'workers/cutkiller_workers/subjects.py') }}
+          restore-keys: models-
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - uses: astral-sh/setup-uv@v6
+      - name: Workers Python (dont transcription réelle, modèles en cache)
+        working-directory: workers
+        run: |
+          uv sync --locked
+          uv run ruff check .
+          uv run ruff format --check .
+          (cd .. && pnpm fixtures)
+          uv run pytest -q
+
+      - name: Dependency audit (shipped packages)
+        run: |
+          pnpm audit --prod --audit-level moderate
+          cd workers && uv export --no-dev --no-hashes --format requirements-txt > /tmp/req.txt
+          uvx pip-audit --no-deps --disable-pip -r /tmp/req.txt
+
+      - name: Lint
+        run: pnpm check
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: JSON Schemas à jour
+        run: pnpm schema && git diff --exit-code schema
+      - name: Référence des règles à jour (docs/rules.md)
+        run: pnpm run docs:rules && git diff --exit-code docs/rules.md
+
+      - name: Tests (unitaires + intégration FFmpeg + bout en bout)
+        run: pnpm test
+
+      - name: Démo bout en bout + quality-check
+        run: |
+          pnpm cutkiller auto .cache/fixtures/speech-fr.mp4 .cache/fixtures/music-120bpm.wav \
+            -p long -o out/demo --draft --min-score 90
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo
+          path: |
+            out/demo/quality.md
+            out/demo/quality.json
+            out/demo/edit.edl.json
+            out/demo/final.mp4
+          if-no-files-found: ignore

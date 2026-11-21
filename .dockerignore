@@ -1,0 +1,10 @@
+.git
+node_modules
+**/node_modules
+.cache
+out
+workers/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+*.log

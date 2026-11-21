@@ -1,0 +1,7 @@
+{
+  "name": "whip-pan",
+  "version": "1.0.0",
+  "kind": "transition",
+  "description": "Panoramique fouetté : le plan sortant file hors champ et le plan entrant arrive dans le même mouvement, très flou au milieu (ease-in-out expo, 300 ms).",
+  "params": { "type": "push", "durationMs": 300, "direction": "left", "ease": "ease-in-out-expo" }
+}

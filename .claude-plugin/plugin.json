@@ -1,0 +1,28 @@
+{
+  "name": "cutkiller",
+  "displayName": "CutKiller",
+  "version": "1.0.0",
+  "description": "Edit real footage into publish-ready YouTube videos, Shorts, TikToks and Reels: silences and hesitations cut, beat-synced cuts, punch-ins, karaoke captions, -14 LUFS mix, 9:16 face tracking — every render scored on 26 quality rules. Exports to Premiere, DaVinci Resolve and Final Cut.",
+  "author": { "name": "BaldW1N69" },
+  "homepage": "https://github.com/BaldW1N69/CutKiller",
+  "repository": "https://github.com/BaldW1N69/CutKiller",
+  "license": "Apache-2.0",
+  "keywords": ["video", "editing", "shorts", "tiktok", "reels", "youtube", "captions", "ffmpeg", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": {
+    "cutkiller": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "${PWD}:/work",
+        "-v",
+        "cutkiller-models:/models",
+        "ghcr.io/baldw1n69/cutkiller:latest",
+        "mcp"
+      ]
+    }
+  }
+}

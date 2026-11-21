@@ -1,0 +1,29 @@
+name: Bug report
+description: An edit, a render or the quality check went wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      placeholder: cutkiller auto interview.mp4 music.mp3 -p short -o out
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: quality.md (or the error output)
+      render: markdown
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `cutkiller doctor`
+      render: text
+    validations:
+      required: true

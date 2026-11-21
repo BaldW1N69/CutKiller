@@ -1,0 +1,12 @@
+{
+  "name": "cross-dissolve",
+  "version": "1.0.0",
+  "kind": "transition",
+  "description": "Fondu enchaîné : le plan entrant apparaît par-dessus le plan sortant, les deux continuent de jouer (poignées prises dans les rushes), sans mouvement (ease-in-out, 1 s). Pour un changement de lieu ou un temps qui passe.",
+  "params": {
+    "type": "dissolve",
+    "durationMs": 1000,
+    "via": "direct",
+    "ease": "ease-in-out"
+  }
+}

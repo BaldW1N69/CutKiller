@@ -1,0 +1,14 @@
+{
+  "name": "fade-out",
+  "version": "1.0.0",
+  "kind": "motion",
+  "description": "Disparition d'un élément : opacité 1 → 0 en 200 ms, courbe accélérée (ease-in).",
+  "params": {
+    "property": "opacity",
+    "role": "exit",
+    "durationMs": 200,
+    "from": 1,
+    "to": 0,
+    "ease": "ease-in-cubic"
+  }
+}

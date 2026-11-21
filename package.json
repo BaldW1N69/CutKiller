@@ -1,0 +1,29 @@
+{
+  "name": "cutkiller",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "cutkiller": "tsx packages/cli/src/main.ts",
+    "check": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run",
+    "schema": "tsx packages/cli/src/main.ts schema --out schema",
+    "fixtures": "tsx fixtures/generate.ts",
+    "rushes": "tsx fixtures/rushes.ts",
+    "docs:rules": "tsx packages/cli/src/main.ts docs --out docs/rules.md",
+    "bench": "tsx fixtures/bench.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

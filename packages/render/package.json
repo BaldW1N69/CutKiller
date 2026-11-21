@@ -1,0 +1,24 @@
+{
+  "name": "@cutkiller/render",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@cutkiller/audio": "workspace:*",
+    "@cutkiller/captions": "workspace:*",
+    "@cutkiller/color": "workspace:*",
+    "@cutkiller/core": "workspace:*",
+    "@cutkiller/media": "workspace:*",
+    "@cutkiller/motion": "workspace:*",
+    "@cutkiller/style": "workspace:*",
+    "canvas": "3.2.3"
+  },
+  "devDependencies": {
+    "@cutkiller/fixtures": "workspace:*",
+    "@cutkiller/style": "workspace:*"
+  }
+}

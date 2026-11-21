@@ -1,0 +1,121 @@
+import { relative } from "node:path";
+import {
+  type Analysis,
+  EDL_VERSION,
+  type Edl,
+  type EdlInput,
+  EdlSchema,
+  type StyleProfile,
+  secondsToFrames,
+} from "@cutkiller/core";
+
+export interface AssembleOptions {
+  /** Directory the EDL will be written to: source paths are stored relative to it. */
+  edlDir: string;
+  /** Seconds a still image stays on screen. */
+  stillSeconds?: number;
+  /** Trim on audio-only inputs (music); their level under the voice is set at render (`output.audio.musicBedLu`). */
+  musicGainDb?: number;
+}
+
+/**
+ * Initial EDL: every video/still input end to end on the main track, in the order
+ * given, and audio-only inputs (music) under the whole timeline. The cut pass
+ * refines this rough assembly from phase 2 on.
+ */
+/**
+ * Output frame rate: the profile's, or (matchSourceFps) the rate of the rushes
+ * that carry the edit — the longest video that is not B-roll, else the longest
+ * video — when it is an allowed rate within 1 %.
+ */
+export function outputFps(analysis: Analysis, profile: StyleProfile): number {
+  if (!profile.format.matchSourceFps) return profile.format.fps;
+  const videos = Object.values(analysis.sources).filter((s) => s.hasVideo && !s.still && s.fps);
+  const main = videos.filter((s) => s.role !== "broll");
+  const pick = (main.length > 0 ? main : videos).sort((a, b) => b.durationS - a.durationS)[0];
+  const src = pick?.fps;
+  if (!src) return profile.format.fps;
+  const match = profile.export.allowedFps.find((f) => Math.abs(src - f) / f < 0.01);
+  return match ?? profile.format.fps;
+}
+
+export function assembleEdl(analysis: Analysis, profile: StyleProfile, opts: AssembleOptions): Edl {
+  const { width, height, kind } = profile.format;
+  const fps = outputFps(analysis, profile);
+  const sources: Edl["sources"] = {};
+  const clips: EdlInput["video"][number]["clips"] = [];
+  const music: [string, number][] = [];
+  let at = 0;
+
+  for (const [id, probe] of Object.entries(analysis.sources)) {
+    sources[id] = {
+      path: relative(opts.edlDir, probe.path) || probe.path,
+      ...(probe.durationS > 0 ? { durationS: probe.durationS } : {}),
+      hasAudio: probe.hasAudio,
+      ...(probe.fps ? { fps: probe.fps } : {}),
+      ...(probe.width ? { width: probe.width, height: probe.height } : {}),
+      ...(probe.still ? { still: true } : {}),
+      ...(probe.role ? { role: probe.role } : {}),
+    };
+    if (!probe.hasVideo) {
+      music.push([id, probe.durationS]);
+      continue;
+    }
+    // Whole output frames, rounded down: the last frame never reads past the rush's end.
+    const out = probe.still ? (opts.stillSeconds ?? 3) : Math.floor(probe.durationS * fps + 1e-6) / fps;
+    clips.push({
+      id: `c${String(clips.length + 1).padStart(3, "0")}`,
+      source: id,
+      in: 0,
+      out,
+      at,
+      why: { kind: "assemble" },
+    });
+    at += secondsToFrames(out, fps);
+  }
+
+  const totalS = at / fps;
+  const audio = music.map(([id, duration], i) => ({
+    id: `music${i + 1}`,
+    clips: [
+      {
+        id: `m${String(i + 1).padStart(3, "0")}`,
+        source: id,
+        in: 0,
+        out: Math.min(duration, totalS),
+        at: 0,
+        gainDb: opts.musicGainDb ?? 0,
+        fadeOutMs: 1000,
+        why: { kind: "music" },
+      },
+    ],
+  }));
+
+  const minMbps = fps > 30 ? profile.export.minBitrateMbps["60"] : profile.export.minBitrateMbps["30"];
+  return EdlSchema.parse({
+    version: EDL_VERSION,
+    meta: { generator: "cutkiller@0.1.0", profile: `${profile.id}@${profile.version}` },
+    output: {
+      format: kind,
+      width,
+      height,
+      fps,
+      video: {
+        codec: profile.export.codec,
+        bitrateMbps: Math.round(minMbps * profile.export.targetBitrateFactor * 10) / 10,
+      },
+      audio: { cutFadeMs: (profile.audio.cutFadeMs[0] + profile.audio.cutFadeMs[1]) / 2 },
+      motionBlur: { thresholdPxPerFrame: profile.motion.motionBlurThresholdPxPerFrame },
+      ...(profile.texture.grain > 0 ||
+      profile.texture.vignette > 0 ||
+      profile.texture.halation > 0 ||
+      profile.texture.bloom > 0 ||
+      profile.texture.letterbox
+        ? { texture: profile.texture }
+        : {}),
+    },
+    sources,
+    video: [{ id: "main", clips }],
+    audio,
+  });
+}

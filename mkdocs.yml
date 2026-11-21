@@ -1,0 +1,38 @@
+site_name: CutKiller
+site_description: The open-source video editor that grades its own work.
+site_url: https://baldw1n69.github.io/CutKiller/
+repo_url: https://github.com/BaldW1N69/CutKiller
+repo_name: BaldW1N69/CutKiller
+edit_uri: edit/main/docs/
+docs_dir: docs
+exclude_docs: |
+  phases/
+  research/
+  AUDIT.md
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - AI agents (MCP): agents.md
+  - Export to Premiere / Resolve / Final Cut: export.md
+  - Quality rules: rules.md
+  - Benchmark: BENCHMARK.md
+  - EDL reference (FR): EDL.md
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: red
+      toggle: { icon: material/brightness-7, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: red
+      toggle: { icon: material/brightness-4, name: Light mode }
+  features: [content.code.copy, navigation.instant, navigation.sections]
+markdown_extensions:
+  - admonition
+  - tables
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.tabbed: { alternate_style: true }
+  - toc: { permalink: true }

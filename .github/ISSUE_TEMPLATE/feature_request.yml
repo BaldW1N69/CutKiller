@@ -1,0 +1,15 @@
+name: Feature request
+description: Something an editor would do that CutKiller does not yet
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What should the edit do, and for which kind of video?
+    validations:
+      required: true
+  - type: textarea
+    id: measure
+    attributes:
+      label: How could we measure that it is done well?
+      description: CutKiller checks every decision; a measurable rule makes a feature land faster.

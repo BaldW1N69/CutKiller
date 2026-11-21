@@ -1,0 +1,66 @@
+# Profil « short » : Shorts / TikTok / Reels (9:16).
+# Toutes les valeurs par défaut reprennent <standards_qualite> ; modifier ici, jamais dans le code.
+id: short
+version: 1.0.0
+description: Format vertical rythmé pour Shorts, TikTok et Reels.
+format: { kind: short, width: 1080, height: 1920, fps: 30 }
+export:
+  codec: h264
+  minBitrateMbps: { "30": 16, "60": 24 }
+  targetBitrateFactor: 1.25
+montage:
+  maxSilenceMs: 350
+  hookMaxS: 1
+  wordMarginMs: [80, 120]
+  jlCutFrames: [4, 12]
+  beatToleranceFrames: 1
+  maxStaticShotS: 4
+  punchInScale: [1.05, 1.15]
+motion:
+  microDurationMs: [150, 300]
+  transitionDurationMs: [200, 500]
+  motionBlurThresholdPxPerFrame: 12
+  overshoot: [0.03, 0.08]
+  punchLevels: [1.06, 1.1, 1.13]
+  punchPreset: zoom-punch@1
+  emphasisMinScore: 1.2
+  punchMinSpacingS: 2
+  transitions:
+    sameSource: [whip-pan@1, glitch-cut@1]
+    crossSource: [whip-pan@1, glitch-cut@1]
+    minSpacingS: 5
+    minRemovedS: 0.8
+captions:
+  style: karaoke-pop@1
+  wordsPerScreen: [1, 3]
+  maxLines: 1
+  maxCharsPerLine: 16
+  pauseBreakMs: 250
+  maxDurationS: 1.6
+  holdMs: 250
+  minDurationMs: 300
+  placement: { anchor: center, y: 0.66 }
+  # Zones couvertes par l'interface, en fraction de l'image 1080×1920 (relevés 2026,
+  # valeurs indicatives et volontairement prudentes). Les sous-titres restent dans
+  # l'intersection des trois zones sûres.
+  safeZones:
+    tiktok: { top: 0.07, bottom: 0.25, left: 0.056, right: 0.13 }
+    reels: { top: 0.14, bottom: 0.21, left: 0.056, right: 0.12 }
+    shorts: { top: 0.125, bottom: 0.198, left: 0.056, right: 0.186 }
+  maxSyncErrorFrames: { p95: 1, max: 3 }
+  minContrast: 4.5
+audio:
+  integratedLufs: -14
+  lufsTolerance: 1
+  truePeakDbtp: -1
+  duckingDb: [-18, -12]
+  cutFadeMs: [5, 10]
+  sfxToleranceFrames: 1
+  renderTruePeakDbtp: -1.5
+  musicBedLu: -5
+  duck: { depthDb: -15, attackMs: 100, releaseMs: 300, mergeGapMs: 600, holdMs: 120 }
+  sfx:
+    transitions: { push: whoosh@1, slide: whoosh-soft@1, glitch: glitch-burst@1 }
+    punchIn: punch-tick@1
+    sectionChange: [riser@1, impact-boom@1]
+    gainDb: -8
