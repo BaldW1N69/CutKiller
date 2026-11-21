@@ -54,8 +54,8 @@ function twoClipEdl(fx: Fixtures, cutFadeMs: number): Edl {
 }
 
 describe("score", () => {
-  it("weights 29 rules to 100 points, 20 per category", () => {
-    expect(RULES).toHaveLength(29);
+  it("weights 30 rules to 100 points, 20 per category", () => {
+    expect(RULES).toHaveLength(30);
     expect(RULES.reduce((s, r) => s + r.weight, 0)).toBe(100);
     for (const cat of ["montage", "motion", "captions", "audio", "image"])
       expect(RULES.filter((r) => r.category === cat).reduce((s, r) => s + r.weight, 0)).toBe(20);

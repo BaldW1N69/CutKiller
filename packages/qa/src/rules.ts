@@ -194,7 +194,16 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "-14 LUFS ±1, true peak ≤ -1 dBTP",
     titleEn: "-14 LUFS ±1, true peak ≤ -1 dBTP",
-    weight: 7,
+    weight: 6,
+    phase: 5,
+    measuredOn: "rendu",
+  },
+  {
+    id: "audio.dialogue-balance",
+    category: "audio",
+    titleFr: "Dialogue au même niveau d'un rush à l'autre",
+    titleEn: "Dialogue at the same level from rush to rush",
+    weight: 2,
     phase: 5,
     measuredOn: "rendu",
   },
@@ -212,7 +221,7 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "SFX synchronisés (±1 frame)",
     titleEn: "SFX in sync (±1 frame)",
-    weight: 4,
+    weight: 3,
     phase: 5,
     measuredOn: "rendu + EDL",
   },
@@ -360,6 +369,11 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
       return tr(
         `p95 offset ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
         `écart p95 ≤ ${p.captions.maxSyncErrorFrames.p95} frame, max ≤ ${p.captions.maxSyncErrorFrames.max}`,
+      );
+    case "audio.dialogue-balance":
+      return tr(
+        `speech levels within ${p.audio.dialogueBalance.maxSpreadDb} dB`,
+        `niveaux de parole à ${p.audio.dialogueBalance.maxSpreadDb} dB près`,
       );
     case "montage.whole-words":
       return tr("no audio edit inside a word (±20 ms)", "aucune coupe son dans un mot (±20 ms)");

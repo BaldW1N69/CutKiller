@@ -11,6 +11,14 @@ from .audio import load_mono
 RATE = 16_000
 
 
+def _in_speech(db: np.ndarray, segments: list[dict[str, float]], hop: int) -> np.ndarray:
+    """Levels of the 10 ms frames inside detected speech (all frames if none)."""
+    keep = np.zeros(len(db), dtype=bool)
+    for s in segments:
+        keep[int(s["start"] * RATE / hop) : int(s["end"] * RATE / hop) + 1] = True
+    return db[keep] if keep.any() else db
+
+
 def vad(request: dict[str, Any]) -> dict[str, Any]:
     import torch
     from silero_vad import get_speech_timestamps, load_silero_vad
@@ -42,6 +50,6 @@ def vad(request: dict[str, Any]) -> dict[str, Any]:
         "peakDb": round(float(db.max()), 1),
         # Loud speech, and the first / last 30 ms: a recording that starts or
         # stops while someone talks cuts a word (still loud on its edge).
-        "speechDb": round(float(np.percentile(db, 90)), 1),
+        "speechDb": round(float(np.percentile(_in_speech(db, segments, hop), 90)), 1),
         "edgeDb": {"start": level(audio[:edge]), "end": level(audio[-edge:])},
     }

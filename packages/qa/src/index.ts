@@ -6,7 +6,13 @@ import {
   type StyleProfile,
 } from "@cutkiller/core";
 import { PresetRegistry } from "@cutkiller/style";
-import { checkCutClicks, checkDucking, checkLoudness, checkSfxSync } from "./checks/audio";
+import {
+  checkCutClicks,
+  checkDialogueBalance,
+  checkDucking,
+  checkLoudness,
+  checkSfxSync,
+} from "./checks/audio";
 import {
   checkCaptionContrast,
   checkCaptionDensity,
@@ -116,6 +122,7 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
     await run(() => checkSfxSync(video, edl, profile));
     const hasSpeech = Object.keys(analysis?.transcripts ?? {}).length > 0;
     if (hasSpeech) await run(() => checkDucking(video, edl, profile));
+    if (hasSpeech) await run(() => checkDialogueBalance(video, edl, profile));
     await run(() => checkStaticShots(edl, profile));
     await run(() => checkPunchIns(edl, profile));
     await run(() => checkPresets(edl, registry, profile));

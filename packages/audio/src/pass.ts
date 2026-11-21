@@ -86,6 +86,29 @@ export const audioPass: Pass = {
       },
     };
 
+    const balanced = balanceDialogue(edl, ctx);
+    for (const [source, g] of balanced)
+      diagnostics.push({
+        level: "info",
+        code: "audio.dialogue-balance",
+        message: tr(
+          `dialogue of « ${source} » ${g > 0 ? "+" : ""}${g.toFixed(1)} dB to match the other rushes`,
+          `dialogue de « ${source} » ${g > 0 ? "+" : ""}${g.toFixed(1)} dB pour égaler les autres rushes`,
+        ),
+      });
+    const video = edl.video.map((track, t) =>
+      t === 0
+        ? {
+            ...track,
+            clips: track.clips.map((c) =>
+              balanced.has(c.source) && c.gainDb === 0
+                ? { ...c, gainDb: balanced.get(c.source) as number }
+                : c,
+            ),
+          }
+        : track,
+    );
+
     // Ducking: every source clip of the audio tracks (music) goes down under speech.
     const regions = speechRegions(edl, ctx, Math.round((a.duck.mergeGapMs / 1000) * fps));
     const hold = Math.round((a.duck.holdMs / 1000) * fps);
@@ -164,6 +187,34 @@ export const audioPass: Pass = {
         `${ducks} zone(s) de ducking, ${sfxTracks.reduce((s, t) => s + t.clips.length, 0)} SFX, cible ${a.integratedLufs} LUFS`,
       ),
     });
-    return { edl: EdlSchema.parse({ ...edl, output, audio: kept }), diagnostics };
+    return { edl: EdlSchema.parse({ ...edl, output, video, audio: kept }), diagnostics };
   },
 };
+
+/**
+ * Gain per rush that brings each one's speech level (analysis: 90th percentile
+ * of 10 ms frames) to the median of the rushes speaking on the main track.
+ * Only gains of 1 dB or more, at most the profile's maximum.
+ */
+export function balanceDialogue(edl: Edl, ctx: PassContext): Map<string, number> {
+  const cfg = ctx.profile.audio.dialogueBalance;
+  const out = new Map<string, number>();
+  if (!cfg.enabled) return out;
+  const sources = [...new Set((edl.video[0]?.clips ?? []).map((c) => c.source))].filter(
+    (s) =>
+      (ctx.analysis.transcripts?.[s]?.words.length ?? 0) > 0 && ctx.analysis.vad?.[s]?.speechDb !== undefined,
+  );
+  if (sources.length < 2) return out;
+  const levels = sources.map((s) => ctx.analysis.vad?.[s]?.speechDb as number);
+  const sorted = [...levels].sort((a, b) => a - b);
+  const mid = sorted.length / 2;
+  const median =
+    sorted.length % 2
+      ? (sorted[Math.floor(mid)] as number)
+      : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
+  sources.forEach((s, i) => {
+    const g = Math.max(-cfg.maxGainDb, Math.min(cfg.maxGainDb, median - (levels[i] as number)));
+    if (Math.abs(g) >= 1) out.set(s, Math.round(g * 10) / 10);
+  });
+  return out;
+}

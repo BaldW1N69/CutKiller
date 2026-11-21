@@ -305,3 +305,65 @@ export async function checkSfxSync(video: string, edl: Edl, profile: StyleProfil
     maxErrorFrames: errors.length ? Math.round(Math.max(...errors) * 100) / 100 : null,
   });
 }
+
+/**
+ * Dialogue balance: on the rendered dialogue, each rush's speech plays at a
+ * similar level (loud speech: 90th percentile of 10 ms frames above the noise,
+ * per rush), within the profile's spread. A second camera's mic left 8 dB under
+ * the first sounds like a cut to another room.
+ */
+export async function checkDialogueBalance(
+  video: string,
+  edl: Edl,
+  profile: StyleProfile,
+): Promise<CheckResult> {
+  const fps = edl.output.fps;
+  const spans = mainAudioSpans(edl);
+  const sources = new Set(spans.map((s) => s.clip.source));
+  if (sources.size < 2) return notEvaluated("audio.dialogue-balance", tr("a single rush", "un seul rush"));
+  const voice = existsSync(`${video}.voice.wav`) ? `${video}.voice.wav` : video;
+  const rate = 16_000;
+  const samples = await decodeMono(voice, rate);
+  const hop = rate / 100;
+  const frames = Math.floor(samples.length / hop);
+  const db = new Float64Array(frames);
+  for (let f = 0; f < frames; f++) {
+    let sum = 0;
+    for (let i = f * hop; i < (f + 1) * hop; i++) sum += (samples[i] as number) ** 2;
+    db[f] = 10 * Math.log10(sum / hop + 1e-12);
+  }
+  const floor = [...db].sort((a, b) => a - b)[Math.floor(frames * 0.1)] ?? -120;
+  const bySource = new Map<string, number[]>();
+  for (const span of spans) {
+    const from = Math.floor(framesToSeconds(span.startFrame, fps) * 100);
+    const to = Math.min(frames, Math.floor(framesToSeconds(span.endFrame, fps) * 100));
+    const list = bySource.get(span.clip.source) ?? [];
+    for (let f = from; f < to; f++) if ((db[f] as number) > floor + 15) list.push(db[f] as number);
+    bySource.set(span.clip.source, list);
+  }
+  const levels = new Map<string, number>();
+  for (const [source, list] of bySource)
+    if (list.length >= 100)
+      levels.set(source, [...list].sort((a, b) => a - b)[Math.floor(list.length * 0.9)] as number);
+  if (levels.size < 2)
+    return notEvaluated("audio.dialogue-balance", tr("speech from a single rush", "parole d'un seul rush"));
+  const values = [...levels.values()];
+  const spread = Math.max(...values) - Math.min(...values);
+  const max = profile.audio.dialogueBalance.maxSpreadDb;
+  const measured = Object.fromEntries([...levels].map(([s, v]) => [s, Math.round(v * 10) / 10]));
+  return graded(
+    "audio.dialogue-balance",
+    1,
+    spread > max
+      ? [
+          {
+            message: tr(
+              `speech levels of the rushes ${spread.toFixed(1)} dB apart (max ${max} dB)`,
+              `niveaux de parole des rushes écartés de ${spread.toFixed(1)} dB (max ${max} dB)`,
+            ),
+          },
+        ]
+      : [],
+    { spreadDb: Math.round(spread * 10) / 10, ...measured },
+  );
+}

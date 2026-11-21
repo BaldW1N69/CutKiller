@@ -1171,6 +1171,30 @@
             }
           }
         },
+        "dialogueBalance": {
+          "default": {
+            "enabled": true,
+            "maxGainDb": 12,
+            "maxSpreadDb": 3
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "maxGainDb": {
+              "default": 12,
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "maxSpreadDb": {
+              "default": 3,
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
         "duck": {
           "default": {
             "depthDb": -15,

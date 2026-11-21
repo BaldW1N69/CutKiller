@@ -236,6 +236,24 @@ export const VARIANTS: Variant[] = [
     },
   },
   {
+    id: "dialogue-unbalanced",
+    rule: "audio.dialogue-balance",
+    expect: "fail",
+    what: "la seconde moitié des plans vient d'un « second micro » 9 dB plus bas",
+    edl(edl) {
+      const clips = main(edl);
+      const first = clips[0];
+      if (!first || clips.length < 4) throw new Error("variante inapplicable : moins de 4 plans");
+      const src = edl.sources[first.source];
+      if (!src) throw new Error("variante inapplicable : source absente");
+      edl.sources["second-mic"] = { ...src };
+      for (const c of clips.slice(Math.floor(clips.length / 2))) {
+        c.source = "second-mic";
+        c.gainDb = -9;
+      }
+    },
+  },
+  {
     id: "word-cut",
     rule: "montage.whole-words",
     expect: "fail",

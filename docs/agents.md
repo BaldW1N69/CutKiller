@@ -41,7 +41,7 @@ CutKiller ships an [MCP](https://modelcontextprotocol.io) server, so Claude, Cur
 | `plan_edit` | Write the editable EDL without rendering |
 | `read_edl` / `write_edl` | Read the EDL; validate and save an edited one (refused if invalid) |
 | `render_edl` | Render an EDL (draft or final) |
-| `quality_check` | Score a video on the 29 rules |
+| `quality_check` | Score a video on the 30 rules |
 | `export_timeline` | `.otio` / `.xml` for Premiere Pro, DaVinci Resolve, Final Cut |
 | `list_styles` | Profiles, looks and supported languages |
 | `doctor` | Installation check with fixes |

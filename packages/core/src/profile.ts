@@ -347,6 +347,18 @@ export const StyleProfileSchema = z.object({
         denoiseDb: z.number().min(0).max(40).default(0),
       })
       .default({ highpassHz: 80, denoiseDb: 0 }),
+    /**
+     * Dialogue balance across rushes (a second camera's mic, a lav and a room
+     * mic): each rush's clips get the gain that brings its speech level to the
+     * median one, up to `maxGainDb`. QA: speech levels within `maxSpreadDb`.
+     */
+    dialogueBalance: z
+      .object({
+        enabled: z.boolean().default(true),
+        maxGainDb: z.number().positive().default(12),
+        maxSpreadDb: z.number().positive().default(3),
+      })
+      .default({ enabled: true, maxGainDb: 12, maxSpreadDb: 3 }),
     duck: z
       .object({
         /** How far the music goes down under speech. */
