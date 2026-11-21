@@ -194,6 +194,11 @@ export const StyleProfileSchema = z.object({
      * (viewers of short videos decide in the first seconds whether to stay).
      */
     hookMaxS: z.number().positive().default(2.5),
+    /**
+     * The ending: no more than this many seconds after the last word (dead air
+     * at the end reads as a mistake and lowers the watch-through rate).
+     */
+    tailMaxS: z.number().positive().default(1.5),
     wordMarginMs: Range.default([80, 120]),
     jlCutFrames: Range.default([4, 12]),
     /**

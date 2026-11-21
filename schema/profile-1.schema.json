@@ -465,6 +465,11 @@
           "type": "number",
           "exclusiveMinimum": 0
         },
+        "tailMaxS": {
+          "default": 1.5,
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
         "wordMarginMs": {
           "default": [
             80,

@@ -244,8 +244,7 @@ export function createServer(): McpServer {
     "quality_check",
     {
       title: "Quality check",
-      description:
-        "Scores a rendered video on 30 rules (silences, hesitations, beat sync, motion, captions sync/safe zones/contrast, loudness, ducking, reframing, colour, export). Pass the EDL for the full check.",
+      description: `Scores a rendered video on ${RULES.length} rules (silences, hesitations, beat sync, motion, captions sync/safe zones/contrast, loudness, ducking, reframing, colour, flashes, export). Pass the EDL for the full check.`,
       inputSchema: {
         video: z.string(),
         edlPath: z.string().optional(),

@@ -64,11 +64,20 @@ export const RULES: readonly Rule[] = [
     measuredOn: "rendu",
   },
   {
+    id: "montage.tail",
+    category: "montage",
+    titleFr: "Fin nette : pas de temps mort après le dernier mot",
+    titleEn: "Clean ending: no dead air after the last word",
+    weight: 2,
+    phase: 9,
+    measuredOn: "rendu",
+  },
+  {
     id: "montage.beat-cuts",
     category: "montage",
     titleFr: "Coupes libres calées sur les beats (±1 frame)",
     titleEn: "Free cuts on the beat (±1 frame)",
-    weight: 3,
+    weight: 2,
     phase: 2,
     measuredOn: "EDL",
   },
@@ -86,7 +95,7 @@ export const RULES: readonly Rule[] = [
     category: "montage",
     titleFr: "Aucun plan statique trop long",
     titleEn: "No static shot too long",
-    weight: 3,
+    weight: 2,
     phase: 2,
     measuredOn: "EDL",
   },
@@ -199,6 +208,15 @@ export const RULES: readonly Rule[] = [
     measuredOn: "rendu",
   },
   {
+    id: "audio.phase",
+    category: "audio",
+    titleFr: "Son compatible mono : pas d'opposition de phase",
+    titleEn: "Mono-safe sound: no left/right anti-phase",
+    weight: 2,
+    phase: 9,
+    measuredOn: "rendu",
+  },
+  {
     id: "audio.dialogue-balance",
     category: "audio",
     titleFr: "Dialogue au même niveau d'un rush à l'autre",
@@ -212,7 +230,7 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "Ducking de la musique -12 à -18 dB, sans pompage",
     titleEn: "Music ducked -12 to -18 dB, no pumping",
-    weight: 5,
+    weight: 4,
     phase: 5,
     measuredOn: "rendu",
   },
@@ -230,7 +248,7 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "Aucun clic aux coupes (fondus 5–10 ms)",
     titleEn: "No clicks at cuts (5–10 ms fades)",
-    weight: 4,
+    weight: 3,
     phase: 1,
     measuredOn: "rendu + EDL",
   },
@@ -239,7 +257,7 @@ export const RULES: readonly Rule[] = [
     category: "image",
     titleFr: "Recadrage 9:16 qui suit le sujet sans saccade",
     titleEn: "9:16 reframing follows the subject smoothly",
-    weight: 5,
+    weight: 4,
     phase: 6,
     measuredOn: "rendu + EDL",
   },
@@ -248,7 +266,7 @@ export const RULES: readonly Rule[] = [
     category: "image",
     titleFr: "Étalonnage cohérent entre plans",
     titleEn: "Consistent grading between shots",
-    weight: 5,
+    weight: 4,
     phase: 6,
     measuredOn: "rendu",
   },
@@ -295,6 +313,15 @@ export const RULES: readonly Rule[] = [
     titleEn: "No unplanned duplicate frames",
     weight: 2,
     phase: 1,
+    measuredOn: "rendu",
+  },
+  {
+    id: "image.flashes",
+    category: "image",
+    titleFr: "Pas plus de 3 flashs par seconde (WCAG 2.3.1)",
+    titleEn: "No more than 3 flashes per second (WCAG 2.3.1)",
+    weight: 2,
+    phase: 9,
     measuredOn: "rendu",
   },
 ];
@@ -439,6 +466,15 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
       return `≥ ${p.export.minBitrateMbps["30"]} Mbps (≤ 30 fps), ${p.export.minBitrateMbps["60"]} (60 fps)`;
     case "image.black-frames":
       return tr("no unplanned black frame", "aucune frame noire non prévue");
+    case "montage.tail":
+      return tr(`≤ ${m.tailMaxS} s after the last word`, `≤ ${m.tailMaxS} s après le dernier mot`);
+    case "audio.phase":
+      return tr("L/R correlation ≥ -0.2 on every 0.5 s", "corrélation G/D ≥ -0,2 sur chaque 0,5 s");
+    case "image.flashes":
+      return tr(
+        "≤ 3 flashes in any second (general flash threshold)",
+        "≤ 3 flashs par seconde (seuil de flash général)",
+      );
     case "image.duplicate-frames":
       return tr("no frozen picture while the source moves", "aucune image figée quand la source bouge");
     default:

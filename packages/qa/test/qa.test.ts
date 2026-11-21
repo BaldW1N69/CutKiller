@@ -54,8 +54,8 @@ function twoClipEdl(fx: Fixtures, cutFadeMs: number): Edl {
 }
 
 describe("score", () => {
-  it("weights 30 rules to 100 points, 20 per category", () => {
-    expect(RULES).toHaveLength(30);
+  it("weights 33 rules to 100 points, 20 per category", () => {
+    expect(RULES).toHaveLength(33);
     expect(RULES.reduce((s, r) => s + r.weight, 0)).toBe(100);
     for (const cat of ["montage", "motion", "captions", "audio", "image"])
       expect(RULES.filter((r) => r.category === cat).reduce((s, r) => s + r.weight, 0)).toBe(20);
@@ -65,12 +65,12 @@ describe("score", () => {
     const results: CheckResult[] = [
       pass("image.export-format"), // weight 2
       graded("image.bitrate", 1, [{ message: "trop bas" }]), // weight 2, score 0
-      graded("audio.cut-clicks", 4, [{ message: "clic" }]), // weight 4, score 0.75
+      graded("audio.cut-clicks", 4, [{ message: "clic" }]), // weight 3, score 0.75
       notEvaluated("motion.no-linear", "aucune animation"),
     ];
     const report = buildReport({ video: "v.mp4", profile: "short@1.0.0" }, results);
-    expect(report.coverage).toBe(8);
-    expect(report.score).toBe(62.5); // 100 × (2 + 0 + 4 × 0.75) / 8
+    expect(report.coverage).toBe(7);
+    expect(report.score).toBeCloseTo(60.7, 1); // 100 × (2 + 0 + 3 × 0.75) / 7
     expect(report.categories.image.score).toBe(50);
     expect(report.categories.motion.score).toBeNull();
     expect(report.results.find((r) => r.ruleId === "captions.sync")?.status).toBe("not-evaluated");
@@ -171,10 +171,12 @@ describe("quality-check sur des rendus réels", () => {
       [
         "audio.cut-clicks",
         "audio.loudness",
+        "audio.phase",
         "image.black-frames",
         "image.bitrate",
         "image.duplicate-frames",
         "image.export-format",
+        "image.flashes",
         "montage.static-shots",
         // The preset library itself is checked even when the EDL animates nothing.
         "motion.presets",

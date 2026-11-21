@@ -11,6 +11,7 @@ import {
   checkDialogueBalance,
   checkDucking,
   checkLoudness,
+  checkPhase,
   checkSfxSync,
 } from "./checks/audio";
 import {
@@ -21,6 +22,7 @@ import {
   checkSafeZones,
 } from "./checks/captions";
 import { checkJlCuts, checkNoLinear, edlErrors } from "./checks/edl";
+import { checkFlashes } from "./checks/flashes";
 import {
   checkBitrate,
   checkBlackFrames,
@@ -34,6 +36,7 @@ import {
   checkHook,
   checkSilences,
   checkStaticShots,
+  checkTail,
   checkWholeWords,
 } from "./checks/montage";
 import {
@@ -47,8 +50,9 @@ import { checkColor, checkReframe } from "./checks/subject";
 import { buildReport, type CheckResult, type Report } from "./report";
 import { checkCaptionSyncTruth, checkFillersTruth, type Label } from "./truth";
 
-export { audioEditFrames, clickScore } from "./checks/audio";
+export { ANTIPHASE_CORRELATION, audioEditFrames, clickScore, phaseCorrelations } from "./checks/audio";
 export { contrastRatio, luminance, parseColor } from "./checks/captions";
+export { cellLuminances, flashBursts, luminanceChanges, MAX_FLASHES_PER_SECOND } from "./checks/flashes";
 export { checkSharpness, DUPLICATE_MAD } from "./checks/image";
 export { renderSubjects } from "./checks/subject";
 export {
@@ -108,6 +112,7 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
   await run(() => checkBitrate(ctx));
   await run(() => checkBlackFrames(ctx));
   await run(() => checkDuplicateFrames(ctx));
+  await run(() => checkFlashes(ctx.video));
   const edl = input.edl;
   if (edl) {
     const errors = edlErrors(edl);
@@ -119,6 +124,7 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
     await run(() => checkJlCuts(edl, profile));
     await run(() => checkCutClicks(video, edl, profile));
     await run(() => checkLoudness(video, profile));
+    await run(() => checkPhase(video, edl.output.fps));
     await run(() => checkSfxSync(video, edl, profile));
     const hasSpeech = Object.keys(analysis?.transcripts ?? {}).length > 0;
     if (hasSpeech) await run(() => checkDucking(video, edl, profile));
@@ -144,6 +150,7 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
     if (hasSpeech) {
       await run(() => checkSilences(video, edl, profile, analysis));
       await run(() => checkHook(video, profile));
+      await run(() => checkTail(video, profile));
       await run(() => checkWholeWords(edl, profile, analysis));
       if (truth) await run(() => checkFillersTruth(truth, profile, edl.output.fps));
       else if (input.transcribeOutput !== false)

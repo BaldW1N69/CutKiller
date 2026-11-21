@@ -10,7 +10,7 @@ import {
   tr,
   type VoiceActivity,
 } from "@cutkiller/core";
-import { decodeMono, measureLoudness, readWavF32 } from "@cutkiller/media";
+import { decodeMono, decodeStereo, measureLoudness, readWavF32 } from "@cutkiller/media";
 import { type CheckResult, graded, notEvaluated, type Violation } from "../report";
 
 const RATE = 48_000;
@@ -366,4 +366,68 @@ export async function checkDialogueBalance(
       : [],
     { spreadDb: Math.round(spread * 10) / 10, ...measured },
   );
+}
+
+/** Under this L/R correlation, a window is in anti-phase: the voice cancels when played in mono. */
+export const ANTIPHASE_CORRELATION = -0.2;
+const PHASE_WINDOW_S = 0.5;
+/** Windows quieter than this (dBFS) are not judged: nothing to cancel. */
+const PHASE_MIN_DB = -45;
+
+/**
+ * L/R correlation of each window of interleaved stereo samples loud enough to
+ * judge (null otherwise). +1: same signal on both sides (a centred voice);
+ * 0: unrelated; -1: one side inverted, silent once summed to mono (a phone, a
+ * smart speaker, a mono Bluetooth earbud).
+ */
+export function phaseCorrelations(stereo: Float32Array, rate: number): (number | null)[] {
+  const win = Math.round(PHASE_WINDOW_S * rate);
+  const out: (number | null)[] = [];
+  for (let start = 0; start + win <= stereo.length / 2; start += win) {
+    let ll = 0;
+    let rr = 0;
+    let lr = 0;
+    for (let i = start; i < start + win; i++) {
+      const l = stereo[2 * i] as number;
+      const r = stereo[2 * i + 1] as number;
+      ll += l * l;
+      rr += r * r;
+      lr += l * r;
+    }
+    const db = 10 * Math.log10((ll + rr) / (2 * win) + 1e-12);
+    out.push(db < PHASE_MIN_DB ? null : lr / Math.sqrt(ll * rr + 1e-24));
+  }
+  return out;
+}
+
+/** The mix survives a mono speaker: no stretch where left and right cancel. */
+export async function checkPhase(video: string, fps: number): Promise<CheckResult> {
+  const rate = 16_000;
+  const corr = phaseCorrelations(await decodeStereo(video, rate), rate);
+  const judged = corr.filter((c): c is number => c !== null);
+  if (judged.length === 0)
+    return notEvaluated("audio.phase", tr("silent audio track", "piste audio silencieuse"));
+  const violations: Violation[] = [];
+  let runStart = -1;
+  corr.forEach((c, k) => {
+    const bad = c !== null && c < ANTIPHASE_CORRELATION;
+    if (bad && runStart < 0) runStart = k;
+    if ((!bad || k === corr.length - 1) && runStart >= 0) {
+      const end = bad ? k + 1 : k;
+      violations.push({
+        message: tr(
+          `left and right in anti-phase for ${((end - runStart) * PHASE_WINDOW_S).toFixed(1)} s: the sound cancels in mono`,
+          `gauche et droite en opposition de phase pendant ${((end - runStart) * PHASE_WINDOW_S).toFixed(1)} s : le son s'annule en mono`,
+        ),
+        frame: Math.round(runStart * PHASE_WINDOW_S * fps),
+      });
+      runStart = -1;
+    }
+  });
+  const sorted = [...judged].sort((a, b) => a - b);
+  return graded("audio.phase", judged.length, violations, {
+    windows: judged.length,
+    minCorrelation: Math.round((sorted[0] as number) * 100) / 100,
+    medianCorrelation: Math.round((sorted[Math.floor(sorted.length / 2)] as number) * 100) / 100,
+  });
 }

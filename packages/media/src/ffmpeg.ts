@@ -200,6 +200,27 @@ export async function decodeMono(path: string, rate = 48_000): Promise<Float32Ar
   return new Float32Array(copy.buffer);
 }
 
+/** Interleaved stereo samples of the first audio stream (L, R, L, R…). */
+export async function decodeStereo(path: string, rate = 48_000): Promise<Float32Array> {
+  const { stdout } = await ffmpeg([
+    "-v",
+    "error",
+    ...mediaInput(path),
+    "-map",
+    "0:a:0",
+    "-ac",
+    "2",
+    "-ar",
+    String(rate),
+    "-f",
+    "f32le",
+    "-",
+  ]);
+  const copy = new Uint8Array(stdout.length - (stdout.length % 8));
+  copy.set(stdout.subarray(0, copy.length));
+  return new Float32Array(copy.buffer);
+}
+
 /**
  * A file path as an option value inside an FFmpeg filtergraph, unquoted
  * (`lut3d=file=${filterPath(p)}:interp=…`). FFmpeg unescapes twice: first the

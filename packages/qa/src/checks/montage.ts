@@ -175,6 +175,34 @@ export async function checkHook(
   );
 }
 
+/** The ending: the edit stops soon after the last word (no dead air). */
+export async function checkTail(
+  video: string,
+  profile: StyleProfile,
+  vadOverride?: VoiceActivity,
+): Promise<CheckResult> {
+  const vad = vadOverride ?? (await runWorker<VoiceActivity>("vad", { path: voiceTrack(video) }));
+  const last = vad.speech.at(-1)?.end;
+  if (last === undefined) return notEvaluated("montage.tail", tr("no voice heard", "aucune voix entendue"));
+  const tail = Math.max(0, vad.durationS - last);
+  const max = profile.montage.tailMaxS;
+  return graded(
+    "montage.tail",
+    1,
+    tail > max
+      ? [
+          {
+            message: tr(
+              `${tail.toFixed(2)} s after the last word (max ${max} s)`,
+              `${tail.toFixed(2)} s après le dernier mot (max ${max} s)`,
+            ),
+          },
+        ]
+      : [],
+    { tailS: Math.round(tail * 100) / 100, maxS: max },
+  );
+}
+
 export async function checkSilences(
   video: string,
   edl: Edl,
