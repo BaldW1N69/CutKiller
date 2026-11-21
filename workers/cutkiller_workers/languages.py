@@ -158,8 +158,29 @@ def fillers(code: str | None) -> frozenset[str]:
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 
 
+# Roman numerals as written by Whisper (« Kapitel II », « Louis XIV », « World War II »):
+# whole upper-case words of I V X L C, two letters or more (no D or M: « DID », « MID »).
+_ROMAN = re.compile(r"\b(?=[IVXLC]{2,}\b)C{0,3}(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})\b")
+_ROMAN_VALUES = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
+
+
+def _roman_value(token: str) -> int:
+    total = 0
+    for i, ch in enumerate(token):
+        v = _ROMAN_VALUES[ch]
+        nxt = _ROMAN_VALUES[token[i + 1]] if i + 1 < len(token) else 0
+        total += -v if v < nxt else v
+    return total
+
+
+def roman_to_digits(text: str) -> str:
+    """« II » → « 2 », so the spoken number can be spelled for the aligner."""
+    return _ROMAN.sub(lambda m: str(_roman_value(m.group(0))) if m.group(0) else m.group(0), text)
+
+
 def spell_numbers(text: str, code: str | None) -> str:
-    """Digits → words in the spoken language, for the CTC aligner."""
+    """Digits (and Roman numerals) → words in the spoken language, for the CTC aligner."""
+    text = roman_to_digits(text)
     if code == "fr":
         from .numbers import spell_numbers as spell_fr
 

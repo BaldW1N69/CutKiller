@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+import os
 import platform
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
+
+# One model cache, fixed before anything imports huggingface_hub (which reads
+# HF_HOME once, at import): otherwise the aligner landed in ~/.cache/huggingface
+# or in ~/.cache/cutkiller/hf depending on which task ran first, and was
+# downloaded twice.
+os.environ.setdefault("HF_HOME", str(Path.home() / ".cache" / "cutkiller" / "hf"))
 
 Task = Callable[[dict[str, Any]], Any]
 

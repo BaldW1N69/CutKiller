@@ -40,3 +40,15 @@ def test_device_defaults_to_cpu_and_can_be_forced(monkeypatch):
     monkeypatch.setenv("CUTKILLER_DEVICE", "cuda")
     assert device.whisper_compute_type(None) == "float16"
     device.device.cache_clear()
+
+
+def test_roman_numerals_are_spelled_for_the_aligner():
+    from cutkiller_workers.languages import roman_to_digits, spell_numbers
+
+    assert roman_to_digits("Kapitel II.") == "Kapitel 2."
+    assert roman_to_digits("Louis XIV") == "Louis 14"
+    # Words that look like numerals are left alone: one letter, D/M, invalid forms.
+    for word in ["I", "DID", "MIX", "CIVIL", "IIII", "Vive"]:
+        assert roman_to_digits(word) == word
+    assert spell_numbers("II.", "de").startswith("zwei")
+    assert spell_numbers("XIV", "fr") == "quatorze"
