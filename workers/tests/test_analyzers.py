@@ -73,6 +73,24 @@ def test_refine_boundaries_moves_ctc_edges_to_the_signal():
     assert abs(out[0]["end"] - 0.90) <= 0.01
 
 
+def test_refine_boundaries_pulls_whisper_edges_in_to_the_voice():
+    from cutkiller_workers.align import refine_boundaries
+
+    rate = 16_000
+    audio = np.zeros(rate * 2, dtype=np.float32)
+    rng = np.random.default_rng(0)
+    audio[int(0.90 * rate) : int(1.30 * rate)] = 0.3 * rng.standard_normal(int(0.4 * rate))
+    # Unaligned word (« 割 »): Whisper starts it 0.45 s before the voice.
+    words = [{"text": "割", "start": 0.45, "end": 1.40, "timing": "whisper"}]
+    out = refine_boundaries(audio, words, rate)
+    assert abs(out[0]["start"] - 0.90) <= 0.01
+    assert abs(out[0]["end"] - 1.30) <= 0.01
+    assert out[0]["timing"] == "whisper"
+    # Never pushed outwards, and a word over silence only is left alone.
+    silent = [{"text": "x", "start": 0.1, "end": 0.3, "timing": "whisper"}]
+    assert refine_boundaries(audio, silent, rate)[0]["start"] == 0.1
+
+
 def test_merge_apostrophes():
     from cutkiller_workers.align import merge_apostrophes
 

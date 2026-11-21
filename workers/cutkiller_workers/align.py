@@ -244,8 +244,10 @@ def refine_boundaries(
     out = [dict(w) for w in words]
     idx = lambda t: int(np.clip(round(t / HOP_S), 0, len(db) - 1))
     for k, w in enumerate(out):
-        if w.get("timing") != "forced":
-            continue
+        # A word the aligner could not place (a character outside its vocabulary,
+        # « 割 » in Chinese) keeps Whisper's edges, which can start 0.5 s before
+        # the voice: those are only pulled in to the signal, never pushed out.
+        forced = w.get("timing") == "forced"
         a, b = idx(w["start"]), idx(w["end"])
         peak = float(db[a : b + 1].max()) if b >= a else float(db[a])
         threshold = max(floor + 12, peak - 40)
@@ -253,15 +255,17 @@ def refine_boundaries(
         hi_bound = idx(out[k + 1]["start"] - 0.01) if k + 1 < len(out) else len(db) - 1
         lo_bound = max(lo_bound, idx(w["start"] - max_extend_s))
         hi_bound = min(hi_bound, idx(w["end"] + max_extend_s))
-        while a > lo_bound and db[a - 1] > threshold:
+        while forced and a > lo_bound and db[a - 1] > threshold:
             a -= 1
-        while b < hi_bound and db[b + 1] > threshold:
+        while forced and b < hi_bound and db[b + 1] > threshold:
             b += 1
         # Also pull a boundary inwards when the CTC span starts or ends in silence.
         while a < b and db[a] <= threshold:
             a += 1
         while b > a and db[b] <= threshold:
             b -= 1
+        if not forced and a >= b:  # no voice under it at all: leave it as heard
+            continue
         w["start"] = round(a * HOP_S, 3)
         w["end"] = round((b + 2) * HOP_S, 3)  # frame b covers [b*hop, b*hop + win)
     return out
