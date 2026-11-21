@@ -20,6 +20,13 @@ Audit of the whole code for a shared-service use ([report](docs/security/AUDIT-2
 - **Final renders 21 % faster** (54 s Short: 155 s → 122 s): delivery encodes use x264 `faster` instead of `medium`. At the delivery bitrate they measured the same: PSNR 37.04 vs 37.01 dB and SSIM 0.896 vs 0.893 on dense film grain (the hardest case), transparent on screen text, -0.9 dB at 54 dB on a soft interview. `veryfast` was rejected (-0.9 dB on grain). The upscale sharpening was kept: it multiplies fine detail by 5.4 (Laplacian variance), a visible effect, though it costs most of the decoding time.
 
 ### Fixed
+- **Invalid EDL on some rushes**: clip points rounded to the µs could overlap the next clip by a frame (crashed the cut pass on a Dutch reading).
+- **Greek never force-aligned** (upper-case Greek aligner vocabulary), and `captions.sync` no longer passes when under half the words are measured.
+- **Aligner windows** end in a pause and stay ordered; their padding no longer reaches the neighbouring words of a render (captions 9.8 and 17 frames early in Portuguese).
+- **Word cut off by the recording** detected behind codec padding and inside a stop (« es|curo »).
+- **Words outside the aligner's vocabulary** (« 割 ») no longer open a shot on half a second of silence.
+- **Last caption** cut short by the end of the edit joins the previous screen.
+- Help and MCP text give the real rule count (30).
 - **Roman numerals aligned** (« Kapitel II », « Louis XIV », « World War II »): spelled out in the spoken language before forced alignment, like digits. On a German audiobook « II. » was highlighted 12.7 frames early; now in sync.
 - **Speech models downloaded twice** (3.6 GB lost): depending on which analysis ran first in the worker, the aligner went to `~/.cache/huggingface` or to `~/.cache/cutkiller/hf`. The cache is now fixed when the worker starts: `~/.cache/cutkiller/hf` (or `HF_HOME`). A copy left in `~/.cache/huggingface` by an earlier version can be deleted.
 - **A word cut off by the recording itself is no longer kept**: the voice analysis measures the first and last 30 ms of each rush; when they are within 15 dB of the speech level, the word touching that edge was cut mid-way by the recording and is dropped (`montage.whole-words` flags it if kept). On the 60 s interview the edit no longer ends on a truncated « pour… »; the 180 s one, whose last word fades out 22 dB, is untouched.
