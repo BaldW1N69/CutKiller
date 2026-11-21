@@ -97,8 +97,7 @@ export function createServer(): McpServer {
     "auto_edit",
     {
       title: "Edit a video end to end",
-      description:
-        `Analyses the rushes, plans the edit (cuts silences and hesitations, beat-synced cuts, punch-ins, captions, music ducking, vertical reframing), renders it and runs the ${RULES.length}-rule quality check. Returns the score and every failed rule. Takes about 1–3× the footage duration on a CPU.`,
+      description: `Analyses the rushes, plans the edit (cuts silences and hesitations, beat-synced cuts, punch-ins, captions, music ducking, vertical reframing), renders it and runs the ${RULES.length}-rule quality check. Returns the score and every failed rule. Takes about 1–3× the footage duration on a CPU.`,
       inputSchema: {
         inputs: z.array(z.string()).min(1).describe("Rushes and music files (paths)"),
         outDir: z.string().describe("Output folder: edit.edl.json, final.mp4, final.srt, quality.md"),

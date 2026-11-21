@@ -220,4 +220,11 @@ describe("synchronisation au mot", () => {
     const r = await checkCaptionSync("v.mp4", dropped, long, analysis, ".", [at(0, 0), at(1, 0), at(3, 0)]);
     expect(r.violations.map((v) => v.message)).toContain("« trois » prononcé mais pas sous-titré");
   });
+
+  it("is not a pass when the aligner measured under half of the words (Greek, before its fix)", async () => {
+    const { edl, analysis } = captioned("a.mp4", ["un", "deux", "trois", "quatre"], long, [1920, 1080]);
+    const whisper = { start: 0, end: 0, timing: "whisper" as const };
+    const r = await checkCaptionSync("v.mp4", edl, long, analysis, ".", [whisper, whisper, whisper, whisper]);
+    expect(r.status).toBe("not-evaluated");
+  });
 });

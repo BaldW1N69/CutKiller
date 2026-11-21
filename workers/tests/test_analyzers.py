@@ -239,3 +239,19 @@ def test_aligner_windows_end_in_a_pause():
     assert all(we - ws <= MAX_WINDOW_S + 1e-9 for _, _, ws, we in windows)
     assert [a for a, _, _, _ in windows][1:] == [b for _, b, _, _ in windows][:-1]
     assert windows[-1][1] == len(words)
+    # Padding stops short of the neighbouring words (20.0 s → 21.0 s pause).
+    assert first_end == pytest.approx(19.9 + 0.4)
+    assert windows[1][2] == pytest.approx(21.0 - 0.4)
+    tight = _windows([{"start": 0.0, "end": 0.4}, {"start": 0.45, "end": 0.8}], 2.0)
+    assert len(tight) == 1
+
+
+def test_aligner_windows_do_not_pad_into_the_next_word():
+    from cutkiller_workers.align import NEIGHBOUR_S, _windows
+
+    # A render: no pause anywhere, 40 s of words 0.3 s apart.
+    words = [{"start": k * 0.3, "end": k * 0.3 + 0.28} for k in range(134)]
+    windows = _windows(words, 40.3)
+    _, b, _, end = windows[0]
+    assert end <= words[b]["start"] + NEIGHBOUR_S + 1e-9
+    assert windows[1][2] >= words[b - 1]["end"] - NEIGHBOUR_S - 1e-9

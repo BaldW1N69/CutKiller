@@ -25,6 +25,7 @@ FRAME_S = 320 / RATE  # wav2vec2 stride: 20 ms per emission frame
 MAX_WINDOW_S = 25.0
 PAD_S = 0.4
 SPLIT_SEARCH_S = 8.0
+NEIGHBOUR_S = 0.05
 
 
 def _hf_home() -> str:
@@ -52,6 +53,13 @@ def _model(name: str):
     return processor, model
 
 
+def _upper_case(vocab: dict[str, int]) -> bool:
+    """Whether the model's letters are upper case only (the Greek model is: Α–Ω,
+    no α–ω). Testing the Latin « a » alone missed it, and no Greek word aligned."""
+    letters = [ch for ch in vocab if len(ch) == 1 and ch.isalpha()]
+    return any(ch.isupper() for ch in letters) and not any(ch.islower() for ch in letters)
+
+
 def normalize(word: str, vocab: dict[str, int], language: str | None = "fr") -> str:
     """Lower-case, spell numbers out, keep only characters the acoustic model knows.
 
@@ -59,7 +67,7 @@ def normalize(word: str, vocab: dict[str, int], language: str | None = "fr") -> 
     model's word delimiter. Models with an upper-case vocabulary get upper case."""
     text = unicodedata.normalize("NFC", languages.spell_numbers(word, language).lower())
     text = text.replace("’", "'").replace("-", " ")
-    upper = "a" not in vocab and "A" in vocab
+    upper = _upper_case(vocab)
     if upper:
         text = text.upper()
     kept = "".join(ch for ch in text if ch == " " or (ch in vocab and ch != "|"))
@@ -76,6 +84,8 @@ def _windows(words: list[dict[str, Any]], duration: float) -> list[tuple[int, in
     i = 0
     while i < len(words):
         start = max(0.0, words[i]["start"] - PAD_S)
+        if i > 0:  # padding stops at the previous word (Whisper timing)
+            start = max(start, min(words[i]["start"], words[i - 1]["end"] - NEIGHBOUR_S))
         j = i
         while j + 1 < len(words) and words[j + 1]["end"] + PAD_S - start <= MAX_WINDOW_S:
             j += 1
@@ -84,6 +94,9 @@ def _windows(words: list[dict[str, Any]], duration: float) -> list[tuple[int, in
             candidates = [k for k in range(i, j + 1) if words[k]["end"] >= limit]
             j = max(candidates, key=lambda k: (words[k + 1]["start"] - words[k]["end"], k))
         end = min(duration, words[j]["end"] + PAD_S)
+        if j + 1 < len(words):  # nor into the next word: with pauses cut (a render),
+            # the padding holds its sound and the last word aligns on it
+            end = min(end, max(words[j]["end"], words[j + 1]["start"] + NEIGHBOUR_S))
         out.append((i, j + 1, start, end))
         i = j + 1
     return out
@@ -118,7 +131,10 @@ def align_words(
 
     aligned_until = 0.0  # end of the last word the previous window aligned
     for a, b, ws, we in _windows(words, duration):
-        ws = max(ws, aligned_until)
+        # Never before what the previous window aligned, never past where this
+        # window's first word starts (a last word stretched into the padding
+        # must not push the next one late).
+        ws = max(ws, min(aligned_until, words[a]["start"] - PAD_S / 4))
         if we - ws < FRAME_S:
             continue
         chunk = audio[int(ws * RATE) : int(we * RATE)]
