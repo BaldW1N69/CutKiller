@@ -251,7 +251,7 @@ def test_aligner_windows_end_in_a_pause():
     starts = [k * 0.5 for k in range(40)] + [21.0 + k * 0.5 for k in range(60)]
     words = [{"start": s, "end": s + 0.4} for s in starts]  # 19.5–19.9, then 21.0
     windows = _windows(words, 60.0)
-    first_a, first_b, _, first_end = windows[0]
+    _, first_b, _, first_end = windows[0]
     assert words[first_b - 1]["end"] == pytest.approx(19.9)
     assert words[first_b]["start"] == pytest.approx(21.0)
     assert all(we - ws <= MAX_WINDOW_S + 1e-9 for _, _, ws, we in windows)
