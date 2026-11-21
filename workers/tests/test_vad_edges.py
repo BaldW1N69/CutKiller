@@ -36,3 +36,10 @@ def test_cut_off_sound_is_loud_on_its_edge_a_faded_one_is_not(tmp_path):
     a, b = vad({"path": str(cut)}), vad({"path": str(faded)})
     assert a["edgeDb"]["end"] > a["speechDb"] - 15
     assert b["edgeDb"]["end"] < b["speechDb"] - 15
+
+
+def test_codec_padding_does_not_hide_a_cut_off_word(tmp_path):
+    padded = tmp_path / "padded.wav"
+    _tone(padded, "volume=0.5,apad=pad_dur=0.032")
+    a = vad({"path": str(padded)})
+    assert a["edgeDb"]["end"] > a["speechDb"] - 15

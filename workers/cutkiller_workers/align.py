@@ -24,6 +24,7 @@ RATE = 16_000
 FRAME_S = 320 / RATE  # wav2vec2 stride: 20 ms per emission frame
 MAX_WINDOW_S = 25.0
 PAD_S = 0.4
+SPLIT_SEARCH_S = 8.0
 
 
 def _hf_home() -> str:
@@ -66,7 +67,11 @@ def normalize(word: str, vocab: dict[str, int], language: str | None = "fr") -> 
 
 
 def _windows(words: list[dict[str, Any]], duration: float) -> list[tuple[int, int, float, float]]:
-    """Groups consecutive words into audio windows of at most MAX_WINDOW_S."""
+    """Groups consecutive words into audio windows of at most MAX_WINDOW_S.
+
+    Windows overlap by their padding, so each one ends in the longest pause of its
+    last SPLIT_SEARCH_S: split mid-sentence, the last word of a window could align
+    on the first word of the next one (measured: « que » placed after « EF »)."""
     out: list[tuple[int, int, float, float]] = []
     i = 0
     while i < len(words):
@@ -74,6 +79,10 @@ def _windows(words: list[dict[str, Any]], duration: float) -> list[tuple[int, in
         j = i
         while j + 1 < len(words) and words[j + 1]["end"] + PAD_S - start <= MAX_WINDOW_S:
             j += 1
+        if j + 1 < len(words):
+            limit = words[j]["end"] - SPLIT_SEARCH_S
+            candidates = [k for k in range(i, j + 1) if words[k]["end"] >= limit]
+            j = max(candidates, key=lambda k: (words[k + 1]["start"] - words[k]["end"], k))
         end = min(duration, words[j]["end"] + PAD_S)
         out.append((i, j + 1, start, end))
         i = j + 1
@@ -107,7 +116,11 @@ def align_words(
     duration = len(audio) / RATE
     result = [dict(w, timing="whisper") for w in words]
 
+    aligned_until = 0.0  # end of the last word the previous window aligned
     for a, b, ws, we in _windows(words, duration):
+        ws = max(ws, aligned_until)
+        if we - ws < FRAME_S:
+            continue
         chunk = audio[int(ws * RATE) : int(we * RATE)]
         inputs = processor(chunk, sampling_rate=RATE, return_tensors="pt")
         with torch.inference_mode():
@@ -144,6 +157,7 @@ def align_words(
                 alignScore=round(float(np.mean(conf[k])), 3),
                 timing="forced",
             )
+        aligned_until = max([aligned_until, *last.values()])
     return refine_boundaries(audio, result, floor_db=floor_db)
 
 

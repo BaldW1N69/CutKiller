@@ -224,3 +224,18 @@ def test_activity_follows_a_small_moving_square(tmp_path):
     assert all(s["cx"] < 0.3 and s["cy"] < 0.3 for s in early)
     assert all(s["cx"] > 0.7 and s["cy"] > 0.7 for s in late)
     assert all(s["fraction"] < 0.01 for s in early + late)
+
+
+def test_aligner_windows_end_in_a_pause():
+    from cutkiller_workers.align import MAX_WINDOW_S, _windows
+
+    # One word every 0.5 s, and a 1 s pause after the word ending at 20.0 s.
+    starts = [k * 0.5 for k in range(40)] + [21.0 + k * 0.5 for k in range(60)]
+    words = [{"start": s, "end": s + 0.4} for s in starts]  # 19.5–19.9, then 21.0
+    windows = _windows(words, 60.0)
+    first_a, first_b, _, first_end = windows[0]
+    assert words[first_b - 1]["end"] == pytest.approx(19.9)
+    assert words[first_b]["start"] == pytest.approx(21.0)
+    assert all(we - ws <= MAX_WINDOW_S + 1e-9 for _, _, ws, we in windows)
+    assert [a for a, _, _, _ in windows][1:] == [b for _, b, _, _ in windows][:-1]
+    assert windows[-1][1] == len(words)

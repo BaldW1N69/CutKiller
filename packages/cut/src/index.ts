@@ -1,4 +1,5 @@
 import {
+  clipFrames,
   type Diagnostic,
   type Edl,
   type EdlInput,
@@ -11,12 +12,14 @@ import {
 } from "@cutkiller/core";
 import { timelineBeats } from "./beats";
 import { planClips, zoomSplits } from "./plan";
+import { stored } from "./stored";
 import { speechTokens } from "./words";
 
 export { type AssembleOptions, assembleEdl, outputFps } from "./assemble";
 export { timelineBeats } from "./beats";
 export { brollPass, isBroll, type PieceScore, verticalFit } from "./broll";
 export { buildRuns, type PlannedClip, planClips, type Run, snapJumpCuts, zoomSplits } from "./plan";
+export { stored } from "./stored";
 export {
   classifyWords,
   normalizeWord,
@@ -71,8 +74,9 @@ export const cutPass: Pass = {
           clips.push({
             ...clip,
             id: bounds.length > 2 ? `${clip.id}-${String(j + 1).padStart(3, "0")}` : clip.id,
-            in: still ? clip.in : clip.in + a / fps,
-            out: still ? clip.in + (b - a) / fps : Math.round((clip.in + b / fps) * 1e6) / 1e6,
+            ...(still
+              ? { in: clip.in, out: clip.in + (b - a) / fps }
+              : stored(clip.in + a / fps, clip.in + b / fps, b - a, fps)),
             at: at + a,
             transform: { ...clip.transform, scale },
             ...(j > 0 ? { why: { kind: "zoom-cut" } } : {}),
@@ -106,8 +110,7 @@ export const cutPass: Pass = {
         clips.push({
           id: `${clip.id}-${String(j + 1).padStart(3, "0")}`,
           source: clip.source,
-          in: Math.round(p.in * 1e6) / 1e6,
-          out: Math.round(p.out * 1e6) / 1e6,
+          ...stored(p.in, p.out, p.frames, fps),
           at,
           transform: { scale: p.scale, x: 0, y: 0 },
           why: { kind: p.kind, wordIds: p.wordIds, ...(p.note ? { note: p.note } : {}) },
@@ -173,7 +176,7 @@ export function sourceChangeLCuts(
   const [min, max] = ctx.profile.montage.jlCutFrames;
   if (wanted <= 0 || cutToMusic) return 0;
   const minShot = Math.round(ctx.profile.montage.minShotS * fps);
-  const frames = (c: ClipInput) => Math.round((c.out - c.in) * fps);
+  const frames = (c: ClipInput) => clipFrames(c, fps);
   let made = 0;
   for (let k = 1; k < clips.length; k++) {
     const prev = clips[k - 1] as ClipInput;
@@ -186,8 +189,11 @@ export function sourceChangeLCuts(
       const earlier = cur.in - t;
       if (earlier < 0 || frames(prev) - n < minShot) continue;
       if (words.some((w) => w.end > earlier && w.start < cur.in)) continue;
-      prev.out = round6(prev.out - t);
-      cur.in = round6(earlier);
+      const [prevFrames, curFrames] = [frames(prev), frames(cur)];
+      prev.out = stored(prev.in, prev.out - t, prevFrames - n, fps).out;
+      const moved = stored(earlier, cur.out, curFrames + n, fps);
+      cur.in = moved.in;
+      cur.out = moved.out;
       cur.at = (cur.at ?? 0) - n;
       cur.audioSplitFrames = n;
       made++;

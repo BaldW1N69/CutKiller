@@ -14,6 +14,7 @@ import {
   type VideoClip,
 } from "@cutkiller/core";
 import { timelineBeats } from "./beats";
+import { stored } from "./stored";
 
 /**
  * A B-roll source: marked so (`--broll`), or, once speech was analysed, a video
@@ -309,8 +310,7 @@ export const brollPass: Pass = {
         overlay.push({
           id: `b${String(overlay.length + 1).padStart(3, "0")}`,
           source: piece.source,
-          in: Math.round(piece.in * 1e6) / 1e6,
-          out: Math.round(piece.out * 1e6) / 1e6,
+          ...stored(piece.in, piece.out, cut.to - cut.from, fps),
           at: cut.from,
           why: {
             kind: "broll",
@@ -353,8 +353,7 @@ export const brollPass: Pass = {
         const clip = {
           id: `s${String(k + 1).padStart(3, "0")}`,
           source: p.source,
-          in: Math.round(p.in * 1e6) / 1e6,
-          out: Math.round((p.in + (frames[k] as number) / fps) * 1e6) / 1e6,
+          ...stored(p.in, p.in + (frames[k] as number) / fps, frames[k] as number, fps),
           at,
           // Natural sound of the B-roll stays far under the music.
           gainDb: -20,

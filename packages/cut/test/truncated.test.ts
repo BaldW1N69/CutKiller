@@ -35,4 +35,21 @@ describe("words cut off by the recording", () => {
     const faded = speechTokens(words, [{ start: 0, end: 60 }], await loadProfile("short"), vad(-57.3, -41.1));
     expect(faded.tokens.every((t) => !t.removed)).toBe(true);
   });
+
+  it("drops an edge word the aligner could not fit, even on a quiet edge (cut in a stop)", async () => {
+    const words = [
+      word("de", 59.78, 59.86),
+      { ...word("escuro", 59.86, 60.005), alignScore: 0.331 }, // LibriVox pt, cut in « es|curo »
+    ];
+    const quiet = { ...vad(-57.3, -48), durationS: 60.032 };
+    const { tokens } = speechTokens(words, [{ start: 0, end: 60.032 }], await loadProfile("long"), quiet);
+    expect(tokens.map((t) => t.removed)).toEqual([undefined, "truncated"]);
+    const fit = speechTokens(
+      [word("de", 59.5, 59.58), { ...word("escuro", 59.6, 60.0), alignScore: 0.95 }],
+      [{ start: 0, end: 60.032 }],
+      await loadProfile("long"),
+      quiet,
+    );
+    expect(fit.tokens.every((t) => !t.removed)).toBe(true);
+  });
 });
