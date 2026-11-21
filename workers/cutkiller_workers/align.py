@@ -26,6 +26,9 @@ MAX_WINDOW_S = 25.0
 PAD_S = 0.4
 SPLIT_SEARCH_S = 8.0
 NEIGHBOUR_S = 0.05
+# Whisper's word edges drift: whatever the neighbours, a window keeps this much
+# padding (measured: at 0.05 s, « ее » lost its onset and aligned 5 frames late).
+MIN_PAD_S = 0.15
 
 
 def _hf_home() -> str:
@@ -85,7 +88,7 @@ def _windows(words: list[dict[str, Any]], duration: float) -> list[tuple[int, in
     while i < len(words):
         start = max(0.0, words[i]["start"] - PAD_S)
         if i > 0:  # padding stops at the previous word (Whisper timing)
-            start = max(start, min(words[i]["start"], words[i - 1]["end"] - NEIGHBOUR_S))
+            start = max(start, min(words[i]["start"] - MIN_PAD_S, words[i - 1]["end"] - NEIGHBOUR_S))
         j = i
         while j + 1 < len(words) and words[j + 1]["end"] + PAD_S - start <= MAX_WINDOW_S:
             j += 1
@@ -96,7 +99,7 @@ def _windows(words: list[dict[str, Any]], duration: float) -> list[tuple[int, in
         end = min(duration, words[j]["end"] + PAD_S)
         if j + 1 < len(words):  # nor into the next word: with pauses cut (a render),
             # the padding holds its sound and the last word aligns on it
-            end = min(end, max(words[j]["end"], words[j + 1]["start"] + NEIGHBOUR_S))
+            end = min(end, max(words[j]["end"] + MIN_PAD_S, words[j + 1]["start"] + NEIGHBOUR_S))
         out.append((i, j + 1, start, end))
         i = j + 1
     return out

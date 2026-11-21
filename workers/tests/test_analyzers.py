@@ -247,11 +247,14 @@ def test_aligner_windows_end_in_a_pause():
 
 
 def test_aligner_windows_do_not_pad_into_the_next_word():
-    from cutkiller_workers.align import NEIGHBOUR_S, _windows
+    from cutkiller_workers.align import MIN_PAD_S, NEIGHBOUR_S, _windows
 
     # A render: no pause anywhere, 40 s of words 0.3 s apart.
     words = [{"start": k * 0.3, "end": k * 0.3 + 0.28} for k in range(134)]
     windows = _windows(words, 40.3)
     _, b, _, end = windows[0]
-    assert end <= words[b]["start"] + NEIGHBOUR_S + 1e-9
-    assert windows[1][2] >= words[b - 1]["end"] - NEIGHBOUR_S - 1e-9
+    assert end <= max(words[b]["start"] + NEIGHBOUR_S, words[b - 1]["end"] + MIN_PAD_S) + 1e-9
+    assert windows[1][2] >= min(words[b - 1]["end"] - NEIGHBOUR_S, words[b]["start"] - MIN_PAD_S) - 1e-9
+    # Still some padding for Whisper's drift.
+    assert end >= words[b - 1]["end"] + MIN_PAD_S - 1e-9
+    assert windows[1][2] <= words[b]["start"] - MIN_PAD_S + 1e-9
