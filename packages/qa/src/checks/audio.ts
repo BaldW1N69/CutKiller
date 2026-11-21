@@ -425,9 +425,14 @@ export async function checkPhase(video: string, fps: number): Promise<CheckResul
     }
   });
   const sorted = [...judged].sort((a, b) => a - b);
-  return graded("audio.phase", judged.length, violations, {
+  const bad = judged.filter((c) => c < ANTIPHASE_CORRELATION).length;
+  const result = graded("audio.phase", judged.length, violations, {
     windows: judged.length,
     minCorrelation: Math.round((sorted[0] as number) * 100) / 100,
     medianCorrelation: Math.round((sorted[Math.floor(sorted.length / 2)] as number) * 100) / 100,
+    antiphaseWindows: bad,
   });
+  // Scored on the share of sound that cancels, not on the number of stretches:
+  // a mix inverted from start to end is one stretch, and fully broken.
+  return { ...result, score: (judged.length - bad) / judged.length };
 }

@@ -331,16 +331,16 @@ export const VARIANTS: Variant[] = [
     id: "tail-dead-air",
     rule: "montage.tail",
     expect: "fail",
-    what: "3 s sans voix ajoutées en fin de montage (temps mort après le dernier mot)",
+    what: "2,5 s sans voix ajoutées en fin de montage (temps mort après le dernier mot, seuil 1,5 s)",
     edl(edl, base) {
       const clips = main(edl);
       const last = clips.at(-1);
       if (!last) throw new Error("variante inapplicable : piste vide");
       const fps = edl.output.fps;
-      const want = Math.round(3 * fps);
+      const want = Math.round(2.5 * fps);
       const pieces = silentPieces(edl, base, last.source, want);
       const total = pieces.reduce((n, p) => n + p.frames, 0);
-      if (total < want) throw new Error("variante inapplicable : moins de 3 s de silence dans le rush");
+      if (total < want) throw new Error("variante inapplicable : moins de 2,5 s de silence dans le rush");
       let at = clipEnd(last, fps);
       for (const [k, piece] of pieces.entries()) {
         const { reframe: _moving, ...still } = last;
