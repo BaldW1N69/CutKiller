@@ -4,6 +4,7 @@ import {
   cellLuminances,
   channelLevels,
   clippedSeconds,
+  dropouts,
   flashBursts,
   luminanceChanges,
   parseIdet,
@@ -123,5 +124,19 @@ describe("image.interlace", () => {
       progressive: 30,
     });
     expect(parseIdet("nothing")).toBeUndefined();
+  });
+});
+
+describe("audio.dropouts", () => {
+  it("finds digital silence inside the sound, not a quiet pause or the head and tail", () => {
+    const rate = 48_000;
+    const sound = new Float32Array(rate * 3);
+    for (let i = rate / 4; i < sound.length - rate / 4; i++) sound[i] = 0.001 * Math.sin(i); // room tone, -60 dBFS
+    expect(dropouts(sound, rate)).toEqual([]);
+    sound.fill(0, rate, rate + rate / 2); // 500 ms gone
+    const gaps = dropouts(sound, rate);
+    expect(gaps).toHaveLength(1);
+    expect((gaps[0] as [number, number])[0]).toBeCloseTo(1, 3);
+    expect((gaps[0] as [number, number])[1]).toBeCloseTo(1.5, 3);
   });
 });

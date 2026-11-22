@@ -325,6 +325,8 @@ export const StyleProfileSchema = z.object({
   audio: z.object({
     integratedLufs: z.number().default(-14),
     lufsTolerance: z.number().nonnegative().default(1),
+    /** Loudness range (EBU R128 LRA, LU): speech that keeps one level. Dynamic edits (cinematic) allow more. */
+    maxLoudnessRangeLu: z.number().positive().default(10),
     truePeakDbtp: z.number().default(-1),
     duckingDb: Range.default([-18, -12]),
     cutFadeMs: Range.default([5, 10]),

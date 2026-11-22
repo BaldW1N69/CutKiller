@@ -554,3 +554,76 @@ export async function checkAudioFormat(video: string, profile: StyleProfile): Pr
     kbps,
   });
 }
+
+/** Loudness range of the delivered sound (EBU R128 LRA): no part much louder or quieter than the rest. */
+export async function checkLoudnessRange(video: string, profile: StyleProfile): Promise<CheckResult> {
+  const l = await measureLoudness(video);
+  if (!Number.isFinite(l.integrated) || l.integrated <= -69.5)
+    return notEvaluated("audio.loudness-range", tr("silent audio track", "piste audio silencieuse"));
+  const max = profile.audio.maxLoudnessRangeLu;
+  return graded(
+    "audio.loudness-range",
+    1,
+    l.range > max + 1e-9
+      ? [
+          {
+            message: tr(
+              `loudness range ${l.range.toFixed(1)} LU (max ${max}): parts too quiet or too loud`,
+              `plage de loudness ${l.range.toFixed(1)} LU (max ${max}) : passages trop faibles ou trop forts`,
+            ),
+          },
+        ]
+      : [],
+    { lraLu: l.range, maxLu: max },
+  );
+}
+
+/** Under this magnitude a sample is digital silence (about -100 dBFS): no room tone is that quiet. */
+const DROPOUT_LEVEL = 1e-5;
+/** Digital silence longer than this inside the programme is a dropout. */
+export const DROPOUT_MIN_S = 0.1;
+
+/**
+ * Runs [start, end) in seconds of digital silence longer than DROPOUT_MIN_S
+ * between the first and the last sound: the sound went missing (a corrupt
+ * stream, a decoder gap), not a pause, which keeps the room's noise.
+ */
+export function dropouts(mono: Float32Array, rate: number): [number, number][] {
+  const loud = (i: number) => Math.abs(mono[i] as number) >= DROPOUT_LEVEL;
+  let first = 0;
+  while (first < mono.length && !loud(first)) first++;
+  let last = mono.length - 1;
+  while (last > first && !loud(last)) last--;
+  const out: [number, number][] = [];
+  let run = -1;
+  for (let i = first; i <= last; i++) {
+    if (!loud(i)) {
+      if (run < 0) run = i;
+    } else if (run >= 0) {
+      if ((i - run) / rate > DROPOUT_MIN_S) out.push([run / rate, i / rate]);
+      run = -1;
+    }
+  }
+  return out;
+}
+
+/** No stretch of digital silence inside the delivered sound. */
+export async function checkDropouts(video: string, fps: number): Promise<CheckResult> {
+  const rate = 48_000;
+  const mono = await decodeMono(video, rate);
+  if (mono.length === 0) return notEvaluated("audio.dropouts", tr("no audio", "pas de son"));
+  const gaps = dropouts(mono, rate);
+  const seconds = Math.max(1, Math.ceil(mono.length / rate));
+  return graded(
+    "audio.dropouts",
+    seconds,
+    gaps.map(([a, b]) => ({
+      message: tr(
+        `${Math.round((b - a) * 1000)} ms of digital silence (the sound drops out)`,
+        `${Math.round((b - a) * 1000)} ms de silence numérique (le son disparaît)`,
+      ),
+      frame: Math.round(a * fps),
+    })),
+    { dropouts: gaps.length, missingS: Math.round(gaps.reduce((n, [a, b]) => n + b - a, 0) * 100) / 100 },
+  );
+}

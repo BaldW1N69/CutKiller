@@ -38,6 +38,7 @@ Audit of the whole code for a shared-service use ([report](docs/security/AUDIT-2
 - Windows: Studio served every file as 404 (path check with `/`); the OTIO test expected POSIX file URLs.
 
 ### Added
+- **Two more quality rules (39)**: `audio.dropouts` (no digital silence inside the sound) and `audio.loudness-range` (LRA ≤ 10 LU, 15 for cinematic profiles). A caption reading-speed rule was measured and dropped: real read speech reaches 22.9 characters per second, so it would judge the speaker, not the edit.
 - **Four more quality rules (37)**: `audio.channel-balance` (no voice from one side only), `audio.clipping`, `audio.export-format` (AAC, 44.1/48 kHz, ≥ 128 kb/s), `image.interlace` (progressive picture; caption text is masked, Cyrillic strokes fooled the detector). Calibrated, no false alarm on the 10 language renders.
 - **Three new quality rules (33)**: `image.flashes` (no more than 3 flashes per second, WCAG 2.3.1), `audio.phase` (the mix does not cancel on a mono speaker), `montage.tail` (no dead air after the last word). Each is calibrated with an injected defect and a valid witness; weights rebalanced, still 20 points per category.
 - **Spanish, German and Italian validated on real speech** (LibriVox, 60 s each, language detected automatically): 99.9/100 each, caption sync median 0.2 frame, p95 ≤ 0.8 frame, no hesitation left.

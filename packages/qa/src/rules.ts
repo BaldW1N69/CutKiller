@@ -203,7 +203,7 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "-14 LUFS ±1, true peak ≤ -1 dBTP",
     titleEn: "-14 LUFS ±1, true peak ≤ -1 dBTP",
-    weight: 5,
+    weight: 4,
     phase: 5,
     measuredOn: "rendu",
   },
@@ -244,6 +244,24 @@ export const RULES: readonly Rule[] = [
     measuredOn: "rendu",
   },
   {
+    id: "audio.dropouts",
+    category: "audio",
+    titleFr: "Aucun trou de son (silence numérique)",
+    titleEn: "No sound dropouts (digital silence)",
+    weight: 1,
+    phase: 9,
+    measuredOn: "rendu",
+  },
+  {
+    id: "audio.loudness-range",
+    category: "audio",
+    titleFr: "Plage de loudness maîtrisée (LRA)",
+    titleEn: "Controlled loudness range (LRA)",
+    weight: 1,
+    phase: 9,
+    measuredOn: "rendu",
+  },
+  {
     id: "audio.dialogue-balance",
     category: "audio",
     titleFr: "Dialogue au même niveau d'un rush à l'autre",
@@ -275,7 +293,7 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "Aucun clic aux coupes (fondus 5–10 ms)",
     titleEn: "No clicks at cuts (5–10 ms fades)",
-    weight: 3,
+    weight: 2,
     phase: 1,
     measuredOn: "rendu + EDL",
   },
@@ -519,6 +537,13 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
       return `AAC, ${p.export.audioSampleRates.join(" / ")} Hz, ≥ ${p.export.minAudioKbps} kb/s`;
     case "image.interlace":
       return tr("≤ 5 % of frames interlaced (idet)", "≤ 5 % d'images entrelacées (idet)");
+    case "audio.dropouts":
+      return tr(
+        `no digital silence > ${0.1 * 1000} ms inside the sound`,
+        `aucun silence numérique > ${0.1 * 1000} ms dans le son`,
+      );
+    case "audio.loudness-range":
+      return `LRA ≤ ${p.audio.maxLoudnessRangeLu} LU`;
     case "image.duplicate-frames":
       return tr("no frozen picture while the source moves", "aucune image figée quand la source bouge");
     default:

@@ -12,8 +12,10 @@ import {
   checkClipping,
   checkCutClicks,
   checkDialogueBalance,
+  checkDropouts,
   checkDucking,
   checkLoudness,
+  checkLoudnessRange,
   checkPhase,
   checkSfxSync,
 } from "./checks/audio";
@@ -60,6 +62,7 @@ export {
   channelLevels,
   clickScore,
   clippedSeconds,
+  dropouts,
   phaseCorrelations,
 } from "./checks/audio";
 export { contrastRatio, luminance, parseColor } from "./checks/captions";
@@ -140,6 +143,8 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
     await run(() => checkPhase(video, edl.output.fps));
     await run(() => checkChannelBalance(video));
     await run(() => checkClipping(video, edl.output.fps));
+    await run(() => checkDropouts(video, edl.output.fps));
+    await run(() => checkLoudnessRange(video, profile));
     await run(() => checkSfxSync(video, edl, profile));
     const hasSpeech = Object.keys(analysis?.transcripts ?? {}).length > 0;
     if (hasSpeech) await run(() => checkDucking(video, edl, profile));
