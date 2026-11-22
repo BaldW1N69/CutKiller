@@ -38,6 +38,7 @@ Audit of the whole code for a shared-service use ([report](docs/security/AUDIT-2
 - Windows: Studio served every file as 404 (path check with `/`); the OTIO test expected POSIX file URLs.
 
 ### Added
+- **Four more quality rules (37)**: `audio.channel-balance` (no voice from one side only), `audio.clipping`, `audio.export-format` (AAC, 44.1/48 kHz, ≥ 128 kb/s), `image.interlace` (progressive picture; caption text is masked, Cyrillic strokes fooled the detector). Calibrated, no false alarm on the 10 language renders.
 - **Three new quality rules (33)**: `image.flashes` (no more than 3 flashes per second, WCAG 2.3.1), `audio.phase` (the mix does not cancel on a mono speaker), `montage.tail` (no dead air after the last word). Each is calibrated with an injected defect and a valid witness; weights rebalanced, still 20 points per category.
 - **Spanish, German and Italian validated on real speech** (LibriVox, 60 s each, language detected automatically): 99.9/100 each, caption sync median 0.2 frame, p95 ≤ 0.8 frame, no hesitation left.
 - **Dialogue balanced across rushes** (`profile.audio.dialogueBalance`, on by default): each rush's clips get the gain that brings its speech level (measured in analysis, loud speech within the voice activity) to the median of the rushes, up to ±12 dB, manual gains untouched. **QA rule `audio.dialogue-balance`** (30 rules): speech levels of the rushes within 3 dB on the rendered dialogue. Measured with a second mic 9 dB quieter: spread 7.6 dB without balancing (rule fails).

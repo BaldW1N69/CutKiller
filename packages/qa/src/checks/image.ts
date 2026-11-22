@@ -347,14 +347,26 @@ export function parseIdet(stderr: string): { interlaced: number; progressive: nu
   return { interlaced: Number(m[1]) + Number(m[2]), progressive: Number(m[3]) };
 }
 
+/** A flat band over where the profile places captions (a two-line block, with margin). */
+function captionMask(profile: StyleProfile): string {
+  const { anchor, y } = profile.captions.placement;
+  const [top, bottom] = anchor === "bottom" ? [y - 0.25, 1] : [y - 0.17, y + 0.17];
+  const a = Math.max(0, top);
+  const b = Math.min(1, bottom);
+  return `drawbox=x=0:y=ih*${a.toFixed(3)}:w=iw:h=ih*${(b - a).toFixed(3)}:color=black:t=fill`;
+}
+
 /** The delivered picture is progressive: no interlaced (combed) frames. */
 export async function checkInterlace(ctx: VideoContext): Promise<CheckResult> {
+  // Caption text (thin horizontal strokes: Cyrillic, Greek) reads as combing to
+  // idet: measured 12 % of a progressive Russian render. Its band is masked.
+  const filters = [...(ctx.edl && ctx.edl.captions.length > 0 ? [captionMask(ctx.profile)] : []), "idet"];
   const { stderr } = await ffmpeg([
     ...mediaInput(ctx.video),
     "-map",
     "0:v:0",
     "-vf",
-    "idet",
+    filters.join(","),
     "-an",
     "-f",
     "null",
