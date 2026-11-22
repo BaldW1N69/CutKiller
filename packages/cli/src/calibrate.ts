@@ -576,6 +576,7 @@ export const VARIANTS: Variant[] = [
     expect: "fail",
     what: "fichier livré remonté de 8 dB (−6 LUFS, crêtes écrêtées)",
     post: (video) => replaceWith(video, ["-c:v", "copy", "-af", "volume=8dB", "-c:a", "aac", "-b:a", "192k"]),
+    consequences: ["audio.clipping"],
   },
   {
     id: "antiphase",
@@ -593,6 +594,67 @@ export const VARIANTS: Variant[] = [
     post: (video) =>
       replaceWith(video, ["-c:v", "copy", "-af", "extrastereo=m=1.5", "-c:a", "aac", "-b:a", "192k"]),
     consequences: ["audio.loudness"],
+  },
+  {
+    id: "one-sided",
+    rule: "audio.channel-balance",
+    expect: "fail",
+    what: "canal droit du fichier livré à -26 dB : la voix ne sort que d'un côté (micro cravate sur un seul canal)",
+    post: (video) =>
+      replaceWith(video, [
+        "-c:v",
+        "copy",
+        "-af",
+        "pan=stereo|c0=c0|c1=0.05*c1",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+      ]),
+    consequences: ["audio.loudness"],
+  },
+  {
+    id: "balance-ok",
+    rule: "audio.channel-balance",
+    expect: "pass",
+    what: "témoin : canal droit 1,5 dB plus bas (sous le seuil de 3 dB)",
+    post: (video) =>
+      replaceWith(video, [
+        "-c:v",
+        "copy",
+        "-af",
+        "pan=stereo|c0=c0|c1=0.84*c1",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+      ]),
+    consequences: ["audio.loudness"],
+  },
+  {
+    id: "clipping",
+    rule: "audio.clipping",
+    expect: "fail",
+    what: "son livré remonté de 14 dB puis écrêté à pleine échelle",
+    post: (video) =>
+      replaceWith(video, [
+        "-c:v",
+        "copy",
+        "-af",
+        "volume=14dB,aformat=sample_fmts=s16",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+      ]),
+    consequences: ["audio.loudness", "audio.ducking", "audio.cut-clicks"],
+  },
+  {
+    id: "audio-format",
+    rule: "audio.export-format",
+    expect: "fail",
+    what: "son livré réencodé en 22,05 kHz à 64 kb/s",
+    post: (video) => replaceWith(video, ["-c:v", "copy", "-c:a", "aac", "-ar", "22050", "-b:a", "64k"]),
   },
   {
     id: "ducking",
@@ -735,6 +797,20 @@ export const VARIANTS: Variant[] = [
         ),
       ),
     consequences: ["image.color", "image.reframe", "captions.contrast", "image.duplicate-frames"],
+  },
+  {
+    id: "interlaced",
+    rule: "image.interlace",
+    expect: "fail",
+    what: "fichier livré entrelacé (deux images par trame, peignes sur le mouvement)",
+    post: (video) => replaceWith(video, reencodeVideo("interlace=scan=tff:lowpass=0,fps=30")),
+    consequences: [
+      "image.duplicate-frames",
+      "motion.blur",
+      "image.reframe",
+      "image.color",
+      "captions.contrast",
+    ],
   },
   {
     id: "sharpness",

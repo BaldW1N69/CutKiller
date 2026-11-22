@@ -37,6 +37,9 @@ export const StyleProfileSchema = z.object({
      * a 120 % punch-in; a 720p one ×2.67: the detail is not there to show.
      */
     maxUpscale: z.number().min(1).default(2.2),
+    /** Delivered audio: AAC at one of these sample rates, at least this bitrate (all channels). */
+    audioSampleRates: z.array(z.number().int().positive()).default([44_100, 48_000]),
+    minAudioKbps: z.number().positive().default(128),
   }),
   /**
    * Moving framing when the rush and the output differ in aspect (16:9 → 9:16):

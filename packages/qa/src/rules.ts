@@ -203,7 +203,7 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "-14 LUFS ±1, true peak ≤ -1 dBTP",
     titleEn: "-14 LUFS ±1, true peak ≤ -1 dBTP",
-    weight: 6,
+    weight: 5,
     phase: 5,
     measuredOn: "rendu",
   },
@@ -212,7 +212,34 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "Son compatible mono : pas d'opposition de phase",
     titleEn: "Mono-safe sound: no left/right anti-phase",
+    weight: 1,
+    phase: 9,
+    measuredOn: "rendu",
+  },
+  {
+    id: "audio.channel-balance",
+    category: "audio",
+    titleFr: "Gauche et droite au même niveau (pas de voix d'un seul côté)",
+    titleEn: "Left and right at the same level (no one-sided voice)",
     weight: 2,
+    phase: 9,
+    measuredOn: "rendu",
+  },
+  {
+    id: "audio.clipping",
+    category: "audio",
+    titleFr: "Aucune crête écrêtée",
+    titleEn: "No clipped peaks",
+    weight: 1,
+    phase: 9,
+    measuredOn: "rendu",
+  },
+  {
+    id: "audio.export-format",
+    category: "audio",
+    titleFr: "AAC, 44,1 ou 48 kHz, débit suffisant",
+    titleEn: "AAC, 44.1 or 48 kHz, enough bitrate",
+    weight: 1,
     phase: 9,
     measuredOn: "rendu",
   },
@@ -230,7 +257,7 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "Ducking de la musique -12 à -18 dB, sans pompage",
     titleEn: "Music ducked -12 to -18 dB, no pumping",
-    weight: 4,
+    weight: 3,
     phase: 5,
     measuredOn: "rendu",
   },
@@ -239,7 +266,7 @@ export const RULES: readonly Rule[] = [
     category: "audio",
     titleFr: "SFX synchronisés (±1 frame)",
     titleEn: "SFX in sync (±1 frame)",
-    weight: 3,
+    weight: 2,
     phase: 5,
     measuredOn: "rendu + EDL",
   },
@@ -257,7 +284,7 @@ export const RULES: readonly Rule[] = [
     category: "image",
     titleFr: "Recadrage 9:16 qui suit le sujet sans saccade",
     titleEn: "9:16 reframing follows the subject smoothly",
-    weight: 4,
+    weight: 3,
     phase: 6,
     measuredOn: "rendu + EDL",
   },
@@ -321,6 +348,15 @@ export const RULES: readonly Rule[] = [
     titleFr: "Pas plus de 3 flashs par seconde (WCAG 2.3.1)",
     titleEn: "No more than 3 flashes per second (WCAG 2.3.1)",
     weight: 2,
+    phase: 9,
+    measuredOn: "rendu",
+  },
+  {
+    id: "image.interlace",
+    category: "image",
+    titleFr: "Image progressive (pas d'entrelacement)",
+    titleEn: "Progressive picture (no interlacing)",
+    weight: 1,
     phase: 9,
     measuredOn: "rendu",
   },
@@ -475,6 +511,14 @@ export function ruleThreshold(id: string, p: StyleProfile): string {
         "≤ 3 flashes in any second (general flash threshold)",
         "≤ 3 flashs par seconde (seuil de flash général)",
       );
+    case "audio.channel-balance":
+      return tr("|L − R| ≤ 3 dB", "|G − D| ≤ 3 dB");
+    case "audio.clipping":
+      return tr("no 3 samples in a row at full scale", "jamais 3 échantillons de suite à pleine échelle");
+    case "audio.export-format":
+      return `AAC, ${p.export.audioSampleRates.join(" / ")} Hz, ≥ ${p.export.minAudioKbps} kb/s`;
+    case "image.interlace":
+      return tr("≤ 5 % of frames interlaced (idet)", "≤ 5 % d'images entrelacées (idet)");
     case "image.duplicate-frames":
       return tr("no frozen picture while the source moves", "aucune image figée quand la source bouge");
     default:

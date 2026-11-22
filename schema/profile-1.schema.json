@@ -119,6 +119,23 @@
           "default": 2.2,
           "type": "number",
           "minimum": 1
+        },
+        "audioSampleRates": {
+          "default": [
+            44100,
+            48000
+          ],
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "minAudioKbps": {
+          "default": 128,
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       },
       "required": [

@@ -7,6 +7,9 @@ import {
 } from "@cutkiller/core";
 import { PresetRegistry } from "@cutkiller/style";
 import {
+  checkAudioFormat,
+  checkChannelBalance,
+  checkClipping,
   checkCutClicks,
   checkDialogueBalance,
   checkDucking,
@@ -28,6 +31,7 @@ import {
   checkBlackFrames,
   checkDuplicateFrames,
   checkExportFormat,
+  checkInterlace,
   checkSharpness,
 } from "./checks/image";
 import {
@@ -50,10 +54,17 @@ import { checkColor, checkReframe } from "./checks/subject";
 import { buildReport, type CheckResult, type Report } from "./report";
 import { checkCaptionSyncTruth, checkFillersTruth, type Label } from "./truth";
 
-export { ANTIPHASE_CORRELATION, audioEditFrames, clickScore, phaseCorrelations } from "./checks/audio";
+export {
+  ANTIPHASE_CORRELATION,
+  audioEditFrames,
+  channelLevels,
+  clickScore,
+  clippedSeconds,
+  phaseCorrelations,
+} from "./checks/audio";
 export { contrastRatio, luminance, parseColor } from "./checks/captions";
 export { cellLuminances, flashBursts, luminanceChanges, MAX_FLASHES_PER_SECOND } from "./checks/flashes";
-export { checkSharpness, DUPLICATE_MAD } from "./checks/image";
+export { checkSharpness, DUPLICATE_MAD, parseIdet } from "./checks/image";
 export { renderSubjects } from "./checks/subject";
 export {
   type Comparison,
@@ -113,6 +124,8 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
   await run(() => checkBlackFrames(ctx));
   await run(() => checkDuplicateFrames(ctx));
   await run(() => checkFlashes(ctx.video));
+  await run(() => checkInterlace(ctx));
+  await run(() => checkAudioFormat(ctx.video, ctx.profile));
   const edl = input.edl;
   if (edl) {
     const errors = edlErrors(edl);
@@ -125,6 +138,8 @@ export async function qualityCheck(input: QualityCheckInput): Promise<Report> {
     await run(() => checkCutClicks(video, edl, profile));
     await run(() => checkLoudness(video, profile));
     await run(() => checkPhase(video, edl.output.fps));
+    await run(() => checkChannelBalance(video));
+    await run(() => checkClipping(video, edl.output.fps));
     await run(() => checkSfxSync(video, edl, profile));
     const hasSpeech = Object.keys(analysis?.transcripts ?? {}).length > 0;
     if (hasSpeech) await run(() => checkDucking(video, edl, profile));

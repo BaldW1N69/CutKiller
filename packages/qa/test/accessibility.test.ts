@@ -1,6 +1,14 @@
 import { loadProfile } from "@cutkiller/style";
 import { describe, expect, it } from "vitest";
-import { cellLuminances, flashBursts, luminanceChanges, phaseCorrelations } from "../src";
+import {
+  cellLuminances,
+  channelLevels,
+  clippedSeconds,
+  flashBursts,
+  luminanceChanges,
+  parseIdet,
+  phaseCorrelations,
+} from "../src";
 import { checkTail } from "../src/checks/montage";
 
 describe("image.flashes (WCAG 2.3.1)", () => {
@@ -71,5 +79,49 @@ describe("montage.tail", () => {
     const late = await checkTail("x.mp4", long, vad(57, 60));
     expect(late.status).toBe("fail");
     expect(late.measured).toMatchObject({ tailS: 3 });
+  });
+});
+
+describe("audio.channel-balance, audio.clipping", () => {
+  const tone = (rate: number, seconds: number, gainL: number, gainR: number) => {
+    const out = new Float32Array(rate * seconds * 2);
+    for (let i = 0; i < rate * seconds; i++) {
+      const v = Math.sin((2 * Math.PI * 220 * i) / rate);
+      out[2 * i] = gainL * v;
+      out[2 * i + 1] = gainR * v;
+    }
+    return out;
+  };
+
+  it("measures one-sided sound (a lavalier on the left channel only)", () => {
+    const even = channelLevels(tone(16_000, 1, 0.3, 0.3), 16_000);
+    expect(Math.abs((even?.left ?? 0) - (even?.right ?? 9))).toBeLessThan(0.01);
+    const left = channelLevels(tone(16_000, 1, 0.3, 0.03), 16_000);
+    expect((left?.left ?? 0) - (left?.right ?? 0)).toBeCloseTo(20, 0);
+    expect(channelLevels(new Float32Array(32_000), 16_000)).toBeUndefined();
+  });
+
+  it("finds flat tops at full scale, not a single true peak", () => {
+    const clean = tone(48_000, 2, 0.9, 0.9);
+    expect(clippedSeconds(clean, 48_000)).toEqual([]);
+    const clipped = tone(48_000, 2, 0.9, 0.9);
+    for (let i = 48_000; i < 96_000; i++) {
+      const v = 2 * Math.sin((2 * Math.PI * 220 * i) / 48_000);
+      clipped[2 * i] = Math.max(-1, Math.min(1, v));
+    }
+    expect(clippedSeconds(clipped, 48_000)).toEqual([1]);
+  });
+});
+
+describe("image.interlace", () => {
+  it("reads FFmpeg's idet summary", () => {
+    const log =
+      "[Parsed_idet_0 @ 0x1] Multi frame detection: TFF:   120 BFF:     0 Progressive:    30 Undetermined:     2";
+    expect(parseIdet(log)).toEqual({ interlaced: 120, progressive: 30 });
+    expect(parseIdet(`Multi frame detection: TFF: 0 BFF: 0 Progressive: 0\n${log}`)).toEqual({
+      interlaced: 120,
+      progressive: 30,
+    });
+    expect(parseIdet("nothing")).toBeUndefined();
   });
 });

@@ -54,8 +54,8 @@ function twoClipEdl(fx: Fixtures, cutFadeMs: number): Edl {
 }
 
 describe("score", () => {
-  it("weights 33 rules to 100 points, 20 per category", () => {
-    expect(RULES).toHaveLength(33);
+  it("weights 37 rules to 100 points, 20 per category", () => {
+    expect(RULES).toHaveLength(37);
     expect(RULES.reduce((s, r) => s + r.weight, 0)).toBe(100);
     for (const cat of ["montage", "motion", "captions", "audio", "image"])
       expect(RULES.filter((r) => r.category === cat).reduce((s, r) => s + r.weight, 0)).toBe(20);
@@ -169,7 +169,10 @@ describe("quality-check sur des rendus réels", () => {
     const evaluated = report.results.filter((r) => r.status !== "not-evaluated");
     expect(evaluated.map((r) => r.ruleId).sort()).toEqual(
       [
+        "audio.channel-balance",
+        "audio.clipping",
         "audio.cut-clicks",
+        "audio.export-format",
         "audio.loudness",
         "audio.phase",
         "image.black-frames",
@@ -177,6 +180,7 @@ describe("quality-check sur des rendus réels", () => {
         "image.duplicate-frames",
         "image.export-format",
         "image.flashes",
+        "image.interlace",
         "montage.static-shots",
         // The preset library itself is checked even when the EDL animates nothing.
         "motion.presets",

@@ -10,7 +10,7 @@ import {
   tr,
   type VoiceActivity,
 } from "@cutkiller/core";
-import { decodeMono, decodeStereo, measureLoudness, readWavF32 } from "@cutkiller/media";
+import { decodeMono, decodeStereo, ffprobe, measureLoudness, readWavF32 } from "@cutkiller/media";
 import { type CheckResult, graded, notEvaluated, type Violation } from "../report";
 
 const RATE = 48_000;
@@ -435,4 +435,122 @@ export async function checkPhase(video: string, fps: number): Promise<CheckResul
   // Scored on the share of sound that cancels, not on the number of stretches:
   // a mix inverted from start to end is one stretch, and fully broken.
   return { ...result, score: (judged.length - bad) / judged.length };
+}
+
+/** Over this level difference (dB) between left and right, the voice comes from one side. */
+export const MAX_CHANNEL_IMBALANCE_DB = 3;
+
+/**
+ * Left and right levels (dB) over the windows loud enough to judge, and their
+ * difference. A lavalier recorded on one channel only plays in one ear.
+ */
+export function channelLevels(
+  stereo: Float32Array,
+  rate: number,
+): { left: number; right: number } | undefined {
+  const win = Math.round(PHASE_WINDOW_S * rate);
+  let ll = 0;
+  let rr = 0;
+  let n = 0;
+  for (let start = 0; start + win <= stereo.length / 2; start += win) {
+    let wl = 0;
+    let wr = 0;
+    for (let i = start; i < start + win; i++) {
+      wl += (stereo[2 * i] as number) ** 2;
+      wr += (stereo[2 * i + 1] as number) ** 2;
+    }
+    if (10 * Math.log10(Math.max(wl, wr) / win + 1e-12) < PHASE_MIN_DB) continue;
+    ll += wl;
+    rr += wr;
+    n += win;
+  }
+  if (n === 0) return undefined;
+  return { left: 10 * Math.log10(ll / n + 1e-12), right: 10 * Math.log10(rr / n + 1e-12) };
+}
+
+/** Both channels carry the sound at the same level (no one-sided voice). */
+export async function checkChannelBalance(video: string): Promise<CheckResult> {
+  const rate = 16_000;
+  const levels = channelLevels(await decodeStereo(video, rate), rate);
+  if (!levels)
+    return notEvaluated("audio.channel-balance", tr("silent audio track", "piste audio silencieuse"));
+  const diff = levels.left - levels.right;
+  const round = (v: number) => Math.round(v * 10) / 10;
+  return graded(
+    "audio.channel-balance",
+    1,
+    Math.abs(diff) > MAX_CHANNEL_IMBALANCE_DB
+      ? [
+          {
+            message: tr(
+              `${diff > 0 ? "left" : "right"} channel ${Math.abs(diff).toFixed(1)} dB louder (max ${MAX_CHANNEL_IMBALANCE_DB} dB)`,
+              `canal ${diff > 0 ? "gauche" : "droit"} plus fort de ${Math.abs(diff).toFixed(1)} dB (max ${MAX_CHANNEL_IMBALANCE_DB} dB)`,
+            ),
+          },
+        ]
+      : [],
+    { leftDb: round(levels.left), rightDb: round(levels.right), differenceDb: round(diff) },
+  );
+}
+
+/** At or over this magnitude a sample is at full scale. */
+const CLIP_LEVEL = 0.999;
+/** Consecutive full-scale samples that make a clipped peak (one can be a true peak). */
+const CLIP_RUN = 3;
+
+/** Seconds (indices) holding a clipped peak: CLIP_RUN samples in a row at full scale on one channel. */
+export function clippedSeconds(stereo: Float32Array, rate: number): number[] {
+  const seconds = new Set<number>();
+  for (let ch = 0; ch < 2; ch++) {
+    let run = 0;
+    for (let i = ch; i < stereo.length; i += 2) {
+      run = Math.abs(stereo[i] as number) >= CLIP_LEVEL ? run + 1 : 0;
+      if (run === CLIP_RUN) seconds.add(Math.floor(i / 2 / rate));
+    }
+  }
+  return [...seconds].sort((a, b) => a - b);
+}
+
+/** No clipped peak in the delivered sound. */
+export async function checkClipping(video: string, fps: number): Promise<CheckResult> {
+  const rate = 48_000;
+  const stereo = await decodeStereo(video, rate);
+  const total = Math.ceil(stereo.length / 2 / rate);
+  if (total === 0) return notEvaluated("audio.clipping", tr("no audio", "pas de son"));
+  const clipped = clippedSeconds(stereo, rate);
+  return graded(
+    "audio.clipping",
+    total,
+    clipped.map((sec) => ({
+      message: tr("clipped peaks (samples at full scale)", "crêtes écrêtées (échantillons à pleine échelle)"),
+      frame: Math.round(sec * fps),
+    })),
+    { seconds: total, clippedSeconds: clipped.length },
+  );
+}
+
+/** Delivered audio stream: AAC, a platform sample rate, enough bitrate. */
+export async function checkAudioFormat(video: string, profile: StyleProfile): Promise<CheckResult> {
+  const info = await ffprobe(video);
+  const a = info.streams.find((s) => s.codec_type === "audio");
+  if (!a) return graded("audio.export-format", 1, [{ message: tr("no audio stream", "aucun flux audio") }]);
+  const rate = Number(a.sample_rate ?? 0);
+  const kbps = Math.round(Number(a.bit_rate ?? 0) / 1000);
+  const { audioSampleRates, minAudioKbps } = profile.export;
+  const violations: Violation[] = [];
+  if (a.codec_name !== "aac")
+    violations.push({
+      message: tr(`codec ${a.codec_name} (expected AAC)`, `codec ${a.codec_name} (attendu AAC)`),
+    });
+  if (!audioSampleRates.includes(rate))
+    violations.push({
+      message: `${rate} Hz (${tr("expected", "attendu")} ${audioSampleRates.join(" / ")} Hz)`,
+    });
+  if (kbps > 0 && kbps < minAudioKbps) violations.push({ message: `${kbps} kb/s < ${minAudioKbps} kb/s` });
+  return graded("audio.export-format", 3, violations, {
+    codec: a.codec_name,
+    sampleRate: rate,
+    channels: a.channels,
+    kbps,
+  });
 }
