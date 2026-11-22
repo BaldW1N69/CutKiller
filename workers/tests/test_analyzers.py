@@ -73,6 +73,24 @@ def test_refine_boundaries_moves_ctc_edges_to_the_signal():
     assert abs(out[0]["end"] - 0.90) <= 0.01
 
 
+def test_refine_boundaries_pulls_whisper_edges_in_to_the_voice():
+    from cutkiller_workers.align import refine_boundaries
+
+    rate = 16_000
+    audio = np.zeros(rate * 2, dtype=np.float32)
+    rng = np.random.default_rng(0)
+    audio[int(0.90 * rate) : int(1.30 * rate)] = 0.3 * rng.standard_normal(int(0.4 * rate))
+    # Unaligned word (« 割 »): Whisper starts it 0.45 s before the voice.
+    words = [{"text": "割", "start": 0.45, "end": 1.40, "timing": "whisper"}]
+    out = refine_boundaries(audio, words, rate)
+    assert abs(out[0]["start"] - 0.90) <= 0.01
+    assert abs(out[0]["end"] - 1.30) <= 0.01
+    assert out[0]["timing"] == "whisper"
+    # Never pushed outwards, and a word over silence only is left alone.
+    silent = [{"text": "x", "start": 0.1, "end": 0.3, "timing": "whisper"}]
+    assert refine_boundaries(audio, silent, rate)[0]["start"] == 0.1
+
+
 def test_merge_apostrophes():
     from cutkiller_workers.align import merge_apostrophes
 
@@ -224,3 +242,37 @@ def test_activity_follows_a_small_moving_square(tmp_path):
     assert all(s["cx"] < 0.3 and s["cy"] < 0.3 for s in early)
     assert all(s["cx"] > 0.7 and s["cy"] > 0.7 for s in late)
     assert all(s["fraction"] < 0.01 for s in early + late)
+
+
+def test_aligner_windows_end_in_a_pause():
+    from cutkiller_workers.align import MAX_WINDOW_S, _windows
+
+    # One word every 0.5 s, and a 1 s pause after the word ending at 20.0 s.
+    starts = [k * 0.5 for k in range(40)] + [21.0 + k * 0.5 for k in range(60)]
+    words = [{"start": s, "end": s + 0.4} for s in starts]  # 19.5–19.9, then 21.0
+    windows = _windows(words, 60.0)
+    _, first_b, _, first_end = windows[0]
+    assert words[first_b - 1]["end"] == pytest.approx(19.9)
+    assert words[first_b]["start"] == pytest.approx(21.0)
+    assert all(we - ws <= MAX_WINDOW_S + 1e-9 for _, _, ws, we in windows)
+    assert [a for a, _, _, _ in windows][1:] == [b for _, b, _, _ in windows][:-1]
+    assert windows[-1][1] == len(words)
+    # Padding stops short of the neighbouring words (20.0 s → 21.0 s pause).
+    assert first_end == pytest.approx(19.9 + 0.4)
+    assert windows[1][2] == pytest.approx(21.0 - 0.4)
+    tight = _windows([{"start": 0.0, "end": 0.4}, {"start": 0.45, "end": 0.8}], 2.0)
+    assert len(tight) == 1
+
+
+def test_aligner_windows_do_not_pad_into_the_next_word():
+    from cutkiller_workers.align import MIN_PAD_S, NEIGHBOUR_S, _windows
+
+    # A render: no pause anywhere, 40 s of words 0.3 s apart.
+    words = [{"start": k * 0.3, "end": k * 0.3 + 0.28} for k in range(134)]
+    windows = _windows(words, 40.3)
+    _, b, _, end = windows[0]
+    assert end <= max(words[b]["start"] + NEIGHBOUR_S, words[b - 1]["end"] + MIN_PAD_S) + 1e-9
+    assert windows[1][2] >= min(words[b - 1]["end"] - NEIGHBOUR_S, words[b]["start"] - MIN_PAD_S) - 1e-9
+    # Still some padding for Whisper's drift.
+    assert end >= words[b - 1]["end"] + MIN_PAD_S - 1e-9
+    assert windows[1][2] <= words[b]["start"] - MIN_PAD_S + 1e-9

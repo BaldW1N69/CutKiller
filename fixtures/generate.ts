@@ -6,7 +6,7 @@
  *   pnpm fixtures [outDir]   (default: .cache/fixtures)
  */
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ffmpeg } from "@cutkiller/media";
 import { faceGradingFixtures, facePanFixture, talkingHeadFixture } from "./face";
@@ -166,8 +166,41 @@ const SPECS: Record<
   },
 };
 
+/**
+ * Runs `fn` alone across processes (a lock directory): test files run in
+ * parallel workers, and two of them writing the same fixture produced a
+ * talking head whose AAC track only decoded for 9.5 of its 14.6 s. A lock
+ * older than 10 min is a crashed run's, and is taken over.
+ */
+async function exclusive<T>(dir: string, fn: () => Promise<T>): Promise<T> {
+  const lock = join(dir, ".lock");
+  for (;;) {
+    try {
+      await mkdir(lock);
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      const age = await stat(lock).then(
+        (s) => Date.now() - s.mtimeMs,
+        () => 0,
+      );
+      if (age > 10 * 60_000) await rm(lock, { recursive: true, force: true });
+      else await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    await rm(lock, { recursive: true, force: true });
+  }
+}
+
 export async function generateFixtures(dir = resolve(".cache/fixtures")): Promise<Fixtures> {
   await mkdir(dir, { recursive: true });
+  return exclusive(dir, () => generateAll(dir));
+}
+
+async function generateAll(dir: string): Promise<Fixtures> {
   const result = { dir } as Fixtures;
   for (const [key, spec] of Object.entries(SPECS) as [
     keyof typeof SPECS,

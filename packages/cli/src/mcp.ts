@@ -13,7 +13,7 @@ import { dirname, join, resolve } from "node:path";
 import { parseEdl, type StyleProfile, SUPPORTED_LANGUAGES } from "@cutkiller/core";
 import { toFcp7Xml, toOtio } from "@cutkiller/interchange";
 import { confinePath } from "@cutkiller/media";
-import type { Report } from "@cutkiller/qa";
+import { type Report, RULES } from "@cutkiller/qa";
 import { listLooks, loadProfile, PresetRegistry, withLook } from "@cutkiller/style";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -97,8 +97,7 @@ export function createServer(): McpServer {
     "auto_edit",
     {
       title: "Edit a video end to end",
-      description:
-        "Analyses the rushes, plans the edit (cuts silences and hesitations, beat-synced cuts, punch-ins, captions, music ducking, vertical reframing), renders it and runs the 26-rule quality check. Returns the score and every failed rule. Takes about 1–3× the footage duration on a CPU.",
+      description: `Analyses the rushes, plans the edit (cuts silences and hesitations, beat-synced cuts, punch-ins, captions, music ducking, vertical reframing), renders it and runs the ${RULES.length}-rule quality check. Returns the score and every failed rule. Takes about 1–3× the footage duration on a CPU.`,
       inputSchema: {
         inputs: z.array(z.string()).min(1).describe("Rushes and music files (paths)"),
         outDir: z.string().describe("Output folder: edit.edl.json, final.mp4, final.srt, quality.md"),
@@ -245,8 +244,7 @@ export function createServer(): McpServer {
     "quality_check",
     {
       title: "Quality check",
-      description:
-        "Scores a rendered video on 30 rules (silences, hesitations, beat sync, motion, captions sync/safe zones/contrast, loudness, ducking, reframing, colour, export). Pass the EDL for the full check.",
+      description: `Scores a rendered video on ${RULES.length} rules (silences, hesitations, beat sync, motion, captions sync/safe zones/contrast, loudness, ducking, reframing, colour, flashes, export). Pass the EDL for the full check.`,
       inputSchema: {
         video: z.string(),
         edlPath: z.string().optional(),

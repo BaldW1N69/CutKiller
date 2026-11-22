@@ -196,6 +196,33 @@ const reencodeVideo = (vf: string) => [
   "copy",
 ];
 
+/**
+ * Word-free stretches of a rush (head, pauses, tail), largest first, 80 ms away
+ * from any word, joined until `want` frames: picture and room sound without voice.
+ */
+function silentPieces(edl: Edl, base: Base, source: string, want: number): { in: number; frames: number }[] {
+  const fps = edl.output.fps;
+  const ws = words(base, source);
+  const duration = edl.sources[source]?.durationS ?? 0;
+  const bounds = [0, ...ws.flatMap((w) => [w.start, w.end]), duration];
+  const gaps: [number, number][] = [];
+  for (let i = 0; i + 1 < bounds.length; i += 2) {
+    const a = (bounds[i] as number) + (i === 0 ? 0 : 0.08);
+    const b = (bounds[i + 1] as number) - (i + 2 === bounds.length ? 0.05 : 0.08);
+    if (b - a >= 0.3) gaps.push([a, b]);
+  }
+  gaps.sort((x, y) => y[1] - y[0] - (x[1] - x[0]));
+  const pieces: { in: number; frames: number }[] = [];
+  let total = 0;
+  for (const [a, b] of gaps) {
+    if (total >= want) break;
+    const frames = Math.min(want - total, Math.floor((b - a) * fps));
+    pieces.push({ in: a, frames });
+    total += frames;
+  }
+  return pieces;
+}
+
 // ————————————————————————————————————————————— the defects
 
 export const VARIANTS: Variant[] = [
@@ -279,27 +306,9 @@ export const VARIANTS: Variant[] = [
       const first = main(edl)[0];
       if (!first) throw new Error("variante inapplicable : piste vide");
       const fps = edl.output.fps;
-      const ws = words(base, first.source);
-      // Word-free stretches of the same rush (head, pauses, tail), largest first,
-      // 80 ms away from any word, joined until 1.5 s of intro without voice.
-      const duration = edl.sources[first.source]?.durationS ?? 0;
-      const bounds = [0, ...ws.flatMap((w) => [w.start, w.end]), duration];
-      const gaps: [number, number][] = [];
-      for (let i = 0; i + 1 < bounds.length; i += 2) {
-        const a = (bounds[i] as number) + (i === 0 ? 0 : 0.08);
-        const b = (bounds[i + 1] as number) - (i + 2 === bounds.length ? 0.05 : 0.08);
-        if (b - a >= 0.3) gaps.push([a, b]);
-      }
-      gaps.sort((x, y) => y[1] - y[0] - (x[1] - x[0]));
       const want = Math.round(1.5 * fps);
-      const pieces: { in: number; frames: number }[] = [];
-      let total = 0;
-      for (const [a, b] of gaps) {
-        if (total >= want) break;
-        const frames = Math.min(want - total, Math.floor((b - a) * fps));
-        pieces.push({ in: a, frames });
-        total += frames;
-      }
+      const pieces = silentPieces(edl, base, first.source, want);
+      const total = pieces.reduce((n, p) => n + p.frames, 0);
       if (total < want) throw new Error("variante inapplicable : moins de 1,5 s de silence dans le rush");
       ripple(edl, 0, total);
       let at = 0;
@@ -317,6 +326,37 @@ export const VARIANTS: Variant[] = [
         at += piece.frames;
       }
     },
+  },
+  {
+    id: "tail-dead-air",
+    rule: "montage.tail",
+    expect: "fail",
+    what: "2,5 s sans voix ajoutées en fin de montage (temps mort après le dernier mot, seuil 1,5 s)",
+    edl(edl, base) {
+      const clips = main(edl);
+      const last = clips.at(-1);
+      if (!last) throw new Error("variante inapplicable : piste vide");
+      const fps = edl.output.fps;
+      const want = Math.round(2.5 * fps);
+      const pieces = silentPieces(edl, base, last.source, want);
+      const total = pieces.reduce((n, p) => n + p.frames, 0);
+      if (total < want) throw new Error("variante inapplicable : moins de 2,5 s de silence dans le rush");
+      let at = clipEnd(last, fps);
+      for (const [k, piece] of pieces.entries()) {
+        const { reframe: _moving, ...still } = last;
+        edl.video[0]?.clips.push({
+          ...still,
+          id: `tail-pad-${k + 1}`,
+          in: piece.in,
+          out: piece.in + piece.frames / fps,
+          at,
+          audioSplitFrames: 0,
+          why: { kind: "selection", note: "silent ending (calibration)" },
+        });
+        at += piece.frames;
+      }
+    },
+    consequences: ["montage.static-shots", "montage.silences", "audio.ducking"],
   },
   {
     id: "beat-cuts",
@@ -536,6 +576,128 @@ export const VARIANTS: Variant[] = [
     expect: "fail",
     what: "fichier livré remonté de 8 dB (−6 LUFS, crêtes écrêtées)",
     post: (video) => replaceWith(video, ["-c:v", "copy", "-af", "volume=8dB", "-c:a", "aac", "-b:a", "192k"]),
+    consequences: ["audio.clipping"],
+  },
+  {
+    id: "antiphase",
+    rule: "audio.phase",
+    expect: "fail",
+    what: "canal droit du fichier livré inversé : le son s'annule sur une enceinte mono",
+    post: (video) =>
+      replaceWith(video, ["-c:v", "copy", "-af", "pan=stereo|c0=c0|c1=-1*c1", "-c:a", "aac", "-b:a", "192k"]),
+  },
+  {
+    id: "stereo-music-ok",
+    rule: "audio.phase",
+    expect: "pass",
+    what: "témoin : largeur stéréo élargie (extrastereo ×1,5), toujours compatible mono",
+    post: (video) =>
+      replaceWith(video, ["-c:v", "copy", "-af", "extrastereo=m=1.5", "-c:a", "aac", "-b:a", "192k"]),
+    consequences: ["audio.loudness"],
+  },
+  {
+    id: "one-sided",
+    rule: "audio.channel-balance",
+    expect: "fail",
+    what: "canal droit du fichier livré à -26 dB : la voix ne sort que d'un côté (micro cravate sur un seul canal)",
+    post: (video) =>
+      replaceWith(video, [
+        "-c:v",
+        "copy",
+        "-af",
+        "pan=stereo|c0=c0|c1=0.05*c1",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+      ]),
+    consequences: ["audio.loudness"],
+  },
+  {
+    id: "balance-ok",
+    rule: "audio.channel-balance",
+    expect: "pass",
+    what: "témoin : canal droit 1,5 dB plus bas (sous le seuil de 3 dB)",
+    post: (video) =>
+      replaceWith(video, [
+        "-c:v",
+        "copy",
+        "-af",
+        "pan=stereo|c0=c0|c1=0.84*c1",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+      ]),
+    consequences: ["audio.loudness"],
+  },
+  {
+    id: "clipping",
+    rule: "audio.clipping",
+    expect: "fail",
+    what: "son livré remonté de 14 dB puis écrêté à pleine échelle",
+    post: (video) =>
+      replaceWith(video, [
+        "-c:v",
+        "copy",
+        "-af",
+        "volume=14dB,aformat=sample_fmts=s16",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+      ]),
+    consequences: ["audio.loudness", "audio.ducking", "audio.cut-clicks"],
+  },
+  {
+    id: "dropout",
+    rule: "audio.dropouts",
+    expect: "fail",
+    what: "500 ms de son remplacées par du silence numérique au milieu d'une phrase (flux corrompu)",
+    post: (video) =>
+      replaceWith(video, [
+        "-c:v",
+        "copy",
+        "-af",
+        "volume=enable='between(t,3,3.5)':volume=0",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+      ]),
+    consequences: ["montage.silences", "captions.sync", "montage.fillers", "audio.cut-clicks"],
+  },
+  {
+    id: "loudness-range",
+    rule: "audio.loudness-range",
+    expect: "fail",
+    what: "seconde moitié du son livré baissée de 20 dB",
+    post: (video) =>
+      replaceWith(video, [
+        "-c:v",
+        "copy",
+        "-af",
+        "volume=enable='gte(t,4)':volume=0.1",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+      ]),
+    consequences: [
+      "audio.loudness",
+      "audio.ducking",
+      "audio.cut-clicks",
+      "captions.sync",
+      "montage.silences",
+      "montage.fillers",
+    ],
+  },
+  {
+    id: "audio-format",
+    rule: "audio.export-format",
+    expect: "fail",
+    what: "son livré réencodé en 22,05 kHz à 64 kb/s",
+    post: (video) => replaceWith(video, ["-c:v", "copy", "-c:a", "aac", "-ar", "22050", "-b:a", "64k"]),
   },
   {
     id: "ducking",
@@ -650,6 +812,48 @@ export const VARIANTS: Variant[] = [
         video,
         reencodeVideo("drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill:enable='between(n,100,104)'"),
       ),
+  },
+  {
+    id: "strobe",
+    rule: "image.flashes",
+    expect: "fail",
+    what: "1 s de stroboscope blanc (alternance toutes les 2 frames) au milieu d'un plan",
+    post: (video) =>
+      replaceWith(
+        video,
+        reencodeVideo(
+          "drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(n,90,119)*lt(mod(n,4),2)'",
+        ),
+      ),
+    consequences: ["image.color", "image.reframe", "captions.contrast", "image.duplicate-frames"],
+  },
+  {
+    id: "flash-cuts-ok",
+    rule: "image.flashes",
+    expect: "pass",
+    what: "témoin : 3 flashs blancs en une seconde (la limite WCAG, autorisée)",
+    post: (video) =>
+      replaceWith(
+        video,
+        reencodeVideo(
+          "drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(n,90,119)*lt(mod(n,10),3)'",
+        ),
+      ),
+    consequences: ["image.color", "image.reframe", "captions.contrast", "image.duplicate-frames"],
+  },
+  {
+    id: "interlaced",
+    rule: "image.interlace",
+    expect: "fail",
+    what: "fichier livré entrelacé (deux images par trame, peignes sur le mouvement)",
+    post: (video) => replaceWith(video, reencodeVideo("interlace=scan=tff:lowpass=0,fps=30")),
+    consequences: [
+      "image.duplicate-frames",
+      "motion.blur",
+      "image.reframe",
+      "image.color",
+      "captions.contrast",
+    ],
   },
   {
     id: "sharpness",

@@ -87,5 +87,28 @@ Decision: `faster` for delivery (equal on the hardest case), `veryfast` stays fo
 | Spanish (Reina-Valera, Tito 1) | es | 99.9/100 | 0.2 / 0.65 / 1.0 | 0 |
 | German (Puschkin, Erzählungen 1) | de | 99.9/100 | 0.2 / 0.7 / 1.9 | 0 |
 | Italian (Deledda, Canne al vento 1) | it | 99.9/100 | 0.25 / 0.8 / 1.3 | 0 |
+| Portuguese (Eça & Ortigão, O Mistério da Estrada de Sintra 1) | pt | 99.9/100 | 0.25 / 0.85 / 1.6 | 0 |
+| Dutch (Webster, Vadertje Langbeen 2) | nl | 99.9/100 | 0.25 / 0.7 / 0.85 | 0 |
+| Polish (Grabiński, Wybrane opowiadania 2) | pl | 99.9/100 | 0.2 / 0.75 / 0.85 | 0 |
+| Russian (Ушкуйники, collection 2) | ru | 99.8/100 | 0.2 / 0.75 / 5.05 | 0 |
+| Arabic (al-Kawakibi, Tabai al-Istibdad 1) | ar | 99.9/100 | 0.2 / 0.8 / 1.35 | 0 |
+| Chinese (Lu Xun, 阿Q正传 2) | zh | 99.9/100 | 0.2 / 0.6 / 0.8 | 0 |
+| Japanese (Tayama, 蒲団 2) | ja | 99.8/100 | 0.25 / 0.85 / 3.55 | 0 |
+| Finnish (Zschokke, Kaleri-orja 2) | fi | 99.8/100 | 0.3 / 1.8 / 2.55 | 0 |
+| Hungarian (Gárdonyi, Egri csillagok 2) | hu | 99.9/100 | 0.2 / 0.8 / 1.4 | 0 |
+| Greek (Plato, Πολιτεία 2) | el | 99.9/100 | 0.25 / 0.75 / 1.65 | 0 |
 
 The 0.1 point lost each time is one repeated frame of the still picture. The German reading first failed sync on « Kapitel II » (« II. » highlighted 12.7 frames early): Roman numerals were not spelled out for the aligner; fixed and re-measured. Read speech is easier than an interview (no overlaps, few hesitations): these numbers validate transcription and alignment, not the hesitation cutting.
+
+No Persian reading on LibriVox: fa is still to be validated.
+
+The second batch (pt … el) found six engine bugs, each fixed with a test and re-measured:
+
+- **Cut pass crash, any language**: in/out points rounded to the µs turned a 91.49999-frame clip into 91.5, read back as 92: one frame of overlap, invalid EDL (Dutch). Clip points are now written to span exactly their planned frames.
+- **Greek never aligned**: its aligner has an upper-case Greek vocabulary and the case test only looked at Latin « a »; all 151 words kept raw Whisper timing. And the sync rule still passed, with 0 of 151 words measured: it is now *not evaluated* under half the words measured.
+- **Aligner windows**: split mid-sentence, the last word of a 25 s window aligned after the first of the next (« que » / « EF », pt, 9.8 frames). Windows now end in the longest pause, never start before the previous one ended, and their padding stops near the neighbouring words (on a render, with pauses cut, « meu » aligned on « em »: 17 frames), keeping 0.15 s for Whisper's drift.
+- **Word cut off by the recording kept** (« es|curo », pt): AAC padding hid the loud edge and a cut inside a stop is quiet anyway. Codec padding is skipped, and an edge word the aligner cannot fit (confidence < 0.5) is dropped.
+- **Shot opening on 512 ms of silence** (zh): « 割 » is outside the Chinese aligner's vocabulary and kept Whisper's start, 0.45 s before the voice. Unaligned words are now pulled in to the signal.
+- **Last caption on screen 17 frames**, cut by the end of the edit (pt): it now joins the previous screen.
+
+Left as measured: Russian « ее » and Japanese « の » are placed on the rush with confidence 0.999, but the quality check re-aligns them on the render with confidence 0.5, 5.1 and 3.4 frames later, on an ambiguous boundary (« забыть ее »). Finnish p95 is 1.8 frames (limit 1), max 2.55. These are measurement limits of short words on the render more than wrong captions; no threshold was tuned to pass them.

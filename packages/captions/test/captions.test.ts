@@ -155,6 +155,33 @@ describe("découpage", () => {
     for (const c of caps) expect(c.toFrame - c.fromFrame).toBeGreaterThanOrEqual(9);
   });
 
+  it("the last screen, cut short by the end of the edit, joins the previous one (pt reading: 17 frames)", () => {
+    const words = speech(
+      [
+        "através",
+        "da",
+        "charneca",
+        "estava",
+        "parada",
+        "uma",
+        "carruagem",
+        "era",
+        "um",
+        "cupê",
+        "pintado",
+        "de",
+      ],
+      [10],
+    );
+    const { edl, analysis } = edlWith(words, "long");
+    const style = captionStyle(registry, "karaoke-pop@1");
+    const end = Math.round((words.at(-1) as Word).end * 30) + 1;
+    const caps = buildCaptions(timelineWords(edl, analysis.transcripts), style, "k@1", long, 30, end);
+    const minFrames = Math.round((long.captions.minDurationMs / 1000) * 30);
+    for (const c of caps) expect(c.toFrame - c.fromFrame).toBeGreaterThanOrEqual(minFrames - 1);
+    expect(caps.at(-1)?.words.map((w) => w.text.toLowerCase())).toContain("cupê");
+  });
+
   it("long : deux lignes de 32 caractères au plus, équilibrées, sans mot-outil en fin de ligne", () => {
     const stop = new Set(long.motion.stopWords);
     const ws = "les pêcheurs partent tôt le matin vers la grande baie"

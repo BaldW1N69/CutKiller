@@ -142,7 +142,17 @@ export function buildCaptions(
   // A screen that would flash may end on a function word: the lesser evil.
   const fitsLoose = (ws: ShownWord[]) =>
     splitLines(ws, c.maxLines, c.maxCharsPerLine, stopWords) !== undefined;
-  mergeShortScreens(groups, c.wordsPerScreen?.[0] ?? 1, maxWords, maxFrames, minFrames, fps, fits, fitsLoose);
+  mergeShortScreens(
+    groups,
+    c.wordsPerScreen?.[0] ?? 1,
+    maxWords,
+    maxFrames,
+    minFrames,
+    fps,
+    fits,
+    fitsLoose,
+    totalFrames,
+  );
 
   const hold = Math.round((c.holdMs / 1000) * fps);
   const closeGap = Math.round(0.25 * fps);
@@ -182,7 +192,7 @@ export function buildCaptions(
  * Screens on view for less than `minFrames` before the next one replaces them
  * (fast speech: « C'EST » → « ON VA » → « AVOIR » in 0.7 s) cannot be read: they
  * join a neighbour when the joined screen fits as one, never across the end of
- * a sentence.
+ * a sentence. The last screen counts until the end of the edit.
  */
 function mergeShortScreens(
   groups: ShownWord[][],
@@ -193,6 +203,8 @@ function mergeShortScreens(
   fps: number,
   fits: (ws: ShownWord[]) => boolean,
   fitsLoose: (ws: ShownWord[]) => boolean = fits,
+  /** End of the edit: the last screen is cut by it (measured: 17 frames for « pintado de »). */
+  totalFrames = Infinity,
 ): void {
   let loose = false;
   const ok = (ws: ShownWord[]) =>
@@ -202,9 +214,10 @@ function mergeShortScreens(
     (ws.at(-1) as ShownWord).toFrame - (ws[0] as ShownWord).fromFrame <= maxFrames;
   /**
    * The joined words as one screen, or two, or undefined when neither fits. With
-   * `minView`, two screens only when the first stays up that long.
+   * `minView`, two screens only when both stay up that long (the second one until
+   * `until`, the next screen or the end of the edit).
    */
-  const regroup = (ws: ShownWord[], minView = 0): ShownWord[][] | undefined => {
+  const regroup = (ws: ShownWord[], minView = 0, until = Infinity): ShownWord[][] | undefined => {
     if (ok(ws)) return [ws];
     let best: { at: number; score: number } | undefined;
     for (let at = minWords; at <= ws.length - minWords; at++) {
@@ -212,7 +225,7 @@ function mergeShortScreens(
       const b = ws.slice(at);
       const start = (b[0] as ShownWord).fromFrame;
       if (!ok(a) || !ok(b) || start <= (a.at(-1) as ShownWord).fromFrame) continue;
-      if (start - (a[0] as ShownWord).fromFrame < minView) continue;
+      if (start - (a[0] as ShownWord).fromFrame < minView || until - start < minView) continue;
       const gap = start - (a.at(-1) as ShownWord).toFrame;
       const score = gap - Math.abs(a.length - b.length) * 0.01;
       if (!best || score > best.score) best = { at, score };
@@ -222,9 +235,8 @@ function mergeShortScreens(
   /** Frames a screen stays up before the next one replaces it. */
   const onView = (k: number) => {
     const next = groups[k + 1];
-    return next
-      ? (next[0] as ShownWord).fromFrame - ((groups[k] as ShownWord[])[0] as ShownWord).fromFrame
-      : Infinity;
+    const from = ((groups[k] as ShownWord[])[0] as ShownWord).fromFrame;
+    return next ? (next[0] as ShownWord).fromFrame - from : totalFrames - from;
   };
   const endsSentence = (ws: ShownWord[]) => (ws.at(-1) as ShownWord).punct === "strong";
   for (let k = 0; k < groups.length; k++) {
@@ -233,19 +245,22 @@ function mergeShortScreens(
     if (!fewWords && onView(k) >= minFrames) continue;
     const prev = groups[k - 1];
     const next = groups[k + 1];
+    const startOf = (i: number) => (groups[i]?.[0] as ShownWord | undefined)?.fromFrame ?? totalFrames;
     const options = [
       prev && {
         gap: (g[0] as ShownWord).fromFrame - (prev.at(-1) as ShownWord).toFrame,
         at: k - 1,
         ws: [...prev, ...g],
+        until: startOf(k + 1),
       },
       next && {
         gap: (next[0] as ShownWord).fromFrame - (g.at(-1) as ShownWord).toFrame,
         at: k,
         ws: [...g, ...next],
+        until: startOf(k + 2),
       },
     ]
-      .filter((o): o is { gap: number; at: number; ws: ShownWord[] } => !!o && o.gap <= fps)
+      .filter((o): o is { gap: number; at: number; ws: ShownWord[]; until: number } => !!o && o.gap <= fps)
       .filter((o) => fewWords || !endsSentence(groups[o.at] as ShownWord[]))
       .sort((a, b) => a.gap - b.gap)
       .map((o) => {
@@ -255,10 +270,10 @@ function mergeShortScreens(
         // A regrouping that gives the brief screen back unchanged fixes nothing.
         const changes = (sc: ShownWord[][] | undefined) =>
           sc?.some((x) => x[0] === g[0] && x.length === g.length) ? undefined : sc;
-        let screens = changes(regroup(o.ws, view));
+        let screens = changes(regroup(o.ws, view, o.until));
         if (!screens) {
           loose = true;
-          screens = changes(regroup(o.ws, view));
+          screens = changes(regroup(o.ws, view, o.until));
           loose = false;
         }
         return { ...o, screens };

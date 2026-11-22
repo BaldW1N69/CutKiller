@@ -24,7 +24,9 @@ interface AlignedWord {
 }
 
 /** Below this CTC confidence on the render, a word's position is not measured (counted apart). */
-export const MIN_ALIGN_SCORE = 0.2;
+export /** Under this share of words measured, the sync rule is not evaluated. */
+const MIN_MEASURED_SHARE = 0.5;
+const MIN_ALIGN_SCORE = 0.2;
 
 const quantile = (sorted: number[], q: number) =>
   sorted.length === 0 ? 0 : (sorted[Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1)] as number);
@@ -103,6 +105,16 @@ export async function checkCaptionSync(
       });
     }
   }
+  // Timing measured on too few words (an aligner that does not know the language's
+  // script, as the Greek one did not): not a pass.
+  if (words.length > 0 && errors.length < MIN_MEASURED_SHARE * words.length && missing === 0)
+    return notEvaluated(
+      "captions.sync",
+      tr(
+        `aligner confident on ${errors.length}/${words.length} words of the render only`,
+        `aligneur sûr de lui sur ${errors.length}/${words.length} mots du rendu seulement`,
+      ),
+    );
   return graded("captions.sync", words.length + missing, violations, {
     words: words.length,
     measured: errors.length,

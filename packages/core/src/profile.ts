@@ -37,6 +37,9 @@ export const StyleProfileSchema = z.object({
      * a 120 % punch-in; a 720p one ×2.67: the detail is not there to show.
      */
     maxUpscale: z.number().min(1).default(2.2),
+    /** Delivered audio: AAC at one of these sample rates, at least this bitrate (all channels). */
+    audioSampleRates: z.array(z.number().int().positive()).default([44_100, 48_000]),
+    minAudioKbps: z.number().positive().default(128),
   }),
   /**
    * Moving framing when the rush and the output differ in aspect (16:9 → 9:16):
@@ -194,6 +197,11 @@ export const StyleProfileSchema = z.object({
      * (viewers of short videos decide in the first seconds whether to stay).
      */
     hookMaxS: z.number().positive().default(2.5),
+    /**
+     * The ending: no more than this many seconds after the last word (dead air
+     * at the end reads as a mistake and lowers the watch-through rate).
+     */
+    tailMaxS: z.number().positive().default(1.5),
     wordMarginMs: Range.default([80, 120]),
     jlCutFrames: Range.default([4, 12]),
     /**
@@ -317,6 +325,8 @@ export const StyleProfileSchema = z.object({
   audio: z.object({
     integratedLufs: z.number().default(-14),
     lufsTolerance: z.number().nonnegative().default(1),
+    /** Loudness range (EBU R128 LRA, LU): speech that keeps one level. Dynamic edits (cinematic) allow more. */
+    maxLoudnessRangeLu: z.number().positive().default(10),
     truePeakDbtp: z.number().default(-1),
     duckingDb: Range.default([-18, -12]),
     cutFadeMs: Range.default([5, 10]),

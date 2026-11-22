@@ -34,8 +34,8 @@ export interface AnalyzeOptions {
 /** Bump when an analyzer's output changes, to invalidate cached results. */
 const ANALYZER_VERSION = {
   activity: "1",
-  transcribe: "11",
-  vad: "4",
+  transcribe: "14",
+  vad: "5",
   beats: "3",
   prosody: "1",
   subjects: "3",

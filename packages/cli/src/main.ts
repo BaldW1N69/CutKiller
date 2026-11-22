@@ -12,6 +12,7 @@ import {
   fingerprintMarkdown,
   formatLabels,
   type Report,
+  RULES,
   reportJsonSchema,
 } from "@cutkiller/qa";
 import { listLooks, loadProfile, PresetRegistry, withLook } from "@cutkiller/style";
@@ -57,7 +58,7 @@ const USAGE_EN = `cutkiller <command> [options]
   plan <inputs…> -p <profile> -o edl.json   analysis + planning → editable EDL
   render <edl.json> -o out.mp4 [--draft]    renders an EDL
   check <video> [--edl edl.json] -p <profile> [--json r.json] [--md r.md] [--min-score 90] [--truth labels.txt]
-                                            26-rule quality check
+                                            ${RULES.length}-rule quality check
   export <edl.json> -o edit.otio|edit.xml   timeline for DaVinci Resolve (.otio/.xml), Premiere Pro and Final Cut (.xml)
   shorts <long video…> -p short -o <dir> [--count 5] [--min 15] [--max 60] [--ai]
                                             one long video → N Shorts chosen for their hook, edited, scored and ranked

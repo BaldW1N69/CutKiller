@@ -1,4 +1,10 @@
-import { type StyleProfile, truncatedEdges, type VoiceActivity, type Word } from "@cutkiller/core";
+import {
+  type StyleProfile,
+  TRUNCATED_ALIGN_SCORE,
+  truncatedEdges,
+  type VoiceActivity,
+  type Word,
+} from "@cutkiller/core";
 
 export type Removal = "filler" | "contextual-filler" | "repeat" | "truncated";
 
@@ -139,10 +145,12 @@ export function speechTokens(
     ids,
   );
   const cut = truncatedEdges(vad);
-  if (vad && (cut.start || cut.end))
+  if (vad)
     for (const t of tokens) {
-      if (cut.start && t.word.start <= EDGE_S) t.removed = "truncated";
-      if (cut.end && t.word.end >= vad.durationS - EDGE_S) t.removed = "truncated";
+      const atStart = t.word.start <= EDGE_S;
+      const atEnd = t.word.end >= vad.durationS - EDGE_S;
+      const unfit = t.word.alignScore !== undefined && t.word.alignScore < TRUNCATED_ALIGN_SCORE;
+      if ((atStart && (cut.start || unfit)) || (atEnd && (cut.end || unfit))) t.removed = "truncated";
     }
   return { tokens: resolveOverlaps(tokens), hallucinated };
 }

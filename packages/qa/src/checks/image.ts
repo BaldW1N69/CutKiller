@@ -332,3 +332,63 @@ export function checkSharpness(edl: Edl, profile: StyleProfile): CheckResult {
     },
   };
 }
+
+/** Over this share of interlaced frames (idet), the render shows combing on motion. */
+export const MAX_INTERLACED_SHARE = 0.05;
+
+/** Interlaced and progressive frame counts in FFmpeg's idet multi-frame summary. */
+export function parseIdet(stderr: string): { interlaced: number; progressive: number } | undefined {
+  // FFmpeg may print a summary for a probe graph first (all zeros): the last one counts.
+  const all = [
+    ...stderr.matchAll(/Multi frame detection: TFF:\s*(\d+)\s+BFF:\s*(\d+)\s+Progressive:\s*(\d+)/g),
+  ];
+  const m = all.at(-1);
+  if (!m) return undefined;
+  return { interlaced: Number(m[1]) + Number(m[2]), progressive: Number(m[3]) };
+}
+
+/** A flat band over where the profile places captions (a two-line block, with margin). */
+function captionMask(profile: StyleProfile): string {
+  const { anchor, y } = profile.captions.placement;
+  const [top, bottom] = anchor === "bottom" ? [y - 0.25, 1] : [y - 0.17, y + 0.17];
+  const a = Math.max(0, top);
+  const b = Math.min(1, bottom);
+  return `drawbox=x=0:y=ih*${a.toFixed(3)}:w=iw:h=ih*${(b - a).toFixed(3)}:color=black:t=fill`;
+}
+
+/** The delivered picture is progressive: no interlaced (combed) frames. */
+export async function checkInterlace(ctx: VideoContext): Promise<CheckResult> {
+  // Caption text (thin horizontal strokes: Cyrillic, Greek) reads as combing to
+  // idet: measured 12 % of a progressive Russian render. Its band is masked.
+  const filters = [...(ctx.edl && ctx.edl.captions.length > 0 ? [captionMask(ctx.profile)] : []), "idet"];
+  const { stderr } = await ffmpeg([
+    ...mediaInput(ctx.video),
+    "-map",
+    "0:v:0",
+    "-vf",
+    filters.join(","),
+    "-an",
+    "-f",
+    "null",
+    "-",
+  ]);
+  const counts = parseIdet(stderr);
+  if (!counts || counts.interlaced + counts.progressive === 0)
+    return notEvaluated("image.interlace", tr("no frame classified", "aucune image classée"));
+  const share = counts.interlaced / (counts.interlaced + counts.progressive);
+  return graded(
+    "image.interlace",
+    1,
+    share > MAX_INTERLACED_SHARE
+      ? [
+          {
+            message: tr(
+              `${Math.round(share * 100)} % of frames interlaced (combing on motion)`,
+              `${Math.round(share * 100)} % d'images entrelacées (peignes sur le mouvement)`,
+            ),
+          },
+        ]
+      : [],
+    { ...counts, interlacedShare: Math.round(share * 1000) / 1000 },
+  );
+}

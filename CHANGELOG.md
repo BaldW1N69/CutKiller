@@ -20,6 +20,14 @@ Audit of the whole code for a shared-service use ([report](docs/security/AUDIT-2
 - **Final renders 21 % faster** (54 s Short: 155 s → 122 s): delivery encodes use x264 `faster` instead of `medium`. At the delivery bitrate they measured the same: PSNR 37.04 vs 37.01 dB and SSIM 0.896 vs 0.893 on dense film grain (the hardest case), transparent on screen text, -0.9 dB at 54 dB on a soft interview. `veryfast` was rejected (-0.9 dB on grain). The upscale sharpening was kept: it multiplies fine detail by 5.4 (Laplacian variance), a visible effect, though it costs most of the decoding time.
 
 ### Fixed
+- **Test fixtures corrupted by parallel workers**: two test files generating the same talking head at once left an AAC track that decoded for 9.5 of its 14.6 s; generation now runs under a cross-process lock.
+- **Invalid EDL on some rushes**: clip points rounded to the µs could overlap the next clip by a frame (crashed the cut pass on a Dutch reading).
+- **Greek never force-aligned** (upper-case Greek aligner vocabulary), and `captions.sync` no longer passes when under half the words are measured.
+- **Aligner windows** end in a pause and stay ordered; their padding no longer reaches the neighbouring words of a render (captions 9.8 and 17 frames early in Portuguese).
+- **Word cut off by the recording** detected behind codec padding and inside a stop (« es|curo »).
+- **Words outside the aligner's vocabulary** (« 割 ») no longer open a shot on half a second of silence.
+- **Last caption** cut short by the end of the edit joins the previous screen.
+- Help and MCP text give the real rule count (30).
 - **Roman numerals aligned** (« Kapitel II », « Louis XIV », « World War II »): spelled out in the spoken language before forced alignment, like digits. On a German audiobook « II. » was highlighted 12.7 frames early; now in sync.
 - **Speech models downloaded twice** (3.6 GB lost): depending on which analysis ran first in the worker, the aligner went to `~/.cache/huggingface` or to `~/.cache/cutkiller/hf`. The cache is now fixed when the worker starts: `~/.cache/cutkiller/hf` (or `HF_HOME`). A copy left in `~/.cache/huggingface` by an earlier version can be deleted.
 - **A word cut off by the recording itself is no longer kept**: the voice analysis measures the first and last 30 ms of each rush; when they are within 15 dB of the speech level, the word touching that edge was cut mid-way by the recording and is dropped (`montage.whole-words` flags it if kept). On the 60 s interview the edit no longer ends on a truncated « pour… »; the 180 s one, whose last word fades out 22 dB, is untouched.
@@ -30,6 +38,9 @@ Audit of the whole code for a shared-service use ([report](docs/security/AUDIT-2
 - Windows: Studio served every file as 404 (path check with `/`); the OTIO test expected POSIX file URLs.
 
 ### Added
+- **Two more quality rules (39)**: `audio.dropouts` (no digital silence inside the sound) and `audio.loudness-range` (LRA ≤ 10 LU, 15 for cinematic profiles). A caption reading-speed rule was measured and dropped: real read speech reaches 22.9 characters per second, so it would judge the speaker, not the edit.
+- **Four more quality rules (37)**: `audio.channel-balance` (no voice from one side only), `audio.clipping`, `audio.export-format` (AAC, 44.1/48 kHz, ≥ 128 kb/s), `image.interlace` (progressive picture; caption text is masked, Cyrillic strokes fooled the detector). Calibrated, no false alarm on the 10 language renders.
+- **Three new quality rules (33)**: `image.flashes` (no more than 3 flashes per second, WCAG 2.3.1), `audio.phase` (the mix does not cancel on a mono speaker), `montage.tail` (no dead air after the last word). Each is calibrated with an injected defect and a valid witness; weights rebalanced, still 20 points per category.
 - **Spanish, German and Italian validated on real speech** (LibriVox, 60 s each, language detected automatically): 99.9/100 each, caption sync median 0.2 frame, p95 ≤ 0.8 frame, no hesitation left.
 - **Dialogue balanced across rushes** (`profile.audio.dialogueBalance`, on by default): each rush's clips get the gain that brings its speech level (measured in analysis, loud speech within the voice activity) to the median of the rushes, up to ±12 dB, manual gains untouched. **QA rule `audio.dialogue-balance`** (30 rules): speech levels of the rushes within 3 dB on the rendered dialogue. Measured with a second mic 9 dB quieter: spread 7.6 dB without balancing (rule fails).
 - **QA rule `montage.whole-words`** (29 rules): no audio edit (start, end, cut) inside a word of the rush, ±20 ms, read from the transcript — a voice detector on the render misses a 2-frame syllable. It fails the two earlier Shorts that ended on a clipped « Entre » / « Mais » and passes every current edit.

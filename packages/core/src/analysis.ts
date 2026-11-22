@@ -7,6 +7,8 @@ export interface Word {
   prob?: number;
   /** "forced": CTC-aligned and refined on the signal; "whisper": raw ASR timestamps. */
   timing: "forced" | "whisper";
+  /** Mean CTC confidence of the word's characters (0–1), forced timing only. */
+  alignScore?: number;
 }
 
 export interface Transcript {
@@ -46,6 +48,14 @@ export function truncatedEdges(vad: VoiceActivity | undefined): { start: boolean
   const limit = vad.speechDb - TRUNCATED_EDGE_DB;
   return { start: vad.edgeDb.start > limit, end: vad.edgeDb.end > limit };
 }
+
+/**
+ * Under this CTC confidence, a word touching an edge of the recording is cut off
+ * by it even when the edge is quiet (cut in a stop or a fricative): the aligner
+ * found no full word to fit. Measured on a LibriVox reading cut in « es|curo »:
+ * edge 28 dB under speech, but the word squeezed into 145 ms, score 0.33.
+ */
+export const TRUNCATED_ALIGN_SCORE = 0.5;
 
 export interface BeatGrid {
   tempoBpm: number;

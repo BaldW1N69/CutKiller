@@ -10,7 +10,7 @@ import {
   tr,
   type VoiceActivity,
 } from "@cutkiller/core";
-import { decodeMono, measureLoudness, readWavF32 } from "@cutkiller/media";
+import { decodeMono, decodeStereo, ffprobe, measureLoudness, readWavF32 } from "@cutkiller/media";
 import { type CheckResult, graded, notEvaluated, type Violation } from "../report";
 
 const RATE = 48_000;
@@ -365,5 +365,265 @@ export async function checkDialogueBalance(
         ]
       : [],
     { spreadDb: Math.round(spread * 10) / 10, ...measured },
+  );
+}
+
+/** Under this L/R correlation, a window is in anti-phase: the voice cancels when played in mono. */
+export const ANTIPHASE_CORRELATION = -0.2;
+const PHASE_WINDOW_S = 0.5;
+/** Windows quieter than this (dBFS) are not judged: nothing to cancel. */
+const PHASE_MIN_DB = -45;
+
+/**
+ * L/R correlation of each window of interleaved stereo samples loud enough to
+ * judge (null otherwise). +1: same signal on both sides (a centred voice);
+ * 0: unrelated; -1: one side inverted, silent once summed to mono (a phone, a
+ * smart speaker, a mono Bluetooth earbud).
+ */
+export function phaseCorrelations(stereo: Float32Array, rate: number): (number | null)[] {
+  const win = Math.round(PHASE_WINDOW_S * rate);
+  const out: (number | null)[] = [];
+  for (let start = 0; start + win <= stereo.length / 2; start += win) {
+    let ll = 0;
+    let rr = 0;
+    let lr = 0;
+    for (let i = start; i < start + win; i++) {
+      const l = stereo[2 * i] as number;
+      const r = stereo[2 * i + 1] as number;
+      ll += l * l;
+      rr += r * r;
+      lr += l * r;
+    }
+    const db = 10 * Math.log10((ll + rr) / (2 * win) + 1e-12);
+    out.push(db < PHASE_MIN_DB ? null : lr / Math.sqrt(ll * rr + 1e-24));
+  }
+  return out;
+}
+
+/** The mix survives a mono speaker: no stretch where left and right cancel. */
+export async function checkPhase(video: string, fps: number): Promise<CheckResult> {
+  const rate = 16_000;
+  const corr = phaseCorrelations(await decodeStereo(video, rate), rate);
+  const judged = corr.filter((c): c is number => c !== null);
+  if (judged.length === 0)
+    return notEvaluated("audio.phase", tr("silent audio track", "piste audio silencieuse"));
+  const violations: Violation[] = [];
+  let runStart = -1;
+  corr.forEach((c, k) => {
+    const bad = c !== null && c < ANTIPHASE_CORRELATION;
+    if (bad && runStart < 0) runStart = k;
+    if ((!bad || k === corr.length - 1) && runStart >= 0) {
+      const end = bad ? k + 1 : k;
+      violations.push({
+        message: tr(
+          `left and right in anti-phase for ${((end - runStart) * PHASE_WINDOW_S).toFixed(1)} s: the sound cancels in mono`,
+          `gauche et droite en opposition de phase pendant ${((end - runStart) * PHASE_WINDOW_S).toFixed(1)} s : le son s'annule en mono`,
+        ),
+        frame: Math.round(runStart * PHASE_WINDOW_S * fps),
+      });
+      runStart = -1;
+    }
+  });
+  const sorted = [...judged].sort((a, b) => a - b);
+  const bad = judged.filter((c) => c < ANTIPHASE_CORRELATION).length;
+  const result = graded("audio.phase", judged.length, violations, {
+    windows: judged.length,
+    minCorrelation: Math.round((sorted[0] as number) * 100) / 100,
+    medianCorrelation: Math.round((sorted[Math.floor(sorted.length / 2)] as number) * 100) / 100,
+    antiphaseWindows: bad,
+  });
+  // Scored on the share of sound that cancels, not on the number of stretches:
+  // a mix inverted from start to end is one stretch, and fully broken.
+  return { ...result, score: (judged.length - bad) / judged.length };
+}
+
+/** Over this level difference (dB) between left and right, the voice comes from one side. */
+export const MAX_CHANNEL_IMBALANCE_DB = 3;
+
+/**
+ * Left and right levels (dB) over the windows loud enough to judge, and their
+ * difference. A lavalier recorded on one channel only plays in one ear.
+ */
+export function channelLevels(
+  stereo: Float32Array,
+  rate: number,
+): { left: number; right: number } | undefined {
+  const win = Math.round(PHASE_WINDOW_S * rate);
+  let ll = 0;
+  let rr = 0;
+  let n = 0;
+  for (let start = 0; start + win <= stereo.length / 2; start += win) {
+    let wl = 0;
+    let wr = 0;
+    for (let i = start; i < start + win; i++) {
+      wl += (stereo[2 * i] as number) ** 2;
+      wr += (stereo[2 * i + 1] as number) ** 2;
+    }
+    if (10 * Math.log10(Math.max(wl, wr) / win + 1e-12) < PHASE_MIN_DB) continue;
+    ll += wl;
+    rr += wr;
+    n += win;
+  }
+  if (n === 0) return undefined;
+  return { left: 10 * Math.log10(ll / n + 1e-12), right: 10 * Math.log10(rr / n + 1e-12) };
+}
+
+/** Both channels carry the sound at the same level (no one-sided voice). */
+export async function checkChannelBalance(video: string): Promise<CheckResult> {
+  const rate = 16_000;
+  const levels = channelLevels(await decodeStereo(video, rate), rate);
+  if (!levels)
+    return notEvaluated("audio.channel-balance", tr("silent audio track", "piste audio silencieuse"));
+  const diff = levels.left - levels.right;
+  const round = (v: number) => Math.round(v * 10) / 10;
+  return graded(
+    "audio.channel-balance",
+    1,
+    Math.abs(diff) > MAX_CHANNEL_IMBALANCE_DB
+      ? [
+          {
+            message: tr(
+              `${diff > 0 ? "left" : "right"} channel ${Math.abs(diff).toFixed(1)} dB louder (max ${MAX_CHANNEL_IMBALANCE_DB} dB)`,
+              `canal ${diff > 0 ? "gauche" : "droit"} plus fort de ${Math.abs(diff).toFixed(1)} dB (max ${MAX_CHANNEL_IMBALANCE_DB} dB)`,
+            ),
+          },
+        ]
+      : [],
+    { leftDb: round(levels.left), rightDb: round(levels.right), differenceDb: round(diff) },
+  );
+}
+
+/** At or over this magnitude a sample is at full scale. */
+const CLIP_LEVEL = 0.999;
+/** Consecutive full-scale samples that make a clipped peak (one can be a true peak). */
+const CLIP_RUN = 3;
+
+/** Seconds (indices) holding a clipped peak: CLIP_RUN samples in a row at full scale on one channel. */
+export function clippedSeconds(stereo: Float32Array, rate: number): number[] {
+  const seconds = new Set<number>();
+  for (let ch = 0; ch < 2; ch++) {
+    let run = 0;
+    for (let i = ch; i < stereo.length; i += 2) {
+      run = Math.abs(stereo[i] as number) >= CLIP_LEVEL ? run + 1 : 0;
+      if (run === CLIP_RUN) seconds.add(Math.floor(i / 2 / rate));
+    }
+  }
+  return [...seconds].sort((a, b) => a - b);
+}
+
+/** No clipped peak in the delivered sound. */
+export async function checkClipping(video: string, fps: number): Promise<CheckResult> {
+  const rate = 48_000;
+  const stereo = await decodeStereo(video, rate);
+  const total = Math.ceil(stereo.length / 2 / rate);
+  if (total === 0) return notEvaluated("audio.clipping", tr("no audio", "pas de son"));
+  const clipped = clippedSeconds(stereo, rate);
+  return graded(
+    "audio.clipping",
+    total,
+    clipped.map((sec) => ({
+      message: tr("clipped peaks (samples at full scale)", "crêtes écrêtées (échantillons à pleine échelle)"),
+      frame: Math.round(sec * fps),
+    })),
+    { seconds: total, clippedSeconds: clipped.length },
+  );
+}
+
+/** Delivered audio stream: AAC, a platform sample rate, enough bitrate. */
+export async function checkAudioFormat(video: string, profile: StyleProfile): Promise<CheckResult> {
+  const info = await ffprobe(video);
+  const a = info.streams.find((s) => s.codec_type === "audio");
+  if (!a) return graded("audio.export-format", 1, [{ message: tr("no audio stream", "aucun flux audio") }]);
+  const rate = Number(a.sample_rate ?? 0);
+  const kbps = Math.round(Number(a.bit_rate ?? 0) / 1000);
+  const { audioSampleRates, minAudioKbps } = profile.export;
+  const violations: Violation[] = [];
+  if (a.codec_name !== "aac")
+    violations.push({
+      message: tr(`codec ${a.codec_name} (expected AAC)`, `codec ${a.codec_name} (attendu AAC)`),
+    });
+  if (!audioSampleRates.includes(rate))
+    violations.push({
+      message: `${rate} Hz (${tr("expected", "attendu")} ${audioSampleRates.join(" / ")} Hz)`,
+    });
+  if (kbps > 0 && kbps < minAudioKbps) violations.push({ message: `${kbps} kb/s < ${minAudioKbps} kb/s` });
+  return graded("audio.export-format", 3, violations, {
+    codec: a.codec_name,
+    sampleRate: rate,
+    channels: a.channels,
+    kbps,
+  });
+}
+
+/** Loudness range of the delivered sound (EBU R128 LRA): no part much louder or quieter than the rest. */
+export async function checkLoudnessRange(video: string, profile: StyleProfile): Promise<CheckResult> {
+  const l = await measureLoudness(video);
+  if (!Number.isFinite(l.integrated) || l.integrated <= -69.5)
+    return notEvaluated("audio.loudness-range", tr("silent audio track", "piste audio silencieuse"));
+  const max = profile.audio.maxLoudnessRangeLu;
+  return graded(
+    "audio.loudness-range",
+    1,
+    l.range > max + 1e-9
+      ? [
+          {
+            message: tr(
+              `loudness range ${l.range.toFixed(1)} LU (max ${max}): parts too quiet or too loud`,
+              `plage de loudness ${l.range.toFixed(1)} LU (max ${max}) : passages trop faibles ou trop forts`,
+            ),
+          },
+        ]
+      : [],
+    { lraLu: l.range, maxLu: max },
+  );
+}
+
+/** Under this magnitude a sample is digital silence (about -100 dBFS): no room tone is that quiet. */
+const DROPOUT_LEVEL = 1e-5;
+/** Digital silence longer than this inside the programme is a dropout. */
+export const DROPOUT_MIN_S = 0.1;
+
+/**
+ * Runs [start, end) in seconds of digital silence longer than DROPOUT_MIN_S
+ * between the first and the last sound: the sound went missing (a corrupt
+ * stream, a decoder gap), not a pause, which keeps the room's noise.
+ */
+export function dropouts(mono: Float32Array, rate: number): [number, number][] {
+  const loud = (i: number) => Math.abs(mono[i] as number) >= DROPOUT_LEVEL;
+  let first = 0;
+  while (first < mono.length && !loud(first)) first++;
+  let last = mono.length - 1;
+  while (last > first && !loud(last)) last--;
+  const out: [number, number][] = [];
+  let run = -1;
+  for (let i = first; i <= last; i++) {
+    if (!loud(i)) {
+      if (run < 0) run = i;
+    } else if (run >= 0) {
+      if ((i - run) / rate > DROPOUT_MIN_S) out.push([run / rate, i / rate]);
+      run = -1;
+    }
+  }
+  return out;
+}
+
+/** No stretch of digital silence inside the delivered sound. */
+export async function checkDropouts(video: string, fps: number): Promise<CheckResult> {
+  const rate = 48_000;
+  const mono = await decodeMono(video, rate);
+  if (mono.length === 0) return notEvaluated("audio.dropouts", tr("no audio", "pas de son"));
+  const gaps = dropouts(mono, rate);
+  const seconds = Math.max(1, Math.ceil(mono.length / rate));
+  return graded(
+    "audio.dropouts",
+    seconds,
+    gaps.map(([a, b]) => ({
+      message: tr(
+        `${Math.round((b - a) * 1000)} ms of digital silence (the sound drops out)`,
+        `${Math.round((b - a) * 1000)} ms de silence numérique (le son disparaît)`,
+      ),
+      frame: Math.round(a * fps),
+    })),
+    { dropouts: gaps.length, missingS: Math.round(gaps.reduce((n, [a, b]) => n + b - a, 0) * 100) / 100 },
   );
 }

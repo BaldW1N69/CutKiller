@@ -24,6 +24,11 @@ RATE = 16_000
 FRAME_S = 320 / RATE  # wav2vec2 stride: 20 ms per emission frame
 MAX_WINDOW_S = 25.0
 PAD_S = 0.4
+SPLIT_SEARCH_S = 8.0
+NEIGHBOUR_S = 0.05
+# Whisper's word edges drift: whatever the neighbours, a window keeps this much
+# padding (measured: at 0.05 s, « ее » lost its onset and aligned 5 frames late).
+MIN_PAD_S = 0.15
 
 
 def _hf_home() -> str:
@@ -47,8 +52,20 @@ def _model(name: str):
 
     # The default install ships the CPU build of PyTorch: only move when it sees CUDA.
     target = "cuda" if device() == "cuda" and torch.cuda.is_available() else "cpu"
-    model = Wav2Vec2ForCTC.from_pretrained(name, local_files_only=local).eval().to(target)
-    return processor, model
+    try:
+        model = Wav2Vec2ForCTC.from_pretrained(name, local_files_only=local)
+    except OSError:
+        # A partial cache (tokenizer files kept, weights not: seen on a CI cache
+        # restore) must download the weights, not fail offline.
+        model = Wav2Vec2ForCTC.from_pretrained(name)
+    return processor, model.eval().to(target)
+
+
+def _upper_case(vocab: dict[str, int]) -> bool:
+    """Whether the model's letters are upper case only (the Greek model is: Α–Ω,
+    no α–ω). Testing the Latin « a » alone missed it, and no Greek word aligned."""
+    letters = [ch for ch in vocab if len(ch) == 1 and ch.isalpha()]
+    return any(ch.isupper() for ch in letters) and not any(ch.islower() for ch in letters)
 
 
 def normalize(word: str, vocab: dict[str, int], language: str | None = "fr") -> str:
@@ -58,7 +75,7 @@ def normalize(word: str, vocab: dict[str, int], language: str | None = "fr") -> 
     model's word delimiter. Models with an upper-case vocabulary get upper case."""
     text = unicodedata.normalize("NFC", languages.spell_numbers(word, language).lower())
     text = text.replace("’", "'").replace("-", " ")
-    upper = "a" not in vocab and "A" in vocab
+    upper = _upper_case(vocab)
     if upper:
         text = text.upper()
     kept = "".join(ch for ch in text if ch == " " or (ch in vocab and ch != "|"))
@@ -66,15 +83,28 @@ def normalize(word: str, vocab: dict[str, int], language: str | None = "fr") -> 
 
 
 def _windows(words: list[dict[str, Any]], duration: float) -> list[tuple[int, int, float, float]]:
-    """Groups consecutive words into audio windows of at most MAX_WINDOW_S."""
+    """Groups consecutive words into audio windows of at most MAX_WINDOW_S.
+
+    Windows overlap by their padding, so each one ends in the longest pause of its
+    last SPLIT_SEARCH_S: split mid-sentence, the last word of a window could align
+    on the first word of the next one (measured: « que » placed after « EF »)."""
     out: list[tuple[int, int, float, float]] = []
     i = 0
     while i < len(words):
         start = max(0.0, words[i]["start"] - PAD_S)
+        if i > 0:  # padding stops at the previous word (Whisper timing)
+            start = max(start, min(words[i]["start"] - MIN_PAD_S, words[i - 1]["end"] - NEIGHBOUR_S))
         j = i
         while j + 1 < len(words) and words[j + 1]["end"] + PAD_S - start <= MAX_WINDOW_S:
             j += 1
+        if j + 1 < len(words):
+            limit = words[j]["end"] - SPLIT_SEARCH_S
+            candidates = [k for k in range(i, j + 1) if words[k]["end"] >= limit]
+            j = max(candidates, key=lambda k: (words[k + 1]["start"] - words[k]["end"], k))
         end = min(duration, words[j]["end"] + PAD_S)
+        if j + 1 < len(words):  # nor into the next word: with pauses cut (a render),
+            # the padding holds its sound and the last word aligns on it
+            end = min(end, max(words[j]["end"] + MIN_PAD_S, words[j + 1]["start"] + NEIGHBOUR_S))
         out.append((i, j + 1, start, end))
         i = j + 1
     return out
@@ -107,7 +137,14 @@ def align_words(
     duration = len(audio) / RATE
     result = [dict(w, timing="whisper") for w in words]
 
+    aligned_until = 0.0  # end of the last word the previous window aligned
     for a, b, ws, we in _windows(words, duration):
+        # Never before what the previous window aligned, never past where this
+        # window's first word starts (a last word stretched into the padding
+        # must not push the next one late).
+        ws = max(ws, min(aligned_until, words[a]["start"] - PAD_S / 4))
+        if we - ws < FRAME_S:
+            continue
         chunk = audio[int(ws * RATE) : int(we * RATE)]
         inputs = processor(chunk, sampling_rate=RATE, return_tensors="pt")
         with torch.inference_mode():
@@ -144,6 +181,7 @@ def align_words(
                 alignScore=round(float(np.mean(conf[k])), 3),
                 timing="forced",
             )
+        aligned_until = max([aligned_until, *last.values()])
     return refine_boundaries(audio, result, floor_db=floor_db)
 
 
@@ -211,8 +249,10 @@ def refine_boundaries(
     out = [dict(w) for w in words]
     idx = lambda t: int(np.clip(round(t / HOP_S), 0, len(db) - 1))
     for k, w in enumerate(out):
-        if w.get("timing") != "forced":
-            continue
+        # A word the aligner could not place (a character outside its vocabulary,
+        # « 割 » in Chinese) keeps Whisper's edges, which can start 0.5 s before
+        # the voice: those are only pulled in to the signal, never pushed out.
+        forced = w.get("timing") == "forced"
         a, b = idx(w["start"]), idx(w["end"])
         peak = float(db[a : b + 1].max()) if b >= a else float(db[a])
         threshold = max(floor + 12, peak - 40)
@@ -220,15 +260,17 @@ def refine_boundaries(
         hi_bound = idx(out[k + 1]["start"] - 0.01) if k + 1 < len(out) else len(db) - 1
         lo_bound = max(lo_bound, idx(w["start"] - max_extend_s))
         hi_bound = min(hi_bound, idx(w["end"] + max_extend_s))
-        while a > lo_bound and db[a - 1] > threshold:
+        while forced and a > lo_bound and db[a - 1] > threshold:
             a -= 1
-        while b < hi_bound and db[b + 1] > threshold:
+        while forced and b < hi_bound and db[b + 1] > threshold:
             b += 1
         # Also pull a boundary inwards when the CTC span starts or ends in silence.
         while a < b and db[a] <= threshold:
             a += 1
         while b > a and db[b] <= threshold:
             b -= 1
+        if not forced and a >= b:  # no voice under it at all: leave it as heard
+            continue
         w["start"] = round(a * HOP_S, 3)
         w["end"] = round((b + 2) * HOP_S, 3)  # frame b covers [b*hop, b*hop + win)
     return out

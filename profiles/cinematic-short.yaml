@@ -74,6 +74,7 @@ captions:
 audio:
   integratedLufs: -14
   lufsTolerance: 1
+  maxLoudnessRangeLu: 15
   truePeakDbtp: -1
   duckingDb: [-18, -12]
   cutFadeMs: [5, 10]
