@@ -58,3 +58,31 @@ def test_roman_numerals_are_spelled_for_the_aligner():
         assert roman_to_digits(word) == word
     assert spell_numbers("II.", "de").startswith("zwei")
     assert spell_numbers("XIV", "fr") == "quatorze"
+
+
+def test_aligner_downloads_weights_missing_from_a_partial_cache(monkeypatch):
+    """Tokenizer cached, weights not (a CI cache restore): download, do not fail offline."""
+    import transformers
+
+    from cutkiller_workers import align
+
+    calls = []
+
+    class Model:
+        def eval(self):
+            return self
+
+        def to(self, _target):
+            return self
+
+    def model_from(name, local_files_only=False):
+        calls.append(local_files_only)
+        if local_files_only:
+            raise OSError(f"{name} does not appear to have a file named model.safetensors")
+        return Model()
+
+    monkeypatch.setattr(transformers.Wav2Vec2Processor, "from_pretrained", lambda *a, **k: object())
+    monkeypatch.setattr(transformers.Wav2Vec2ForCTC, "from_pretrained", model_from)
+    _, model = align._model.__wrapped__("some/aligner")
+    assert isinstance(model, Model)
+    assert calls == [True, False]

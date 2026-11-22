@@ -52,8 +52,13 @@ def _model(name: str):
 
     # The default install ships the CPU build of PyTorch: only move when it sees CUDA.
     target = "cuda" if device() == "cuda" and torch.cuda.is_available() else "cpu"
-    model = Wav2Vec2ForCTC.from_pretrained(name, local_files_only=local).eval().to(target)
-    return processor, model
+    try:
+        model = Wav2Vec2ForCTC.from_pretrained(name, local_files_only=local)
+    except OSError:
+        # A partial cache (tokenizer files kept, weights not: seen on a CI cache
+        # restore) must download the weights, not fail offline.
+        model = Wav2Vec2ForCTC.from_pretrained(name)
+    return processor, model.eval().to(target)
 
 
 def _upper_case(vocab: dict[str, int]) -> bool:
