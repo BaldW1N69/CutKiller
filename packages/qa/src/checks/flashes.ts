@@ -112,7 +112,11 @@ export async function checkFlashes(video: string): Promise<CheckResult> {
       "-",
     ],
     GRID * CELL_W * GRID * CELL_H * 3,
-    (f) => cellLuminances(f).forEach((v, k) => cells[k]?.push(v)),
+    (f) => {
+      cellLuminances(f).forEach((v, k) => {
+        cells[k]?.push(v);
+      });
+    },
   );
   const bursts = cells.flatMap((series) => flashBursts(luminanceChanges(series), fps));
   bursts.sort((a, b) => a.frame - b.frame);

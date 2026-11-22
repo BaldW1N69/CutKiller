@@ -154,7 +154,6 @@ export const cutPass: Pass = {
 };
 
 type ClipInput = EdlInput["video"][number]["clips"][number];
-const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
 
 /**
  * L-cuts where the main track changes rush: the picture cut moves `n` frames
